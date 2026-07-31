@@ -1,0 +1,268 @@
+// NextGen HMS Shared TypeScript Types
+
+export interface Tenant {
+  id: string;
+  name: string;
+  type: "clinic" | "hospital_level_4" | "hospital_level_5";
+  county: string;
+}
+
+export interface DepartmentToggles {
+  reception: boolean;
+  queue: boolean;
+  doctor: boolean;
+  pharmacy: boolean;
+  laboratory: boolean;
+  radiology: boolean;
+  billing: boolean;
+}
+
+export interface QueueTicket {
+  id: string;
+  ticketNo: string; // e.g., GEN-002, LAB-045, RAD-012, PHA-089
+  patientName: string;
+  nationalId: string;
+  biometricStatus: "verified" | "not_verified";
+  service: string; // e.g., "General Doctor", "Laboratory", "Pharmacy", "Radiology"
+  currentDepartment: "reception" | "queue" | "doctor" | "laboratory" | "radiology" | "pharmacy" | "billing" | "labour_room" | "gyna" | string;
+  status: "pending" | "serving" | "completed" | "skipped";
+  notes?: string;
+  timestamp: string;
+  phone?: string;
+  age?: number;
+  issue?: string;
+  assignedSpecialistId?: string;
+  assignedSpecialistName?: string;
+}
+
+export interface Medication {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  minThreshold: number;
+  batchNo: string;
+  expiryDate: string; // YYYY-MM-DD
+  price: number;
+  imageUrl?: string;
+}
+
+export interface PrescriptionItem {
+  drugName: string;
+  quantity: number;
+  dosage: string;
+  instructions: string;
+  status: "pending" | "dispensed";
+}
+
+export interface MedicalRecord {
+  id: string;
+  patientName: string;
+  nationalId: string;
+  phone: string;
+  age: number;
+  gender: string;
+  bloodType: string;
+  shaEligible: "eligible" | "not_eligible" | "unchecked";
+  shaId?: string;
+  visits: ClinicalVisit[];
+}
+
+export interface ClinicalVisit {
+  id: string;
+  date: string;
+  vitals: {
+    temp: string; // °C
+    bp: string; // mmHg e.g. 120/80
+    pulse: string; // bpm
+    weight: string; // kg
+  };
+  symptoms: string;
+  diagnosis: string;
+  prescriptions: PrescriptionItem[];
+    referrals: {
+      id: string;
+      department: "laboratory" | "radiology" | "labour_room" | "gyna" | string;
+      testName: string;
+      notes: string;
+      status: "pending" | "completed";
+      results?: string;
+    }[];
+}
+
+export interface SplitBilling {
+  sha: number;
+  insurance: number;
+  outOfPocket: number;
+}
+
+export interface Invoice {
+  id: string;
+  patientId: string;
+  patientName: string;
+  nationalId: string;
+  items: {
+    description: string;
+    amount: number;
+    department: string;
+  }[];
+  total: number;
+  split: SplitBilling;
+  paymentMethod: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance";
+  paymentStatus: "unpaid" | "pending_mpesa" | "paid";
+  mpesaCheckoutId?: string;
+  kraCompliantInvoiceNo?: string;
+  shaClaimId?: string;
+  timestamp: string;
+}
+
+export interface ExpenseItem {
+  id: string;
+  description: string;
+  amount: number;
+  category: "supplies" | "salaries" | "utilities" | "equipment" | "rent" | "other";
+  date: string;
+  supplier?: string;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  nationalId: string;
+  role: string;
+  department: string; // e.g. "medical", "pharmacy", "finance", "hr", "security", "nursing", "administration"
+  specialty?: string; // e.g. "Gynecology", "Dentistry", "Laboratory Medicine", "Radiology", "General Practice"
+  salary: number; // Base salary in KES
+  phone: string;
+  email: string;
+  status: "active" | "on_leave" | "terminated";
+  hireDate: string;
+}
+
+export interface PayrollRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  month: string; // e.g., "July 2026"
+  baseSalary: number;
+  allowances: number;
+  deductions: {
+    shif: number; // Social Health Insurance Fund (2.75% standard in Kenya)
+    paye: number; // KRA PAYE tax
+    housingLevy: number; // Affordable Housing Levy (1.5% employee share)
+    nssf: number; // National Social Security Fund (standard pension contribution)
+    other: number;
+  };
+  netPay: number;
+  paymentStatus: "paid" | "pending";
+  paidDate?: string;
+}
+
+export interface SecurityLog {
+  id: string;
+  type: "individual" | "vehicle";
+  nameOrPlate: string; // Name for individual, License plate for vehicle
+  entityType: "staff" | "patient" | "visitor" | "contractor" | "delivery" | "other";
+  direction: "entry" | "exit";
+  checkpoint: string; // "Main Gate", "Reception Desk", "Emergency Gate", "Staff Gate"
+  idOrPhone?: string; // National ID / Passport or phone number
+  timestamp: string;
+  status: "authorized" | "flagged" | "denied";
+  notes?: string;
+  officerName: string;
+}
+
+export interface SystemTicket {
+  id: string;
+  ticketNumber: string; // e.g. TCK-8492
+  patientId?: string;
+  patientName: string;
+  nationalId: string;
+  phone?: string;
+  visitReason: string;
+  department: string;
+  priority: "Normal" | "Urgent" | "Emergency";
+  status: "open" | "in_progress" | "closed" | "cancelled";
+  createdTime: string;
+  closedTime?: string;
+  closedBy?: string;
+  resolutionNotes?: string;
+  autoGenerated: boolean;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  kraPin: string;
+  category: "Pharmaceuticals" | "Medical Consumables" | "Laboratory Reagents" | "Radiology Equipment" | "General Supplies";
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+  status: "active" | "under_review" | "blacklisted";
+  rating: number; // 1 to 5
+}
+
+export interface PurchaseRequisition {
+  id: string;
+  requisitionNo: string; // e.g., REQ-2026-081
+  department: string;
+  requestedBy: string;
+  items: {
+    itemName: string;
+    category: string;
+    quantity: number;
+    estimatedCost: number;
+  }[];
+  totalEstimatedCost: number;
+  priority: "Low" | "Medium" | "High" | "Emergency";
+  status: "pending_approval" | "approved" | "rejected" | "ordered";
+  requestDate: string;
+  notes?: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  poNumber: string; // e.g., LPO-2026-402
+  requisitionId?: string;
+  supplierId: string;
+  supplierName: string;
+  supplierPin: string;
+  department: string;
+  items: {
+    itemName: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }[];
+  subtotal: number;
+  vatAmount: number;
+  totalAmount: number;
+  status: "draft" | "issued" | "partially_fulfilled" | "completed" | "cancelled";
+  createdDate: string;
+  deliveryDueDate: string;
+  paymentTerms: string; // e.g., "Net 30 Days", "Cash On Delivery"
+}
+
+export interface GoodsReceivedNote {
+  id: string;
+  grnNumber: string; // e.g., GRN-2026-109
+  poNumber: string;
+  supplierName: string;
+  receivedDate: string;
+  receivedBy: string;
+  items: {
+    itemName: string;
+    orderedQuantity: number;
+    receivedQuantity: number;
+    batchNo: string;
+    expiryDate: string;
+    unitPrice: number;
+    total: number;
+    passInspection: boolean;
+  }[];
+  notes?: string;
+  inventoryUpdated: boolean;
+}
+
+
