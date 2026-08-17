@@ -1,9 +1,26 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../lib/firebase";
-import { collection, addDoc, onSnapshot } from "firebase/firestore";
-import { User, CreditCard, Ticket, Fingerprint, Search, ShieldAlert, CheckCircle, RefreshCw, Stethoscope, Briefcase } from "lucide-react";
-import { Employee } from "../types";
-import { createAutoTicket } from "../lib/ticketService";
+import { collection, addDoc, updateDoc, doc, onSnapshot } from "firebase/firestore";
+import { 
+  User, 
+  CreditCard, 
+  Ticket, 
+  Fingerprint, 
+  Search, 
+  ShieldAlert, 
+  CheckCircle, 
+  RefreshCw, 
+  Stethoscope, 
+  Briefcase,
+  AlertCircle,
+  UserCheck,
+  Ban,
+  Clock,
+  X,
+  History
+} from "lucide-react";
+import { Employee, MedicalRecord, SystemTicket, QueueTicket } from "../types";
+import { createAutoTicket, checkActivePatientEncounter, findPatientByNationalId, DuplicateEncounterCheck } from "../lib/ticketService";
 
 interface ReceptionKioskProps {
   onTicketCreated: () => void;
@@ -23,6 +40,19 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assignedSpecialistId, setAssignedSpecialistId] = useState<string>("");
 
+  // Real-time lookup & duplicate check states
+  const [existingPatientProfile, setExistingPatientProfile] = useState<MedicalRecord | null>(null);
+  const [activeDuplicateEncounter, setActiveDuplicateEncounter] = useState<DuplicateEncounterCheck | null>(null);
+  const [isCheckingId, setIsCheckingId] = useState(false);
+
+  // Duplicate Encounter Rejection Modal state
+  const [duplicateRejectionModal, setDuplicateRejectionModal] = useState<{
+    show: boolean;
+    checkResult: DuplicateEncounterCheck;
+    nationalId: string;
+    patientName: string;
+  } | null>(null);
+
   // Subscribe to employees from Firestore to list clinical specialists
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "employees"), (snapshot) => {
@@ -35,6 +65,63 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
     });
     return () => unsubscribe();
   }, []);
+
+  // Real-time National ID lookup function
+  const performIdLookup = useCallback(async (idToCheck: string) => {
+    const cleanId = (idToCheck || "").trim();
+    if (!cleanId || cleanId.length < 3) {
+      setExistingPatientProfile(null);
+      setActiveDuplicateEncounter(null);
+      return;
+    }
+
+    setIsCheckingId(true);
+    try {
+      // 1. Check for active duplicate encounters (open ticket or active queue)
+      const dupCheck = await checkActivePatientEncounter(cleanId);
+      setActiveDuplicateEncounter(dupCheck.isDuplicate ? dupCheck : null);
+
+      // 2. Check for existing registered patient file in EHR database
+      const existingPatient = await findPatientByNationalId(cleanId);
+      if (existingPatient) {
+        setExistingPatientProfile(existingPatient);
+        // Auto-populate demographics if current fields are empty
+        setPatientName((prev) => prev || existingPatient.patientName || "");
+        setPhone((prev) => prev || existingPatient.phone || "");
+        setAge((prev) => (prev ? prev : existingPatient.age ? String(existingPatient.age) : ""));
+        if (existingPatient.gender) setGender(existingPatient.gender);
+        if (existingPatient.bloodType) setBloodType(existingPatient.bloodType);
+        if (existingPatient.shaEligible === "eligible" && existingPatient.shaId) {
+          setShaStatus({
+            eligible: true,
+            shaId: existingPatient.shaId,
+            patientName: existingPatient.patientName,
+            benefitLimits: { outpatient: 100000, inpatient: 500000 }
+          });
+        }
+      } else {
+        setExistingPatientProfile(null);
+      }
+    } catch (err) {
+      console.error("Error performing ID verification lookup:", err);
+    } finally {
+      setIsCheckingId(false);
+    }
+  }, []);
+
+  // Debounced lookup on National ID change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (nationalId.trim()) {
+        performIdLookup(nationalId.trim());
+      } else {
+        setExistingPatientProfile(null);
+        setActiveDuplicateEncounter(null);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [nationalId, performIdLookup]);
 
   // Biometric state
   const [biometricsCaptured, setBiometricsCaptured] = useState(false);
@@ -54,13 +141,12 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   const simulateIDScan = () => {
     setScanning(true);
     setTimeout(() => {
-      // Simulate scanning Kenyan ID card
-      const mockIds = ["32441928", "29110482", "38450123", "20445981"];
-      const chosenId = mockIds[Math.floor(Math.random() * mockIds.length)];
-      setNationalId(chosenId);
+      // Hardware Optical Reader Simulation: Generate formatted Kenyan National ID and Phone
+      const freshId = String(Math.floor(20000000 + Math.random() * 19000000));
+      setNationalId(freshId);
       setPhone("07" + Math.floor(10000000 + Math.random() * 90000000));
       setScanning(false);
-    }, 1500);
+    }, 1200);
   };
 
   const checkSHAEligibility = async () => {
@@ -98,7 +184,10 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
 
   const handleRegisterAndTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!patientName || !nationalId) {
+    const cleanId = nationalId.trim();
+    const cleanName = patientName.trim();
+
+    if (!cleanName || !cleanId) {
       alert("Please fill out patient name and scan/input ID.");
       return;
     }
@@ -106,119 +195,155 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
     setSubmitting(true);
     setSuccessTicket(null);
 
-    // Dynamic prefix generator & mapping specialist details
-    let prefix = "GEN";
-    let currentDept: any = "doctor";
-    let selectedServiceName = service;
-    let specName = "";
+    try {
+      // STEP 1: Strict Anti-Duplication Check
+      // Reject if patient already has an active hospital encounter in queue or open system tickets
+      const dupCheck = await checkActivePatientEncounter(cleanId);
+      if (dupCheck.isDuplicate) {
+        setDuplicateRejectionModal({
+          show: true,
+          checkResult: dupCheck,
+          nationalId: cleanId,
+          patientName: cleanName
+        });
+        setSubmitting(false);
+        return;
+      }
 
-    if (assignedSpecialistId) {
-      const spec = employees.find(e => e.id === assignedSpecialistId);
-      if (spec) {
-        specName = spec.name;
-        const dept = spec.department.toLowerCase();
-        if (dept === "medical" || dept === "nursing") {
-          currentDept = "doctor";
-          selectedServiceName = `Consultation with ${spec.name} (${spec.specialty || "General GP"})`;
-        } else if (dept === "laboratory" || dept === "lab") {
-          currentDept = "laboratory";
-          selectedServiceName = `Lab Service: ${spec.name}`;
+      // Dynamic prefix generator & mapping specialist details
+      let prefix = "GEN";
+      let currentDept: any = "doctor";
+      let selectedServiceName = service;
+      let specName = "";
+
+      if (assignedSpecialistId) {
+        const spec = employees.find(e => e.id === assignedSpecialistId);
+        if (spec) {
+          specName = spec.name;
+          const dept = spec.department.toLowerCase();
+          if (dept === "medical" || dept === "nursing") {
+            currentDept = "doctor";
+            selectedServiceName = `Consultation with ${spec.name} (${spec.specialty || "General GP"})`;
+          } else if (dept === "laboratory" || dept === "lab") {
+            currentDept = "laboratory";
+            selectedServiceName = `Lab Service: ${spec.name}`;
+            prefix = "LAB";
+          } else if (dept === "radiology") {
+            currentDept = "radiology";
+            selectedServiceName = `Radiology Service: ${spec.name}`;
+            prefix = "RAD";
+          } else if (dept === "pharmacy") {
+            currentDept = "pharmacy";
+            selectedServiceName = `Pharmacy Service: ${spec.name}`;
+            prefix = "PHA";
+          } else {
+            currentDept = "doctor";
+            selectedServiceName = `Consultation with ${spec.name}`;
+          }
+        }
+      } else {
+        if (service === "Laboratory") {
           prefix = "LAB";
-        } else if (dept === "radiology") {
-          currentDept = "radiology";
-          selectedServiceName = `Radiology Service: ${spec.name}`;
+          currentDept = "laboratory";
+        } else if (service === "Radiology") {
           prefix = "RAD";
-        } else if (dept === "pharmacy") {
-          currentDept = "pharmacy";
-          selectedServiceName = `Pharmacy Service: ${spec.name}`;
+          currentDept = "radiology";
+        } else if (service === "Pharmacy") {
           prefix = "PHA";
-        } else {
-          currentDept = "doctor";
-          selectedServiceName = `Consultation with ${spec.name}`;
+          currentDept = "pharmacy";
+        } else if (service === "Labour Room") {
+          prefix = "LBR";
+          currentDept = "labour_room";
+        } else if (service === "Gynecology (Gyna)") {
+          prefix = "GYN";
+          currentDept = "gyna";
         }
       }
-    } else {
-      if (service === "Laboratory") {
-        prefix = "LAB";
-        currentDept = "laboratory";
-      } else if (service === "Radiology") {
-        prefix = "RAD";
-        currentDept = "radiology";
-      } else if (service === "Pharmacy") {
-        prefix = "PHA";
-        currentDept = "pharmacy";
-      } else if (service === "Labour Room") {
-        prefix = "LBR";
-        currentDept = "labour_room";
-      } else if (service === "Gynecology (Gyna)") {
-        prefix = "GYN";
-        currentDept = "gyna";
-      }
-    }
 
-    const ticketNo = `${prefix}-${Math.floor(Math.random() * 900 + 100)}`;
+      const ticketNo = `${prefix}-${Math.floor(Math.random() * 900 + 100)}`;
 
-    try {
-      // 1. Create Patient EHR Record if eligible / standard
-      const patientData = {
-        patientName,
-        nationalId,
-        phone,
-        age: parseInt(age) || 30,
-        gender,
-        bloodType,
-        shaEligible: shaStatus?.eligible ? "eligible" : "not_eligible",
-        shaId: shaStatus?.shaId || "",
-        visits: [
-          {
-            id: `vst-${Date.now()}`,
-            date: new Date().toISOString().split("T")[0],
-            vitals: {
-              temp: "36.8",
-              bp: "120/80",
-              pulse: "72",
-              weight: "68",
-            },
-            symptoms: issue || "Walk-in registration. Presenting for routine assessment/consultation.",
-            diagnosis: "Initial checkup pending clinical consultation",
-            prescriptions: [],
-            referrals: [],
-          },
-        ],
+      // STEP 2: EHR Record Management (Prevent Duplicate Patient Document)
+      let resolvedPatientId = "";
+      const existingPatient = await findPatientByNationalId(cleanId);
+
+      const newVisit = {
+        id: `vst-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        vitals: {
+          temp: "36.8",
+          bp: "120/80",
+          pulse: "72",
+          weight: "68",
+        },
+        symptoms: issue.trim() || "Walk-in registration. Presenting for routine assessment/consultation.",
+        diagnosis: "Initial checkup pending clinical consultation",
+        prescriptions: [],
+        referrals: [],
       };
 
-      // 2. Save EHR to Firestore
-      const patientRef = await addDoc(collection(db, "patients"), patientData);
+      if (existingPatient) {
+        // Patient already exists in database -> DO NOT create duplicate record.
+        // Update existing record by appending the visit and updating latest contact info.
+        resolvedPatientId = existingPatient.id;
+        const updatedVisits = [...(existingPatient.visits || []), newVisit];
+        await updateDoc(doc(db, "patients", existingPatient.id), {
+          patientName: cleanName,
+          phone: phone.trim() || existingPatient.phone,
+          age: parseInt(age) || existingPatient.age || 30,
+          gender: gender || existingPatient.gender,
+          bloodType: bloodType || existingPatient.bloodType,
+          shaEligible: shaStatus?.eligible ? "eligible" : (existingPatient.shaEligible || "not_eligible"),
+          shaId: shaStatus?.shaId || existingPatient.shaId || "",
+          visits: updatedVisits,
+        });
+        console.log(`Updated existing patient EHR profile [${existingPatient.id}] with new visit.`);
+      } else {
+        // Brand new patient -> Create new document in `patients`
+        const newPatientData = {
+          patientName: cleanName,
+          nationalId: cleanId,
+          phone: phone.trim(),
+          age: parseInt(age) || 30,
+          gender,
+          bloodType,
+          shaEligible: shaStatus?.eligible ? "eligible" : "not_eligible",
+          shaId: shaStatus?.shaId || "",
+          visits: [newVisit],
+        };
+        const patientRef = await addDoc(collection(db, "patients"), newPatientData);
+        resolvedPatientId = patientRef.id;
+        console.log(`Created new patient EHR profile [${patientRef.id}].`);
+      }
 
-      // 3. Create active Queue ticket in database
+      // STEP 3: Create active Queue ticket in database
       const queueData = {
         ticketNo,
-        patientName,
-        nationalId,
+        patientName: cleanName,
+        nationalId: cleanId,
         biometricStatus: biometricsCaptured ? "verified" : "not_verified",
         service: selectedServiceName,
         currentDepartment: currentDept,
         status: "pending",
-        patientId: patientRef.id,
+        patientId: resolvedPatientId,
         timestamp: new Date().toISOString(),
-        phone: phone || "N/A",
+        phone: phone.trim() || "N/A",
         age: parseInt(age) || 30,
-        issue: issue || "Not Specified",
+        issue: issue.trim() || "Not Specified",
         assignedSpecialistId: assignedSpecialistId || "",
         assignedSpecialistName: specName || "",
       };
 
       await addDoc(collection(db, "queue"), queueData);
 
-      // Automatically trigger system ticket creation
+      // STEP 4: Automatically trigger system ticket creation
       await createAutoTicket({
-        patientName,
-        nationalId,
-        phone,
+        patientName: cleanName,
+        nationalId: cleanId,
+        phone: phone.trim(),
         department: currentDept,
-        visitReason: issue || selectedServiceName || "Outpatient Clinical Intake",
+        visitReason: issue.trim() || selectedServiceName || "Outpatient Clinical Intake",
         priority: "Normal",
-        patientId: patientRef.id
+        patientId: resolvedPatientId
       });
 
       setSuccessTicket(ticketNo);
@@ -231,6 +356,8 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       setAssignedSpecialistId("");
       setBiometricsCaptured(false);
       setShaStatus(null);
+      setExistingPatientProfile(null);
+      setActiveDuplicateEncounter(null);
       onTicketCreated();
     } catch (err) {
       console.error("Failed to register patient/ticket:", err);
@@ -257,7 +384,14 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* National ID Field */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-600">National ID / Passport</label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-gray-600">National ID / Passport</label>
+                {isCheckingId && (
+                  <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" /> Verifying ID...
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <CreditCard className="absolute left-3 top-2.5 w-4.5 h-4.5 text-gray-400" />
@@ -268,7 +402,13 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
                     placeholder="e.g. 32441928"
                     value={nationalId}
                     onChange={(e) => setNationalId(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:border-emerald-500 focus:outline-hidden"
+                    className={`w-full pl-10 pr-3 py-2 border rounded-xl text-sm focus:outline-hidden font-mono ${
+                      activeDuplicateEncounter
+                        ? "border-rose-400 bg-rose-50/50 text-rose-950 focus:border-rose-500"
+                        : existingPatientProfile
+                        ? "border-emerald-400 bg-emerald-50/30 text-emerald-950 focus:border-emerald-500"
+                        : "border-gray-200 focus:border-emerald-500"
+                    }`}
                   />
                 </div>
                 <button
@@ -302,6 +442,70 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
               </button>
             </div>
           </div>
+
+          {/* ACTIVE DUPLICATE ENCOUNTER REJECTION ALERT BANNER */}
+          {activeDuplicateEncounter && (
+            <div
+              id="active-duplicate-warning-banner"
+              className="p-4 rounded-xl border border-rose-200 bg-rose-50/90 text-rose-950 text-xs space-y-2 animate-fade-in"
+            >
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-rose-900 uppercase tracking-wide">
+                      Active Encounter Detected — Duplicate Ticket Blocked
+                    </span>
+                    <span className="px-2 py-0.2 bg-rose-600 text-white rounded text-[9px] font-black uppercase tracking-wider">
+                      REJECTED
+                    </span>
+                  </div>
+                  <p className="text-rose-800 leading-relaxed font-medium">
+                    This patient already has an unresolved ticket in the hospital system. Under anti-duplication safety rules, a second active ticket cannot be issued for ID <strong className="font-mono text-rose-950">{nationalId}</strong>.
+                  </p>
+                  <div className="mt-2 pt-2 border-t border-rose-200/80 flex flex-wrap items-center gap-3 text-[11px] font-semibold text-rose-900">
+                    <span>
+                      Active Ticket: <strong className="font-mono">{activeDuplicateEncounter.activeTicket?.ticketNumber || activeDuplicateEncounter.activeQueue?.ticketNo}</strong>
+                    </span>
+                    <span>•</span>
+                    <span>
+                      Location: <strong className="uppercase">{activeDuplicateEncounter.activeTicket?.department || activeDuplicateEncounter.activeQueue?.currentDepartment}</strong>
+                    </span>
+                    <span>•</span>
+                    <span>
+                      Priority: <strong className="capitalize">{activeDuplicateEncounter.activeTicket?.priority || "Normal"}</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* REGISTERED PATIENT EHR FILE RECOGNIZED BADGE */}
+          {existingPatientProfile && !activeDuplicateEncounter && (
+            <div
+              id="existing-patient-found-badge"
+              className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 text-emerald-950 text-xs flex items-start gap-2.5 animate-fade-in"
+            >
+              <UserCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-emerald-900">
+                    Existing Medical Record Recognized
+                  </p>
+                  <span className="px-2 py-0.2 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[9px] font-bold">
+                    Profile Linked
+                  </span>
+                </div>
+                <p className="text-emerald-800 text-[11px]">
+                  Patient: <strong className="font-semibold text-emerald-950">{existingPatientProfile.patientName}</strong> • Age: {existingPatientProfile.age} • Gender: {existingPatientProfile.gender} • Blood: {existingPatientProfile.bloodType} • <span className="font-semibold">{existingPatientProfile.visits?.length || 1} Past Visit(s) on File</span>.
+                </p>
+                <p className="text-[10px] text-emerald-700">
+                  New intake will be appended directly to their existing medical history without creating duplicate patient records.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* SHA Response Alert Box */}
           {shaStatus && (
@@ -503,11 +707,29 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
           <button
             id="btn-register-submit"
             type="submit"
-            disabled={submitting}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors disabled:opacity-50"
+            disabled={submitting || !!activeDuplicateEncounter}
+            className={`w-full py-3 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors disabled:opacity-50 ${
+              activeDuplicateEncounter
+                ? "bg-rose-600 hover:bg-rose-700 cursor-not-allowed"
+                : "bg-emerald-600 hover:bg-emerald-700"
+            }`}
           >
-            <Ticket className="w-4 h-4" />
-            {submitting ? "Processing Claim & Dispatching..." : "Issue Digital Queue Ticket"}
+            {activeDuplicateEncounter ? (
+              <>
+                <Ban className="w-4 h-4" />
+                <span>Duplicate Encounter Blocked (Active Ticket Exists)</span>
+              </>
+            ) : submitting ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Processing EHR & Dispatching Ticket...</span>
+              </>
+            ) : (
+              <>
+                <Ticket className="w-4 h-4" />
+                <span>Issue Digital Queue Ticket</span>
+              </>
+            )}
           </button>
         </form>
 
@@ -568,6 +790,88 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
           )}
         </div>
       </div>
+
+      {/* DUPLICATE ENCOUNTER REJECTION MODAL */}
+      {duplicateRejectionModal?.show && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-60 animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border-2 border-rose-200 overflow-hidden animate-scale-up">
+            <div className="p-5 bg-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-rose-700/60 rounded-2xl">
+                  <ShieldAlert className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm uppercase tracking-wide">Duplicate Ticket Registration Rejected</h3>
+                  <p className="text-[11px] text-rose-100 font-medium">Hospital Patient Identity Verification Rule</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setDuplicateRejectionModal(null)}
+                className="p-1 rounded-xl hover:bg-rose-700/50 text-rose-100 hover:text-white cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <p className="text-rose-900 font-medium leading-relaxed">
+                    Patient <strong className="font-bold text-rose-950">{duplicateRejectionModal.patientName}</strong> with National ID <span className="font-mono font-bold text-rose-950">{duplicateRejectionModal.nationalId}</span> already has an active hospital encounter in progress.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                  Active Clinical Encounter Record
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-slate-700">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block">Ticket No</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm">
+                      {duplicateRejectionModal.checkResult.activeTicket?.ticketNumber || duplicateRejectionModal.checkResult.activeQueue?.ticketNo}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block">Department</span>
+                    <span className="font-bold text-slate-900 uppercase">
+                      {duplicateRejectionModal.checkResult.activeTicket?.department || duplicateRejectionModal.checkResult.activeQueue?.currentDepartment}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block">Current Status</span>
+                    <span className="font-bold text-amber-600 capitalize">
+                      {duplicateRejectionModal.checkResult.activeTicket?.status || duplicateRejectionModal.checkResult.activeQueue?.status || "Active in Queue"}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block">Encounter Time</span>
+                    <span className="font-bold text-slate-900 text-[11px]">
+                      {duplicateRejectionModal.checkResult.activeTicket?.createdTime || duplicateRejectionModal.checkResult.activeQueue?.timestamp ? new Date(duplicateRejectionModal.checkResult.activeQueue?.timestamp || "").toLocaleTimeString() : "Today"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-500 leading-normal">
+                To maintain single-patient clinical integrity and prevent accidental billing duplication, please resolve or close their active ticket before issuing a new one.
+              </p>
+
+              <div className="pt-2 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setDuplicateRejectionModal(null)}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs uppercase cursor-pointer shadow-md transition-colors"
+                >
+                  Understood & Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -46,7 +46,6 @@ export default function DashboardOverview({ tenant, toggles, onNavigateToTab }: 
   const [meds, setMeds] = useState<Medication[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // 1. Queue Listener
@@ -83,7 +82,6 @@ export default function DashboardOverview({ tenant, toggles, onNavigateToTab }: 
         empData.push({ id: doc.id, ...doc.data() } as Employee);
       });
       setEmployees(empData);
-      setLoading(false);
     });
 
     return () => {
@@ -156,47 +154,51 @@ export default function DashboardOverview({ tenant, toggles, onNavigateToTab }: 
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
     .slice(0, 5);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 text-slate-400">
-        <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin mb-4" />
-        <p className="text-xs font-mono uppercase tracking-widest animate-pulse">Assembling Hospital Metrics Dashboard...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      {/* Upper Brand Showcase - Darkened Deep Pink/Rose Background */}
-      <div className="bg-gradient-to-r from-pink-950 via-rose-900 to-slate-950 border border-pink-800/50 rounded-3xl p-6 relative overflow-hidden text-white flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="p-3.5 bg-pink-900/60 backdrop-blur-md text-pink-300 border border-pink-700/60 rounded-2xl shadow-lg">
-            <Building2 className="w-8 h-8 text-pink-300" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold uppercase tracking-tight text-white font-comfortaa">{tenant.name}</h1>
-              <span className="px-2.5 py-0.5 bg-pink-500/20 text-pink-200 border border-pink-500/40 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xs">
-                Tier {tenant.type === "clinic" ? "Primary Clinic" : tenant.type === "hospital_level_4" ? "Level 4" : "Level 5"}
-              </span>
+      {/* Upper Brand Showcase - Darkened Deep Pink/Rose Background with Single Wave Curved Bottom Edge */}
+      <div className="relative rounded-3xl overflow-hidden shadow-xl border border-pink-800/50 bg-gradient-to-r from-pink-950 via-rose-900 to-slate-950">
+        <div className="p-6 pb-12 relative text-white flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="p-3.5 bg-pink-900/60 backdrop-blur-md text-pink-300 border border-pink-700/60 rounded-2xl shadow-lg">
+              <Building2 className="w-8 h-8 text-pink-300" />
             </div>
-            <p className="text-xs text-pink-200/80 font-medium">
-              Registered Primary Care Facility • {tenant.county} County • SHA Portal Connected • KRA eTIMS v2.0
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold uppercase tracking-tight text-white font-comfortaa">{tenant.name}</h1>
+                <span className="px-2.5 py-0.5 bg-pink-500/20 text-pink-200 border border-pink-500/40 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xs">
+                  Tier {tenant.type === "clinic" ? "Primary Clinic" : tenant.type === "hospital_level_4" ? "Level 4" : "Level 5"}
+                </span>
+              </div>
+              <p className="text-xs text-pink-200/80 font-medium">
+                Registered Primary Care Facility • {tenant.county} County • SHA Portal Connected • KRA eTIMS v2.0
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 relative z-10 self-start md:self-auto bg-pink-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-pink-700/50 shadow-md">
+            <div className="text-right">
+              <span className="block text-[9px] text-pink-300 font-black tracking-widest uppercase">SYSTEM METRIC</span>
+              <span className="text-3xl font-black text-rose-200 tracking-tight font-mono drop-shadow-sm">
+                {formatKES(totalRevenue)}
+              </span>
+              <p className="text-[10px] text-pink-300/90 font-semibold">Total Cleared Revenue Today</p>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 relative z-10 self-start md:self-auto bg-pink-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-pink-700/50 shadow-md">
-          <div className="text-right">
-            <span className="block text-[9px] text-pink-300 font-black tracking-widest uppercase">SYSTEM METRIC</span>
-            <span className="text-3xl font-black text-rose-200 tracking-tight font-mono drop-shadow-sm">
-              {formatKES(totalRevenue)}
-            </span>
-            <p className="text-[10px] text-pink-300/90 font-semibold">Total Cleared Revenue Today</p>
-          </div>
+        {/* Single Wave Bottom Edge SVG Divider */}
+        <div className="relative w-full overflow-hidden leading-none pointer-events-none -mt-8 z-20">
+          <svg
+            viewBox="0 0 1440 50"
+            preserveAspectRatio="none"
+            className="block w-full h-6 md:h-8 fill-gray-100"
+          >
+            <path d="M 0,0 C 360,55 1080,-15 1440,30 L 1440,50 L 0,50 Z" />
+          </svg>
         </div>
       </div>
 

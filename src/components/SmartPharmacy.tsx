@@ -520,7 +520,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted }: SmartPha
                         type="button"
                         onClick={() => triggerMockScanForCode(m.batchNo)}
                         className="px-2 py-1 bg-slate-100 hover:bg-orange-100 hover:text-orange-900 border border-gray-200 rounded-md font-mono text-[9px] text-gray-700 cursor-pointer transition-all flex items-center gap-1"
-                        title="Click to instantly mock scan this drug code"
+                        title="Click to scan drug batch barcode into system"
                       >
                         <span>{m.batchNo}</span>
                         <span className="text-[8px] text-gray-400 font-sans">({m.name.split(" ")[0]})</span>

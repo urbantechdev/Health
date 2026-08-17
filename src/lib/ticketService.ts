@@ -1,6 +1,95 @@
 import { db } from "./firebase";
-import { collection, addDoc, getDocs, query, where, updateDoc, doc } from "firebase/firestore";
-import { SystemTicket } from "../types";
+import { collection, addDoc, getDocs, query, where, updateDoc, doc, deleteDoc, writeBatch } from "firebase/firestore";
+import { SystemTicket, QueueTicket, MedicalRecord } from "../types";
+
+export interface DuplicateEncounterCheck {
+  isDuplicate: boolean;
+  activeTicket?: SystemTicket;
+  activeQueue?: QueueTicket;
+  existingPatient?: MedicalRecord;
+  reason?: string;
+}
+
+/**
+ * Check if a patient with the given National ID already has an active hospital encounter (open/in_progress ticket or pending queue).
+ */
+export async function checkActivePatientEncounter(nationalId: string): Promise<DuplicateEncounterCheck> {
+  const cleanId = (nationalId || "").trim();
+  if (!cleanId) {
+    return { isDuplicate: false };
+  }
+
+  try {
+    // 1. Check system_tickets for active/open tickets
+    const qTickets = query(
+      collection(db, "system_tickets"),
+      where("nationalId", "==", cleanId)
+    );
+    const ticketSnap = await getDocs(qTickets);
+    const activeTicketDoc = ticketSnap.docs.find((d) => {
+      const data = d.data() as SystemTicket;
+      return data.status === "open" || data.status === "in_progress";
+    });
+
+    if (activeTicketDoc) {
+      const activeTicket = { id: activeTicketDoc.id, ...activeTicketDoc.data() } as SystemTicket;
+      return {
+        isDuplicate: true,
+        activeTicket,
+        reason: `Active ticket ${activeTicket.ticketNumber} already exists in ${activeTicket.department} for ID ${cleanId}.`
+      };
+    }
+
+    // 2. Check live queue for active/pending encounters
+    const qQueue = query(
+      collection(db, "queue"),
+      where("nationalId", "==", cleanId)
+    );
+    const queueSnap = await getDocs(qQueue);
+    const activeQueueDoc = queueSnap.docs.find((d) => {
+      const data = d.data() as QueueTicket;
+      return data.status === "pending" || data.status === "serving";
+    });
+
+    if (activeQueueDoc) {
+      const activeQueue = { id: activeQueueDoc.id, ...activeQueueDoc.data() } as QueueTicket;
+      return {
+        isDuplicate: true,
+        activeQueue,
+        reason: `Active queue encounter ${activeQueue.ticketNo} is currently ${activeQueue.status} in ${activeQueue.currentDepartment} for ID ${cleanId}.`
+      };
+    }
+
+    return { isDuplicate: false };
+  } catch (err) {
+    console.error("Error checking active patient encounter:", err);
+    return { isDuplicate: false };
+  }
+}
+
+/**
+ * Find existing registered patient in EHR database by National ID / Passport
+ */
+export async function findPatientByNationalId(nationalId: string): Promise<MedicalRecord | null> {
+  const cleanId = (nationalId || "").trim();
+  if (!cleanId) return null;
+
+  try {
+    const q = query(
+      collection(db, "patients"),
+      where("nationalId", "==", cleanId)
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const d = snap.docs[0];
+      return { id: d.id, ...d.data() } as MedicalRecord;
+    }
+    return null;
+  } catch (err) {
+    console.error("Error finding patient by nationalId:", err);
+    return null;
+  }
+}
 
 export async function createAutoTicket(data: {
   patientName: string;
@@ -14,12 +103,19 @@ export async function createAutoTicket(data: {
   try {
     if (!data.patientName || !data.nationalId) return null;
 
+    // Check for duplicate active ticket before inserting
+    const duplicateCheck = await checkActivePatientEncounter(data.nationalId);
+    if (duplicateCheck.isDuplicate) {
+      console.warn(`[DUPLICATE REJECTED] Cannot create auto ticket: ${duplicateCheck.reason}`);
+      return duplicateCheck.activeTicket?.id || null;
+    }
+
     const ticketNo = `TCK-${Math.floor(1000 + Math.random() * 9000)}`;
     const newTicket: Omit<SystemTicket, "id"> = {
       ticketNumber: ticketNo,
       patientId: data.patientId || "",
-      patientName: data.patientName,
-      nationalId: data.nationalId,
+      patientName: data.patientName.trim(),
+      nationalId: data.nationalId.trim(),
       phone: data.phone || "",
       visitReason: data.visitReason || "Outpatient Clinical Intake & Consultation",
       department: data.department || "reception",
@@ -98,3 +194,37 @@ export async function closeAutoTicketById(ticketId: string, resolutionNotes?: st
     return false;
   }
 }
+
+/**
+ * Permanently delete a ticket document by its Firestore ID
+ */
+export async function deleteTicketById(ticketId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, "system_tickets", ticketId));
+    console.log(`Ticket [${ticketId}] deleted successfully from Firestore.`);
+    return true;
+  } catch (err) {
+    console.error("Error deleting ticket by id:", err);
+    return false;
+  }
+}
+
+/**
+ * Permanently delete multiple tickets in batch
+ */
+export async function deleteMultipleTicketsById(ticketIds: string[]): Promise<number> {
+  if (!ticketIds.length) return 0;
+  try {
+    const batch = writeBatch(db);
+    ticketIds.forEach((id) => {
+      batch.delete(doc(db, "system_tickets", id));
+    });
+    await batch.commit();
+    console.log(`Successfully batch deleted ${ticketIds.length} tickets.`);
+    return ticketIds.length;
+  } catch (err) {
+    console.error("Error batch deleting tickets:", err);
+    return 0;
+  }
+}
+

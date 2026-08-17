@@ -1,6 +1,9 @@
 import React from "react";
-import { DepartmentToggles, Tenant } from "../types";
+import { DepartmentToggles, Tenant, Employee } from "../types";
+import { db } from "../lib/firebase";
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import KenyanIntegrationsShowcase from "./KenyanIntegrationsShowcase";
+import { runFullDatabaseDeduplication, checkDuplicateEmployee, DeduplicationReport } from "../lib/deduplicationService";
 import { 
   ToggleLeft, 
   ToggleRight, 
@@ -21,7 +24,16 @@ import {
   Cpu,
   Type,
   Palette,
-  Link2
+  Link2,
+  Users,
+  Shield,
+  UserPlus,
+  KeyRound,
+  Edit2,
+  Database,
+  RefreshCw,
+  Ban,
+  Check
 } from "lucide-react";
 
 const GOOGLE_FONTS = [
@@ -121,6 +133,121 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   const [selectedThemeColor, setSelectedThemeColor] = React.useState(() => localStorage.getItem("platform_theme_color") || "emerald");
   const [selectedBlockEdgeColor, setSelectedBlockEdgeColor] = React.useState(() => localStorage.getItem("platform_block_edge_color") || "yellow-blue-green");
 
+  // System Users / Staff list from Firestore
+  const [systemUsers, setSystemUsers] = React.useState<Employee[]>([]);
+  const [showAddUserModal, setShowAddUserModal] = React.useState(false);
+  const [userName, setUserName] = React.useState("");
+  const [userEmail, setUserEmail] = React.useState("");
+  const [userDept, setUserDept] = React.useState("administration");
+  const [userRole, setUserRole] = React.useState("System Administrator");
+  const [userAccessLevel, setUserAccessLevel] = React.useState<"Super Admin" | "Department Admin" | "Standard Staff">("Super Admin");
+  const [userSubmitting, setUserSubmitting] = React.useState(false);
+  const [userCreationError, setUserCreationError] = React.useState("");
+
+  // Deduplication Scanner States
+  const [isDeduplicating, setIsDeduplicating] = React.useState(false);
+  const [dedupReport, setDedupReport] = React.useState<DeduplicationReport | null>(null);
+  const [dedupStatusMessage, setDedupStatusMessage] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const unsub = onSnapshot(collection(db, "employees"), (snapshot) => {
+      const usersList: Employee[] = [];
+      snapshot.forEach((doc) => {
+        usersList.push({ id: doc.id, ...doc.data() } as Employee);
+      });
+      setSystemUsers(usersList);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleRunFullDeduplication = async () => {
+    setIsDeduplicating(true);
+    setDedupStatusMessage("Scanning all hospital collections for duplicate records (Patients, Tickets, Queue, Staff, Pharmacy)...");
+    try {
+      const report = await runFullDatabaseDeduplication();
+      setDedupReport(report);
+      setDedupStatusMessage(`Deduplication scan complete: Found ${report.totalDuplicatesFound} duplicate(s), safely merged & cleaned ${report.totalDuplicatesCleaned} duplicate record(s).`);
+    } catch (err) {
+      console.error("Error running database deduplication:", err);
+      setDedupStatusMessage("Deduplication error encountered while processing collections.");
+    } finally {
+      setIsDeduplicating(false);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUserCreationError("");
+    if (!userName.trim() || !userEmail.trim()) {
+      setUserCreationError("Please provide both name and corporate email address.");
+      return;
+    }
+
+    const cleanEmail = userEmail.trim().toLowerCase();
+    const cleanName = userName.trim();
+
+    setUserSubmitting(true);
+    try {
+      // 1. Strict Duplicate Check: Always reject if user with same email or exact name already exists
+      const duplicateCheck = await checkDuplicateEmployee("", cleanEmail);
+      if (duplicateCheck.isDuplicate) {
+        setUserCreationError(`[DUPLICATE REJECTED] ${duplicateCheck.reason}`);
+        setUserSubmitting(false);
+        return;
+      }
+
+      // Also check local system users for exact email match
+      const existingUser = systemUsers.find(u => u.email?.toLowerCase() === cleanEmail);
+      if (existingUser) {
+        setUserCreationError(`[DUPLICATE REJECTED] An account with email '${cleanEmail}' already exists for ${existingUser.name}. Duplicate creation is strictly blocked.`);
+        setUserSubmitting(false);
+        return;
+      }
+
+      await addDoc(collection(db, "employees"), {
+        name: cleanName,
+        email: cleanEmail,
+        department: userDept,
+        role: userRole.trim() || "Staff Member",
+        accessLevel: userAccessLevel,
+        status: "active",
+        salary: 100000,
+        phone: "+254700000000",
+        nationalId: "SYS-" + Math.floor(100000 + Math.random() * 900000),
+        hireDate: new Date().toISOString().split("T")[0]
+      });
+      setUserName("");
+      setUserEmail("");
+      setUserRole("System Administrator");
+      setUserCreationError("");
+      setShowAddUserModal(false);
+    } catch (err) {
+      console.error("Error creating user:", err);
+      setUserCreationError("Failed to create user. Please check Firestore connection.");
+    } finally {
+      setUserSubmitting(false);
+    }
+  };
+
+  const handleUpdateAccessLevel = async (userId: string, newAccessLevel: "Super Admin" | "Department Admin" | "Standard Staff") => {
+    try {
+      await updateDoc(doc(db, "employees", userId), {
+        accessLevel: newAccessLevel
+      });
+    } catch (err) {
+      console.error("Error updating user access level:", err);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to remove ${name} from the System User registry?`)) return;
+    try {
+      await deleteDoc(doc(db, "employees", userId));
+    } catch (err) {
+      console.error("Error deleting user:", err);
+    }
+  };
+
   React.useEffect(() => {
     const handleSync = () => {
       setPlatformFontSize(localStorage.getItem("platform_font_size") || "base");
@@ -212,7 +339,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
     onTenantChange({
       id: tenant.id,
-      name: type === "clinic" ? "Hospital Management System" : type === "hospital_level_4" ? "Mama Lucy Level 4 Hospital" : "Kenyatta National Referral Hospital",
+      name: type === "clinic" ? "HMS" : type === "hospital_level_4" ? "Mama Lucy Level 4 Hospital" : "Kenyatta National Referral Hospital",
       type,
       county: type === "clinic" ? "Nairobi" : type === "hospital_level_4" ? "Kiambu" : "Nairobi County",
     });
@@ -436,7 +563,287 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
         </p>
       </div>
 
-      {/* 3. Advanced Features Management */}
+      {/* 3. System Users & Access Levels Control */}
+      <div className="pt-6 border-t border-gray-100 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800">3. System Users & Access Level Control</h3>
+              <p className="text-[11px] text-gray-400">Manage registered staff accounts, emails, and authorization levels</p>
+            </div>
+          </div>
+          <button
+            id="btn-add-system-user"
+            onClick={() => setShowAddUserModal(!showAddUserModal)}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+          >
+            {showAddUserModal ? <X className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
+            <span>{showAddUserModal ? "Cancel" : "Create New User Account"}</span>
+          </button>
+        </div>
+
+        {/* User Creation Form */}
+        {showAddUserModal && (
+          <form onSubmit={handleCreateUser} className="p-4 bg-emerald-50/40 rounded-xl border border-emerald-100 space-y-3">
+            <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Register New System User & Assign Access Level</span>
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Dr. Jane Doe"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:border-emerald-500 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Corporate Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. jane.doe@afyacare.co.ke"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Department</label>
+                <select
+                  value={userDept}
+                  onChange={(e) => setUserDept(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:border-emerald-500"
+                >
+                  <option value="administration">Administration</option>
+                  <option value="medical">Medical Practice</option>
+                  <option value="pharmacy">Pharmacy</option>
+                  <option value="finance">Finance & Billing</option>
+                  <option value="hr">Human Resources</option>
+                  <option value="reception">Reception & Triage</option>
+                  <option value="laboratory">Laboratory</option>
+                  <option value="radiology">Radiology</option>
+                  <option value="security">Security</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Access Level *</label>
+                <select
+                  value={userAccessLevel}
+                  onChange={(e) => setUserAccessLevel(e.target.value as any)}
+                  className="w-full px-3 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-900 focus:border-emerald-500"
+                >
+                  <option value="Super Admin">Super Admin (Full Control)</option>
+                  <option value="Department Admin">Department Admin</option>
+                  <option value="Standard Staff">Standard Staff</option>
+                </select>
+              </div>
+            </div>
+
+            {userCreationError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-xs font-bold text-rose-800 animate-shake">
+                <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{userCreationError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={userSubmitting}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Save User Account</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* System Users List */}
+        <div className="bg-slate-50/50 rounded-xl border border-gray-200/80 overflow-hidden">
+          {systemUsers.length === 0 ? (
+            <div className="p-6 text-center text-xs text-gray-500">
+              <p className="font-semibold text-gray-700 mb-1">No System Users Registered</p>
+              <p>Click "Create New User Account" above to add administrators and staff with specific access levels.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100/80 border-b border-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                  <tr>
+                    <th className="p-3">User / Staff Name</th>
+                    <th className="p-3">Email Address (Login ID)</th>
+                    <th className="p-3">Department</th>
+                    <th className="p-3">Access Level</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200/60 bg-white">
+                  {systemUsers.map((u) => {
+                    const currentAccess = u.accessLevel || (u.department === "administration" ? "Super Admin" : "Standard Staff");
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3 font-semibold text-gray-900">
+                          <div>{u.name}</div>
+                          <div className="text-[10px] text-gray-400 font-normal">{u.role}</div>
+                        </td>
+                        <td className="p-3 font-mono text-gray-700">{u.email}</td>
+                        <td className="p-3 font-semibold capitalize text-gray-600">{u.department}</td>
+                        <td className="p-3">
+                          <select
+                            value={currentAccess}
+                            onChange={(e) => handleUpdateAccessLevel(u.id, e.target.value as any)}
+                            className={`px-2 py-1 rounded-md text-[11px] font-bold border transition-colors cursor-pointer ${
+                              currentAccess === "Super Admin"
+                                ? "bg-purple-50 text-purple-800 border-purple-200"
+                                : currentAccess === "Department Admin"
+                                ? "bg-indigo-50 text-indigo-800 border-indigo-200"
+                                : "bg-slate-100 text-slate-700 border-slate-200"
+                            }`}
+                          >
+                            <option value="Super Admin">Super Admin</option>
+                            <option value="Department Admin">Department Admin</option>
+                            <option value="Standard Staff">Standard Staff</option>
+                          </select>
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => handleDeleteUser(u.id, u.name)}
+                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                            title="Remove User Account"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 4. Anti-Duplication & Database Integrity Engine */}
+      <div className="pt-6 border-t border-gray-100 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <span>4. Anti-Duplication & Zero-Duplicate Integrity Engine</span>
+                <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-black uppercase tracking-wider border border-rose-200 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-rose-700" />
+                  <span>Strict Rejection Enforced</span>
+                </span>
+              </h3>
+              <p className="text-[11px] text-gray-500">Automatically scans and purges redundant records across Patients, Queues, Tickets, Personnel, and Medications while enforcing zero-duplicate insertion rules.</p>
+            </div>
+          </div>
+
+          <button
+            id="btn-run-full-deduplication"
+            onClick={handleRunFullDeduplication}
+            disabled={isDeduplicating}
+            className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer ${
+              isDeduplicating
+                ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                : "bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-rose-500/20 active:scale-95"
+            }`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isDeduplicating ? "animate-spin" : ""}`} />
+            <span>{isDeduplicating ? "Scanning & Cleaning Database..." : "Scan & Clean All Duplicate Data"}</span>
+          </button>
+        </div>
+
+        {/* Real-time deduplication rules status */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Patient EHR Records</span>
+              </span>
+              <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full font-bold">REJECT DUPES</span>
+            </div>
+            <p className="text-[10px] text-slate-500">Blocks duplicate National ID / Passport numbers. Merges visit history automatically.</p>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+              <span className="flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Live Queues & Tickets</span>
+              </span>
+              <span className="text-[10px] text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded-full font-bold">REJECT DUPES</span>
+            </div>
+            <p className="text-[10px] text-slate-500">Rejects multiple active hospital encounters in doctor, pharmacy, or diagnostic queues.</p>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+              <span className="flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-purple-600" />
+                <span>Staff & Pharmacy Stock</span>
+              </span>
+              <span className="text-[10px] text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded-full font-bold">REJECT DUPES</span>
+            </div>
+            <p className="text-[10px] text-slate-500">Enforces unique Employee emails / IDs and consolidates duplicate medication SKUs.</p>
+          </div>
+        </div>
+
+        {/* Deduplication Progress and Report Display */}
+        {dedupStatusMessage && (
+          <div className={`p-4 rounded-xl border flex items-start gap-3 text-xs ${
+            isDeduplicating 
+              ? "bg-indigo-50/70 border-indigo-200 text-indigo-900" 
+              : "bg-emerald-50 border-emerald-200 text-emerald-900"
+          }`}>
+            {isDeduplicating ? (
+              <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            )}
+            <div className="space-y-1 flex-1">
+              <p className="font-bold">{dedupStatusMessage}</p>
+              {dedupReport && (
+                <div className="mt-3 pt-3 border-t border-emerald-200/60 space-y-2">
+                  <div className="flex items-center justify-between font-mono text-[11px] text-emerald-800">
+                    <span>Audit Report Timestamp: {dedupReport.timestamp}</span>
+                    <span className="font-bold">Total Cleaned: {dedupReport.totalDuplicatesCleaned}</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    {dedupReport.details.map((det, idx) => (
+                      <div key={idx} className="p-2.5 bg-white/80 rounded-lg border border-emerald-100 text-[11px]">
+                        <div className="flex items-center justify-between font-bold text-slate-800">
+                          <span className="capitalize">{det.collection}</span>
+                          <span className={det.cleaned > 0 ? "text-rose-600 font-bold" : "text-emerald-600"}>
+                            {det.cleaned > 0 ? `${det.cleaned} Removed` : "0 Duplicates"}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1">{det.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 5. Advanced Features Management */}
       <div className="pt-6 border-t border-gray-100 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2">

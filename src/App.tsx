@@ -61,7 +61,10 @@ import {
   Palette,
   Ticket,
   ShoppingBag,
-  DollarSign
+  DollarSign,
+  Menu,
+  LayoutGrid,
+  ChevronRight
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -183,91 +186,91 @@ export const THEME_PALETTES: Record<string, { name: string; hex: string; colors:
 
 const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClass: string; textClass: string; borderClass: string; pillClass: string; btnClass: string; accentClass: string; titleClass: string }> = {
   "sunset-orange": {
-    name: "Sunset Orange",
+    name: "Sunset Orange & Green",
     bgClass: "bg-gradient-to-r from-orange-950 via-amber-950 to-orange-900",
     fillClass: "fill-orange-950",
     textClass: "text-orange-100",
     borderClass: "border-orange-800",
-    pillClass: "bg-orange-950/70 backdrop-blur-md text-orange-100 border-orange-700/60 shadow-xs",
-    btnClass: "bg-orange-800/80 hover:bg-orange-700 text-orange-50 border border-orange-500/80 shadow-xs hover:border-orange-400",
-    accentClass: "text-orange-400",
+    pillClass: "bg-emerald-950/70 backdrop-blur-md text-emerald-100 border-emerald-600/60 shadow-xs",
+    btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-emerald-50 border border-emerald-500/80 shadow-xs hover:border-emerald-400",
+    accentClass: "text-emerald-400",
     titleClass: "text-white",
   },
   "dark-slate": {
-    name: "Deep Slate & Orange",
+    name: "Deep Slate & Green",
     bgClass: "bg-slate-900",
     fillClass: "fill-slate-900",
     textClass: "text-slate-100",
     borderClass: "border-slate-800",
-    pillClass: "bg-slate-800/80 backdrop-blur-md text-slate-100 border-orange-500/30 shadow-xs",
-    btnClass: "bg-slate-700/80 hover:bg-slate-700 text-slate-100 border border-orange-500/40 hover:border-orange-400/80 shadow-xs",
-    accentClass: "text-orange-400",
+    pillClass: "bg-slate-800/90 backdrop-blur-md text-slate-100 border-emerald-500/40 shadow-xs",
+    btnClass: "bg-emerald-700/80 hover:bg-emerald-600 text-slate-100 border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
     titleClass: "text-white",
   },
   "emerald-dark": {
-    name: "Medical Emerald & Orange",
+    name: "Medical Emerald",
     bgClass: "bg-emerald-950",
     fillClass: "fill-emerald-950",
     textClass: "text-emerald-100",
     borderClass: "border-emerald-900",
-    pillClass: "bg-emerald-900/60 backdrop-blur-md text-emerald-100 border-orange-500/30 shadow-xs",
-    btnClass: "bg-emerald-850/80 hover:bg-emerald-800 text-emerald-100 border border-orange-500/40 hover:border-orange-400/80 shadow-xs",
-    accentClass: "text-orange-400",
+    pillClass: "bg-emerald-900/80 backdrop-blur-md text-emerald-100 border-emerald-500/40 shadow-xs",
+    btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
     titleClass: "text-white",
   },
   "navy-dark": {
-    name: "Executive Navy & Orange",
+    name: "Executive Navy & Green",
     bgClass: "bg-indigo-950",
     fillClass: "fill-indigo-950",
     textClass: "text-indigo-100",
     borderClass: "border-indigo-900",
-    pillClass: "bg-indigo-900/60 backdrop-blur-md text-indigo-100 border-orange-500/30 shadow-xs",
-    btnClass: "bg-indigo-850/80 hover:bg-indigo-800 text-indigo-100 border border-orange-500/40 hover:border-orange-400/80 shadow-xs",
-    accentClass: "text-orange-400",
+    pillClass: "bg-indigo-900/80 backdrop-blur-md text-indigo-100 border-emerald-500/40 shadow-xs",
+    btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-indigo-100 border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
     titleClass: "text-white",
   },
   "midnight": {
-    name: "Midnight Charcoal & Amber",
+    name: "Midnight Charcoal & Green",
     bgClass: "bg-zinc-950",
     fillClass: "fill-zinc-950",
     textClass: "text-zinc-100",
     borderClass: "border-zinc-800",
-    pillClass: "bg-zinc-900/80 backdrop-blur-md text-zinc-100 border-orange-500/30 shadow-xs",
-    btnClass: "bg-zinc-800/80 hover:bg-zinc-700 text-zinc-100 border border-orange-500/40 hover:border-orange-400/80 shadow-xs",
-    accentClass: "text-orange-400",
+    pillClass: "bg-zinc-900/90 backdrop-blur-md text-zinc-100 border-emerald-500/40 shadow-xs",
+    btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-zinc-100 border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
     titleClass: "text-white",
   },
   "teal-dark": {
-    name: "Ocean Teal & Orange",
+    name: "Ocean Teal & Green",
     bgClass: "bg-teal-950",
     fillClass: "fill-teal-950",
     textClass: "text-teal-100",
     borderClass: "border-teal-900",
-    pillClass: "bg-teal-900/60 backdrop-blur-md text-teal-100 border-orange-500/30 shadow-xs",
-    btnClass: "bg-teal-850/80 hover:bg-teal-800 text-teal-100 border border-orange-500/40 hover:border-orange-400/80 shadow-xs",
-    accentClass: "text-orange-400",
+    pillClass: "bg-teal-900/80 backdrop-blur-md text-teal-100 border-emerald-500/40 shadow-xs",
+    btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-teal-100 border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
     titleClass: "text-white",
   },
   "royal-purple": {
-    name: "Royal Violet & Orange",
+    name: "Royal Violet & Green",
     bgClass: "bg-purple-950",
     fillClass: "fill-purple-950",
     textClass: "text-purple-100",
     borderClass: "border-purple-900",
-    pillClass: "bg-purple-900/60 backdrop-blur-md text-purple-100 border-orange-500/30 shadow-xs",
-    btnClass: "bg-purple-850/80 hover:bg-purple-800 text-purple-100 border border-orange-500/40 hover:border-orange-400/80 shadow-xs",
-    accentClass: "text-orange-400",
+    pillClass: "bg-purple-900/80 backdrop-blur-md text-purple-100 border-emerald-500/40 shadow-xs",
+    btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-purple-100 border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
     titleClass: "text-white",
   },
   "subtle-light": {
-    name: "Crisp Light & Orange",
+    name: "Crisp Light & Green",
     bgClass: "bg-white",
     fillClass: "fill-white",
     textClass: "text-slate-800",
     borderClass: "border-gray-200",
-    pillClass: "bg-gray-100/90 backdrop-blur-md text-slate-800 border-orange-300/80 shadow-xs",
-    btnClass: "bg-white hover:bg-orange-50 text-slate-900 border border-orange-400/60 hover:border-orange-500 shadow-2xs",
-    accentClass: "text-orange-600",
+    pillClass: "bg-emerald-50/90 backdrop-blur-md text-emerald-950 border-emerald-300 shadow-xs",
+    btnClass: "bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500 shadow-2xs",
+    accentClass: "text-emerald-600",
     titleClass: "text-slate-900",
   },
 };
@@ -275,7 +278,7 @@ const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClas
 export default function App() {
   const [tenant, setTenant] = useState<Tenant>({
     id: "tenant-9943",
-    name: "Hospital Management System",
+    name: "HMS",
     type: "clinic",
     county: "Nairobi",
   });
@@ -291,13 +294,17 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState<string>("dashboard");
-  const [seeding, setSeeding] = useState(false);
-  const [seedSuccess, setSeedSuccess] = useState(false);
 
   // Authentication & Session States
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [simulatedUser, setSimulatedUser] = useState<{ email: string; displayName: string; isSimulated: boolean; photoURL?: string } | null>(null);
+  const [simulatedUser, setSimulatedUser] = useState<{ email: string; displayName: string; isSimulated: boolean; photoURL?: string } | null>(() => {
+    return {
+      email: "admin@hospital.ke",
+      displayName: "System Administrator",
+      isSimulated: true,
+      photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
+    };
+  });
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Specialist Simulation & Live Notification States
@@ -319,6 +326,7 @@ export default function App() {
   const [brandFontId, setBrandFontId] = useState<string>(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
   const [brandThemeColor, setBrandThemeColor] = useState<string>(() => localStorage.getItem("platform_theme_color") || "emerald");
   const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "yellow-blue-green");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   useEffect(() => {
     localStorage.setItem("platform_header_bg", headerBgStyle);
@@ -409,7 +417,7 @@ export default function App() {
     if (brandCustomName) {
       document.title = brandCustomName;
     } else {
-      document.title = "Hospital Management System";
+      document.title = "HMS";
     }
   }, [brandFontId, brandThemeColor, brandFaviconUrl, brandCustomName, brandBlockEdgeColor]);
 
@@ -450,7 +458,6 @@ export default function App() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
-      setAuthLoading(false);
     });
     return () => unsubscribeAuth();
   }, []);
@@ -459,12 +466,18 @@ export default function App() {
     ? { email: user.email || "", displayName: user.displayName || "Google User", isSimulated: false, photoURL: user.photoURL || undefined } 
     : simulatedUser;
 
-  const isSuperAdmin = activeUser?.email === "muyamoz@gmail.com" || activeUser?.email === "naisiaetext@gmail.com";
-
   // Find employee matching logged-in user email
   const loggedInEmployee = employees.find(
-    (emp) => emp.email?.toLowerCase() === activeUser?.email?.toLowerCase()
+    (emp) => emp.email?.toLowerCase().trim() === activeUser?.email?.toLowerCase().trim()
   );
+
+  // Dynamic Super Admin check:
+  // 1. If database has 0 employees registered yet, initial user acts as Super Admin to set up facility
+  // 2. OR if loggedInEmployee has accessLevel === "Super Admin" || role === "Super Admin" || department === "administration"
+  const isSuperAdmin = employees.length === 0 || 
+    loggedInEmployee?.accessLevel === "Super Admin" || 
+    loggedInEmployee?.role === "Super Admin" || 
+    loggedInEmployee?.department === "administration";
 
   // Determine active identity for role checks
   const activeStaffRecord = activeSpecialistId
@@ -473,6 +486,41 @@ export default function App() {
 
   const activeRoleName = activeStaffRecord?.role || (isSuperAdmin ? "Hospital Superintendent" : "Guest Operator");
   const activeDepartmentName = activeStaffRecord?.department || (isSuperAdmin ? "administration" : "guest");
+
+  const [loginEmailInput, setLoginEmailInput] = useState("");
+
+  const handleStaffEmailLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const cleanEmail = loginEmailInput.trim().toLowerCase();
+    if (!cleanEmail) return;
+
+    // Check if user is registered in employees collection
+    const matched = employees.find(
+      (emp) => emp.email?.trim().toLowerCase() === cleanEmail
+    );
+
+    if (matched) {
+      setSimulatedUser({
+        email: matched.email,
+        displayName: matched.name,
+        isSimulated: true,
+        photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
+      });
+    } else if (employees.length === 0) {
+      // First setup: No registered staff in system yet! Allow initial admin account setup
+      setSimulatedUser({
+        email: cleanEmail,
+        displayName: "Initial System Administrator",
+        isSimulated: true,
+        photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
+      });
+    } else {
+      setAuthError(
+        `Access Denied: Email '${cleanEmail}' is not registered in the System User Registry. Please ask an Administrator to create your user account and access level from the dashboard.`
+      );
+    }
+  };
 
   const checkTabPermission = (tabId: string): { allowed: boolean; reason?: string } => {
     // Super admins have access to all tabs
@@ -489,7 +537,7 @@ export default function App() {
     if (!loggedInEmployee) {
       return {
         allowed: false,
-        reason: "Your email address is not registered in the Staff Registry. Please ask a Super-Admin to add your email in the HR Panel to obtain department clearance."
+        reason: "Your email address is not registered in the System User Registry. Please ask an Administrator to create your account in the Admin Panel to obtain department clearance."
       };
     }
 
@@ -649,6 +697,71 @@ export default function App() {
   }, [activeSpecialistId, employees]);
 
   // Live Firebase/Firestore onSnapshot Listener for Specialist notifications
+  const [queueItems, setQueueItems] = useState<any[]>([]);
+  const [systemTicketsList, setSystemTicketsList] = useState<any[]>([]);
+
+  // Real-time listener for queue collection to power live notification badges
+  useEffect(() => {
+    const unsubQueue = onSnapshot(collection(db, "queue"), (snapshot) => {
+      const q: any[] = [];
+      snapshot.forEach((doc) => {
+        q.push({ id: doc.id, ...doc.data() });
+      });
+      setQueueItems(q);
+    });
+    return () => unsubQueue();
+  }, []);
+
+  // Real-time listener for system_tickets collection to power live notification badges
+  useEffect(() => {
+    const unsubTickets = onSnapshot(collection(db, "system_tickets"), (snapshot) => {
+      const t: any[] = [];
+      snapshot.forEach((doc) => {
+        t.push({ id: doc.id, ...doc.data() });
+      });
+      setSystemTicketsList(t);
+    });
+    return () => unsubTickets();
+  }, []);
+
+  // Live badge counts per tab/menu item
+  const openTicketsCount = systemTicketsList.filter((t) => t.status === "open" || t.status === "in_progress").length;
+  const pendingQueueCount = queueItems.filter((q) => q.status === "pending" || q.status === "serving").length;
+  const doctorWaitingCount = queueItems.filter((q) => (q.currentDepartment === "doctor" || !q.currentDepartment) && q.status === "pending").length;
+  const diagnosticsWaitingCount = queueItems.filter((q) => (q.currentDepartment === "laboratory" || q.currentDepartment === "radiology") && q.status === "pending").length;
+  const pharmacyWaitingCount = queueItems.filter((q) => q.currentDepartment === "pharmacy" && q.status === "pending").length;
+  const activeJourneysCount = queueItems.filter((q) => q.status !== "completed").length;
+  const receptionWaitingCount = queueItems.filter((q) => q.currentDepartment === "reception" && q.status === "pending").length;
+  const unverifiedBiometricsCount = queueItems.filter((q) => q.biometricStatus === "not_verified" && q.status === "pending").length;
+
+  const getMenuNotificationCount = (tabId: string): number => {
+    switch (tabId) {
+      case "tickets":
+        return openTicketsCount;
+      case "queue":
+        return pendingQueueCount;
+      case "doctor":
+        return doctorWaitingCount;
+      case "diagnostics":
+        return diagnosticsWaitingCount;
+      case "pharmacy":
+        return pharmacyWaitingCount;
+      case "journey":
+        return activeJourneysCount;
+      case "reception":
+        return receptionWaitingCount;
+      case "security":
+        return unverifiedBiometricsCount;
+      case "dashboard":
+        return notifications.length > 0 ? notifications.length : (openTicketsCount + pendingQueueCount);
+      default:
+        return 0;
+    }
+  };
+
+  const totalSystemActiveNotifications = openTicketsCount + pendingQueueCount + notifications.length;
+
+  // Live Firebase/Firestore onSnapshot Listener for Specialist notifications
   useEffect(() => {
     const qQueue = collection(db, "queue");
     const unsubscribeQueue = onSnapshot(qQueue, (snapshot) => {
@@ -718,169 +831,11 @@ export default function App() {
     }
   };
 
-  // Auto-seed Firestore on mount if database is empty
-  useEffect(() => {
-    const checkAndSeedDatabase = async () => {
-      setSeeding(true);
-      try {
-        const medSnap = await getDocs(collection(db, "medications"));
-        if (medSnap.empty) {
-          console.log("Firestore empty. Seeding initial clinical & POS records...");
-
-          // 1. Seed Pharmacy Stock
-          const initialMeds = [
-            {
-              name: "Amoxicillin (500mg)",
-              category: "Antibiotics",
-              quantity: 120,
-              minThreshold: 40,
-              batchNo: "AMX-8829-2026",
-              expiryDate: "2026-10-15", // Expiring soon! (Within 4 months)
-              price: 25,
-              imageUrl: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=300&q=80",
-            },
-            {
-              name: "Paracetamol (500mg)",
-              category: "Analgesics",
-              quantity: 800,
-              minThreshold: 150,
-              batchNo: "PCM-1044-2027",
-              expiryDate: "2027-04-12",
-              price: 5,
-              imageUrl: "https://images.unsplash.com/photo-1550572017-edf792890586?auto=format&fit=crop&w=300&q=80",
-            },
-            {
-              name: "Metformin (500mg)",
-              category: "Antidiabetics",
-              quantity: 0, // Out of Stock to trigger AI suggestions
-              minThreshold: 50,
-              batchNo: "MTF-3022-2026",
-              expiryDate: "2026-11-20",
-              price: 15,
-              imageUrl: "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?auto=format&fit=crop&w=300&q=80",
-            },
-            {
-              name: "Atorvastatin (10mg)",
-              category: "Cardiovascular",
-              quantity: 15, // Low stock!
-              minThreshold: 40,
-              batchNo: "ATV-0091-2026",
-              expiryDate: "2026-09-10", // Expiring soon! (FIFO alert)
-              price: 45,
-              imageUrl: "https://images.unsplash.com/photo-1628771065518-0d82f1938462?auto=format&fit=crop&w=300&q=80",
-            },
-            {
-              name: "Omeprazole (20mg)",
-              category: "Gastrointestinal",
-              quantity: 450,
-              minThreshold: 60,
-              batchNo: "OMP-7744-2027",
-              expiryDate: "2027-03-01",
-              price: 12,
-              imageUrl: "https://images.unsplash.com/photo-1576602976047-174e57a47881?auto=format&fit=crop&w=300&q=80",
-            },
-          ];
-
-          for (const m of initialMeds) {
-            await addDoc(collection(db, "medications"), m);
-          }
-
-          // 2. Seed Initial Patients with EHR Visit timelines
-          const initialPatients = [
-            {
-              patientName: "Alice Wambui Kamau",
-              nationalId: "32441928",
-              phone: "0711943210",
-              age: 29,
-              gender: "Female",
-              bloodType: "A+",
-              shaEligible: "eligible",
-              shaId: "SHA-K-3244-9043",
-              visits: [
-                {
-                  id: "vst-001",
-                  date: "2026-05-10",
-                  vitals: { temp: "38.2", bp: "125/82", pulse: "88", weight: "58" },
-                  symptoms: "High fever, chills, sore throat, and painful swallowing for 3 days.",
-                  diagnosis: "Acute Bacterial Tonsillitis",
-                  prescriptions: [
-                    { drugName: "Amoxicillin (500mg)", quantity: 21, dosage: "1x3", instructions: "Take for 7 days post meals", status: "dispensed" },
-                    { drugName: "Paracetamol (500mg)", quantity: 15, dosage: "1x3", instructions: "Take when fever occurs", status: "dispensed" }
-                  ],
-                  referrals: []
-                }
-              ]
-            },
-            {
-              patientName: "David Omondi Otieno",
-              nationalId: "29110482",
-              phone: "0722004481",
-              age: 42,
-              gender: "Male",
-              bloodType: "O+",
-              shaEligible: "eligible",
-              shaId: "SHA-K-2911-3012",
-              visits: [
-                {
-                  id: "vst-002",
-                  date: "2026-06-15",
-                  vitals: { temp: "36.5", bp: "145/95", pulse: "72", weight: "85" },
-                  symptoms: "Occasional morning headaches, mild dizziness, and high fatigue indicators.",
-                  diagnosis: "Primary Essential Hypertension (Stage 1)",
-                  prescriptions: [
-                    { drugName: "Atorvastatin (10mg)", quantity: 30, dosage: "1x1", instructions: "Take at night", status: "dispensed" }
-                  ],
-                  referrals: [
-                    { id: "ref-001", department: "laboratory", testName: "Lipid Profile Panel", notes: "Assess cardiac risks", status: "completed", results: "Cholesterol: 5.8 mmol/L (Elevated), LDL: 3.8 mmol/L. Triglycerides: 2.1 mmol/L." }
-                  ]
-                }
-              ]
-            }
-          ];
-
-          for (const p of initialPatients) {
-            await addDoc(collection(db, "patients"), p);
-          }
-
-          // 3. Seed Initial Expenses (Opex Ledger)
-          const initialExpenses = [
-            {
-              description: "Medical oxygen cylinders refill",
-              amount: 12500,
-              category: "supplies",
-              date: "2026-07-01",
-              supplier: "Kenya Medical Supplies Authority (KEMSA)",
-            },
-            {
-              description: "Primary power generator diesel maintenance",
-              amount: 8400,
-              category: "utilities",
-              date: "2026-07-04",
-              supplier: "Rubis Energy Kenya",
-            }
-          ];
-
-          for (const e of initialExpenses) {
-            await addDoc(collection(db, "expenses"), e);
-          }
-
-          setSeedSuccess(true);
-        }
-      } catch (err) {
-        console.error("Filerore seeding issue:", err);
-      } finally {
-        setSeeding(false);
-      }
-    };
-
-    checkAndSeedDatabase();
-  }, []);
-
   // Filter navigation tabs dynamically based on super-admin feature toggles
   const navItems = [
     { id: "dashboard", label: "Dashboard Overview", icon: LayoutDashboard, enabled: true },
     { id: "reception", label: "Reception Desk", icon: UserPlus, enabled: toggles.reception },
-    { id: "tickets", label: "Client Tickets", icon: Ticket, enabled: true },
+    { id: "tickets", label: "Patient Tickets", icon: Ticket, enabled: true },
     { id: "journey", label: "Patient Journey", icon: Activity, enabled: true },
     { id: "queue", label: "Live Queue Board", icon: Monitor, enabled: toggles.queue },
     { id: "doctor", label: "Doctor Station", icon: Stethoscope, enabled: toggles.doctor },
@@ -895,51 +850,35 @@ export default function App() {
     { id: "admin", label: "Developer Settings", icon: Sliders, enabled: true },
   ];
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 font-sans">
-        <div className="flex flex-col items-center gap-3">
-          <RefreshCw className="w-10 h-10 text-emerald-500 animate-spin" />
-          <p className="text-xs font-bold font-mono tracking-widest text-slate-400 uppercase animate-pulse">Validating NextGen HMS Session...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (!activeUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#0b0f19] via-[#0f172a] to-[#020617] flex flex-col items-center justify-center p-4 text-slate-100 font-sans relative overflow-hidden">
-        {/* Background ambient lighting */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
-
-        <div className="max-w-md w-full bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)] space-y-6 relative z-10">
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4 text-slate-800 font-sans">
+        <div className="max-w-sm w-full bg-white border border-slate-200/90 rounded-2xl p-7 shadow-xl shadow-slate-200/60 space-y-6">
+          {/* Corporate Header */}
           <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-emerald-600 text-white rounded-2xl shadow-lg shadow-emerald-600/20 mb-2">
-              <Building2 className="w-8 h-8" />
+            <div className="inline-flex p-2.5 bg-emerald-600 text-white rounded-xl shadow-sm mb-1">
+              <Building2 className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white uppercase font-comfortaa">Hospital Management System</h1>
-            <p className="text-[10px] font-bold font-mono text-emerald-400 tracking-widest uppercase">Hospital Management System</p>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-              Secure biometric intake, real-time Social Health Authority (SHA) claims, and eTIMS compliant billing.
-            </p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 uppercase">AfyaCare HMS</h1>
+            <p className="text-[11px] font-semibold text-slate-500 tracking-wide uppercase">Enterprise Staff Portal</p>
           </div>
 
           {authError && (
-            <div className="p-3.5 bg-rose-950/50 border border-rose-500/30 text-rose-300 rounded-xl text-xs space-y-1.5">
-              <div className="flex items-center gap-1.5 font-bold">
-                <ShieldAlert className="w-4 h-4 text-rose-400" />
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>Authentication Notice</span>
               </div>
-              <p className="leading-relaxed text-[11px]">{authError}</p>
+              <p className="leading-snug text-[11px]">{authError}</p>
             </div>
           )}
 
-          <div className="space-y-3">
+          {/* Primary Login Actions */}
+          <div className="space-y-3 pt-1">
             <button
               id="btn-google-login"
               onClick={handleGoogleLogin}
-              className="w-full py-3 px-4 bg-white hover:bg-gray-100 text-slate-950 font-bold rounded-xl text-xs tracking-wide transition-all duration-200 flex items-center justify-center gap-3 shadow-lg shadow-white/5 hover:-translate-y-0.5 cursor-pointer"
+              className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg text-xs transition-all flex items-center justify-center gap-2.5 shadow-sm cursor-pointer"
             >
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path
@@ -959,38 +898,41 @@ export default function App() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              <span>Sign in with Google Account</span>
+              <span>Sign in with Google</span>
             </button>
 
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-slate-800"></div>
-              <span className="flex-shrink mx-4 text-[9px] font-bold text-slate-500 uppercase tracking-widest">Sandbox Testing Portal</span>
-              <div className="flex-grow border-t border-slate-800"></div>
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink mx-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Registered Staff Authentication</span>
+              <div className="flex-grow border-t border-slate-200"></div>
             </div>
 
-            {/* Quick Bypass Button for Super Admin testing */}
-            <button
-              id="btn-bypass-login"
-              onClick={() => handleBypassLogin("muyamoz@gmail.com", "Super Admin (muyamoz)")}
-              className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-750 text-emerald-400 font-bold rounded-xl text-xs tracking-wider uppercase border border-emerald-500/20 hover:border-emerald-500/40 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer animate-pulse hover:animate-none"
-            >
-              <Key className="w-4 h-4 text-emerald-400" />
-              <span>Super Admin Bypass (muyamoz@gmail.com)</span>
-            </button>
+            {/* Dynamic Staff Email Sign-In Form */}
+            <form onSubmit={handleStaffEmailLogin} className="space-y-2">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Corporate Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={loginEmailInput}
+                  onChange={(e) => setLoginEmailInput(e.target.value)}
+                  placeholder="e.g. admin@afyacare.co.ke"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-emerald-500"
+                />
+              </div>
 
-            {/* Additional sandbox login for naisiaetext@gmail.com */}
-            <button
-              id="btn-developer-login"
-              onClick={() => handleBypassLogin("naisiaetext@gmail.com", "Developer Admin")}
-              className="w-full py-2.5 px-4 bg-slate-900/50 hover:bg-slate-800/40 text-slate-400 font-semibold rounded-xl text-[11px] tracking-wide border border-slate-800 hover:border-slate-750 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <UserCog className="w-3.5 h-3.5 text-slate-400" />
-              <span>Sign in as Developer (naisiaetext@gmail.com)</span>
-            </button>
+              <button
+                type="submit"
+                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>Sign In to Staff Portal</span>
+              </button>
+            </form>
           </div>
 
-          <div className="pt-4 border-t border-slate-800/60 text-center text-[10px] text-slate-500 leading-normal">
-            By signing in, you will access the secure medical dashboard. Registered Super Admin has root bypass and system impersonation privileges.
+          <div className="pt-3 border-t border-slate-100 text-center text-[10px] text-slate-400">
+            AfyaCare Medical Systems • Authorized Personnel Only
           </div>
         </div>
       </div>
@@ -1001,75 +943,164 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col text-gray-800 font-sans pb-16 md:pb-0">
-      {/* End-to-End Top Header Bar with Single Wave Curved Bottom Edge */}
-      <div className="relative w-full z-30 shrink-0">
-        <header className={`w-full ${currentHeaderStyle.bgClass} ${currentHeaderStyle.textClass} pt-5 md:pt-6 pb-4 md:pb-5 px-5 md:px-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors duration-300 shadow-xs`}>
-        
-        {/* Brand and Active Facility */}
-        <div className="flex items-center gap-3.5 md:gap-5">
-          <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md shadow-emerald-600/25 flex items-center justify-center shrink-0">
-            {brandLogoUrl ? (
-              <img src={brandLogoUrl} alt="Logo" className="w-8 h-8 object-contain rounded" referrerPolicy="no-referrer" />
-            ) : (
-              <Building2 className="w-8 h-8 animate-pulse" />
-            )}
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className={`text-3xl md:text-4xl lg:text-4xl font-extrabold tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-none font-sans`}>
-                {brandCustomName || tenant.name}
-              </h1>
-              <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-extrabold rounded-md uppercase tracking-wider shrink-0">Tier {tenant.type}</span>
-            </div>
-          </div>
-        </div>
+      {/* End-to-End Top Header Bar with Single Wave Curved Bottom Edge & Motion Ray Scanner */}
+      <div className="relative w-full z-30 shrink-0 shadow-xs overflow-hidden">
+        <header className={`relative w-full ${currentHeaderStyle.bgClass} ${currentHeaderStyle.textClass} py-3.5 sm:py-5 md:py-9 min-h-[84px] md:min-h-[150px] px-3.5 sm:px-6 md:px-8 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 md:gap-4 transition-colors duration-300 overflow-hidden`}>
+          
+          {/* Motion Ray Scanner Effect Moving Continuously from Left to Right */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+            {/* Soft Ambient Sweeping Light Ray Beam */}
+            <motion.div
+              className="absolute top-0 bottom-0 w-48 md:w-80 bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent blur-md -skew-x-12"
+              initial={{ left: "-40%" }}
+              animate={{ left: "120%" }}
+              transition={{
+                repeat: Infinity,
+                duration: 4.5,
+                ease: "easeInOut",
+                repeatDelay: 0.6,
+              }}
+            />
 
-        {/* User Profile and Real-time Clock */}
-        <div className="flex flex-wrap items-center gap-2.5 md:gap-3.5">
-          {/* Offline/Online Status Indicator and Sync Controller */}
-          <div className={`hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all ${
-            isOnline && !isSimulatedOffline
-              ? currentHeaderStyle.pillClass
-              : "bg-amber-500/20 text-amber-200 animate-pulse border-amber-500/40"
-          }`}>
-            <span className={`w-2.5 h-2.5 rounded-full ${isOnline && !isSimulatedOffline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></span>
-            <div className="flex flex-col text-left mr-0.5">
-              <span className="text-[9px] font-black uppercase tracking-widest opacity-70 leading-none">NETWORK</span>
-              <span className="text-xs font-extrabold leading-none mt-0.5 flex items-center gap-1">
-                {isOnline && !isSimulatedOffline ? "Online" : "Offline"}
-                {pendingSyncCount > 0 && <span className="text-[10px] font-medium text-emerald-400 animate-pulse">(Syncing...)</span>}
-              </span>
+            {/* Core Sharp Laser Scan Ray Line */}
+            <motion.div
+              className="absolute top-0 bottom-0 w-1.5 md:w-2 bg-gradient-to-b from-transparent via-emerald-300 to-transparent -skew-x-12 opacity-90 shadow-[0_0_20px_#34d399]"
+              initial={{ left: "-40%" }}
+              animate={{ left: "120%" }}
+              transition={{
+                repeat: Infinity,
+                duration: 4.5,
+                ease: "easeInOut",
+                repeatDelay: 0.6,
+              }}
+            >
+              {/* Secondary Intense White Core Flare */}
+              <div className="absolute top-1/4 bottom-1/4 w-0.5 left-1/2 -translate-x-1/2 bg-white/90 blur-[1px]" />
+            </motion.div>
+
+            {/* Top Scanning Edge Particle / Flare Tracer */}
+            <motion.div
+              className="absolute top-0 w-24 h-1 bg-gradient-to-r from-transparent via-emerald-300 to-transparent blur-[0.5px]"
+              initial={{ left: "-40%" }}
+              animate={{ left: "120%" }}
+              transition={{
+                repeat: Infinity,
+                duration: 4.5,
+                ease: "easeInOut",
+                repeatDelay: 0.6,
+              }}
+            />
+          </div>
+          
+          {/* Mobile Top Header: Row Layout with Brand Left, Quick Stats & Profile Right */}
+          <div className="relative z-10 flex items-center justify-between gap-2.5 w-full md:w-auto">
+            {/* Brand and Active Facility */}
+            <div className="flex items-center gap-2.5 sm:gap-3 group cursor-pointer min-w-0">
+              <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:rotate-3 group-hover:bg-emerald-500 group-hover:shadow-emerald-500/40 transition-all duration-300">
+                {brandLogoUrl ? (
+                  <img src={brandLogoUrl} alt="Logo" className="w-5 h-5 sm:w-6 sm:h-6 object-contain rounded transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
+                ) : (
+                  <Building2 className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse group-hover:animate-none" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h1 className={`text-base sm:text-lg md:text-xl lg:text-2xl font-extrabold tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-tight font-sans truncate group-hover:text-emerald-300 transition-colors duration-200`}>
+                    {brandCustomName || tenant.name}
+                  </h1>
+                  <span className="px-1.5 py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[9px] sm:text-[10px] font-extrabold rounded uppercase tracking-wider shrink-0 transition-all duration-200">
+                    Tier {tenant.type}
+                  </span>
+                </div>
+                <p className="text-[10px] text-emerald-300/70 font-medium truncate hidden sm:block">
+                  {tenant.county} County • SHA Portal • eTIMS Live
+                </p>
+              </div>
             </div>
-            
+
+            {/* Mobile Header Quick Actions: Live Clock & Profile Trigger */}
+            <div className="md:hidden flex items-center gap-1.5 shrink-0">
+              {/* Compact Live Clock on Mobile Header */}
+              <div className="flex items-center gap-1 bg-black/40 border border-white/15 px-2 py-1 rounded-xl text-emerald-300 font-mono shadow-inner">
+                <Clock className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
+                <span className="text-[11px] font-black tracking-tight">
+                  {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+
+              {/* Mobile Offline/Online Indicator */}
+              <button
+                onClick={toggleOfflineSimulation}
+                title={isSimulatedOffline ? "Offline Mode" : "Online Mode"}
+                className={`p-1.5 rounded-xl border transition-all active:scale-90 ${
+                  isOnline && !isSimulatedOffline
+                    ? "bg-emerald-950/70 border-emerald-500/40 text-emerald-300"
+                    : "bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse"
+                }`}
+              >
+                {isSimulatedOffline ? <WifiOff className="w-3.5 h-3.5" /> : <Wifi className="w-3.5 h-3.5" />}
+              </button>
+
+              {/* Mobile Profile & System Menu Button */}
+              <button
+                onClick={() => setIsMobileMenuOpen(true)}
+                title={activeUser.displayName || activeUser.email}
+                className="p-0.5 bg-white/20 hover:bg-white/30 border border-white/40 rounded-full shadow-md active:scale-90 transition-all cursor-pointer relative group"
+              >
+                {activeUser.photoURL ? (
+                  <img 
+                    src={activeUser.photoURL} 
+                    alt={activeUser.displayName || activeUser.email} 
+                    className="w-7 h-7 rounded-full object-cover border-2 border-emerald-400 group-hover:scale-105 transition-transform" 
+                    referrerPolicy="no-referrer" 
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs border border-emerald-400 shadow-inner group-hover:bg-emerald-500 transition-colors">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                )}
+                {isSimulatedOffline && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border border-slate-900 animate-pulse" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Desktop Top Header Controls */}
+          <div className="hidden md:flex flex-wrap items-center gap-1.5 md:gap-2 relative z-10">
+            {/* Offline/Online Status Indicator & Toggle Icon Button */}
             <button
               onClick={toggleOfflineSimulation}
-              title={isSimulatedOffline ? "Enable connection and push pending changes to Firebase" : "Go offline to operate in fully local cached database"}
-              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer text-xs font-bold active:scale-95 ${
+              title={isSimulatedOffline ? "Offline Mode (Click to connect & sync with Firebase)" : "Online Mode (Click to switch to offline cached database)"}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-md hover:scale-105 active:scale-95 ${
                 isOnline && !isSimulatedOffline
-                  ? currentHeaderStyle.btnClass
-                  : "bg-amber-500 text-slate-950 hover:bg-amber-400 border border-amber-300 shadow-xs"
+                  ? `${currentHeaderStyle.pillClass} hover:bg-white/20 hover:border-emerald-300/60`
+                  : "bg-amber-500/20 text-amber-200 border-amber-500/50 hover:bg-amber-500/30 animate-pulse hover:animate-none"
               }`}
             >
-              {isSimulatedOffline ? <WifiOff className="w-3.5 h-3.5 text-slate-950" /> : <Wifi className={`w-3.5 h-3.5 ${currentHeaderStyle.accentClass}`} />}
-              <span className="font-mono text-[11px]">
-                {isSimulatedOffline ? "Sync Now" : "Go Offline"}
-              </span>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline && !isSimulatedOffline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></span>
+              {isSimulatedOffline ? (
+                <WifiOff className="w-4 h-4 text-amber-300 shrink-0 transition-transform duration-200 hover:rotate-12" />
+              ) : (
+                <Wifi className={`w-4 h-4 ${currentHeaderStyle.accentClass} shrink-0 transition-transform duration-200 hover:scale-110`} />
+              )}
+              {pendingSyncCount > 0 && (
+                <span className="text-[10px] font-mono font-bold text-emerald-400 animate-pulse">{pendingSyncCount}</span>
+              )}
             </button>
-          </div>
 
-          {/* Admin Account Jumper / Specialist Jumper - Only visible to Admins */}
-          {(isSuperAdmin || activeUser.email === "naisiaetext@gmail.com") && (
-            <div className="flex items-center gap-2 bg-amber-500/20 px-3 py-1.5 rounded-xl border border-amber-400/40 transition-all shadow-xs animate-pulse hover:animate-none text-amber-100">
-              <div className="p-1 bg-amber-500 text-slate-950 rounded-md shrink-0">
-                <UserCog className="w-4 h-4 text-slate-950" />
-              </div>
-              <div className="text-left block">
-                <label className="block text-[9px] text-amber-300 font-black uppercase tracking-widest leading-none mb-0.5">Admin Account Jumper</label>
+            {/* Admin Account Jumper - Icon + Select */}
+            {isSuperAdmin && (
+              <div 
+                title="Admin Account Jumper" 
+                className="flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 px-3 py-1.5 rounded-xl border border-emerald-400/40 hover:border-emerald-400/80 shadow-2xs hover:shadow-md hover:scale-105 transition-all duration-200 text-emerald-100 group"
+              >
+                <UserCog className="w-4 h-4 text-emerald-400 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-200 shrink-0" />
                 <select
                   id="admin-specialist-jumper"
                   value={activeSpecialistId}
                   onChange={(e) => setActiveSpecialistId(e.target.value)}
-                  className="bg-amber-950/60 hover:bg-amber-900/80 text-amber-100 border border-amber-400/30 rounded-md px-1.5 py-0.5 text-xs font-bold focus:outline-hidden cursor-pointer max-w-[140px] truncate transition-colors"
+                  className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-100 border-none rounded-lg text-xs font-bold focus:outline-hidden cursor-pointer max-w-[130px] truncate p-1 transition-colors duration-200"
                 >
                   <option value="" className="bg-slate-900 text-white">System Admin</option>
                   {employees.map(emp => (
@@ -1079,78 +1110,78 @@ export default function App() {
                   ))}
                 </select>
               </div>
-            </div>
-          )}
-
-          {/* Active Google User Identity Profile display */}
-          <div className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all shadow-xs ${currentHeaderStyle.pillClass}`}>
-            {activeUser.photoURL ? (
-              <img 
-                src={activeUser.photoURL} 
-                alt={activeUser.displayName} 
-                className="w-7 h-7 rounded-full border border-emerald-500/50 object-cover shrink-0" 
-                referrerPolicy="no-referrer" 
-              />
-            ) : (
-              <div className="p-1 bg-emerald-600 text-white rounded-md shrink-0">
-                <User className="w-3.5 h-3.5" />
-              </div>
             )}
-            <div className="text-left block mr-0.5">
-              <div className="flex items-center gap-1 leading-none mb-0.5">
-                <span className="text-[9px] opacity-70 font-black uppercase tracking-widest">SESSION</span>
-                {isSuperAdmin && (
-                  <span className="px-1 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[8px] font-extrabold rounded uppercase tracking-wider">ADMIN</span>
-                )}
-              </div>
-              <p className="text-xs font-extrabold leading-none truncate max-w-[125px]" title={activeUser.email}>
-                {activeUser.displayName}
-              </p>
+
+            {/* Active User Profile & Logout - Icon Centric */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-200 shadow-2xs hover:shadow-md hover:scale-105 ${currentHeaderStyle.pillClass} hover:bg-white/20 hover:border-white/40 group`}>
+              {activeUser.photoURL ? (
+                <img 
+                  src={activeUser.photoURL} 
+                  alt={activeUser.displayName || activeUser.email} 
+                  title={activeUser.displayName || activeUser.email}
+                  className="w-6 h-6 rounded-full border border-emerald-500/50 object-cover shrink-0 group-hover:scale-110 transition-transform duration-200" 
+                  referrerPolicy="no-referrer" 
+                />
+              ) : (
+                <div title={activeUser.displayName || activeUser.email} className="p-1 bg-emerald-600 text-white rounded-lg shrink-0 group-hover:bg-emerald-500 group-hover:scale-110 transition-all duration-200">
+                  <User className="w-3.5 h-3.5" />
+                </div>
+              )}
+              <span className="text-xs font-bold truncate max-w-[90px] group-hover:text-emerald-200 transition-colors duration-200" title={activeUser.displayName || activeUser.email}>
+                {activeUser.displayName ? activeUser.displayName.split(" ")[0] : "Admin"}
+              </span>
+
+              <button
+                onClick={handleLogout}
+                title="Sign out of system"
+                className="p-1 hover:bg-rose-500/30 text-rose-300 hover:text-rose-100 rounded-lg transition-all duration-200 cursor-pointer shrink-0 hover:scale-125 active:scale-90"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            <button
-              onClick={handleLogout}
-              title="Sign out of system portal"
-              className="p-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 rounded-lg border border-transparent hover:border-rose-400/30 transition-all cursor-pointer shrink-0"
+            {/* Header Background Color Palette Icon Dropdown */}
+            <div 
+              title="Header Color Theme"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 hover:shadow-md hover:scale-105 bg-emerald-900/80 text-emerald-100 border-emerald-500/40 hover:bg-white/20 group"
             >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+              <Palette className={`w-4 h-4 ${currentHeaderStyle.accentClass} shrink-0 group-hover:rotate-45 group-hover:scale-110 transition-transform duration-300`} />
+              <select
+                id="header-bg-color-select"
+                value={headerBgStyle}
+                onChange={(e) => setHeaderBgStyle(e.target.value)}
+                className={`bg-transparent border-none text-xs font-extrabold focus:outline-hidden p-0 cursor-pointer ${currentHeaderStyle.textClass}`}
+              >
+                {Object.entries(HEADER_BG_STYLES).map(([key, style]) => (
+                  <option key={key} value={key} className="bg-slate-900 text-white">
+                    {style.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Header Background Color Palette Selector */}
-          <div className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${currentHeaderStyle.pillClass}`}>
-            <Palette className={`w-4 h-4 ${currentHeaderStyle.accentClass} shrink-0`} />
-            <span className="text-[10px] font-black uppercase opacity-70 font-mono tracking-wider">Header:</span>
-            <select
-              id="header-bg-color-select"
-              value={headerBgStyle}
-              onChange={(e) => setHeaderBgStyle(e.target.value)}
-              className={`bg-transparent border-none text-xs font-extrabold focus:outline-hidden p-0 cursor-pointer ${currentHeaderStyle.textClass}`}
+            {/* Timestamp Clock Icon Badge - Big Bold Font */}
+            <div 
+              title="System Clock"
+              className={`flex items-center gap-2.5 font-mono px-3.5 py-1.5 md:py-2 rounded-2xl border transition-all duration-200 hover:shadow-lg hover:scale-105 ${currentHeaderStyle.pillClass} hover:bg-white/20 hover:border-white/40 group cursor-default shadow-xs`}
             >
-              {Object.entries(HEADER_BG_STYLES).map(([key, style]) => (
-                <option key={key} value={key} className="bg-slate-900 text-white">
-                  {style.name}
-                </option>
-              ))}
-            </select>
+              <Clock className={`w-4 h-4 md:w-5 md:h-5 ${currentHeaderStyle.accentClass} animate-pulse group-hover:scale-110 shrink-0 transition-transform duration-200`} />
+              <div className="flex flex-col items-start leading-none">
+                <span className="text-base md:text-xl font-black tracking-wider font-mono group-hover:text-emerald-200 transition-colors duration-200">
+                  {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                <span className="text-[8px] font-extrabold uppercase tracking-widest opacity-80 mt-0.5">Live Time (EAT)</span>
+              </div>
+            </div>
           </div>
-
-          {/* Timestamp clock */}
-          <div className={`hidden sm:flex items-center gap-2 font-mono text-xs px-3 py-1.5 rounded-xl border ${currentHeaderStyle.pillClass}`}>
-            <Clock className={`w-4 h-4 ${currentHeaderStyle.accentClass} animate-pulse shrink-0`} />
-            <span className="font-bold">
-              {currentTime.toLocaleDateString("en-CA")} {currentTime.toLocaleTimeString()}
-            </span>
-          </div>
-        </div>
       </header>
 
       {/* Single Wave Bottom Edge SVG Divider */}
-      <div className="w-full overflow-hidden leading-none pointer-events-none -mt-0.5 z-20">
+      <div className="relative w-full overflow-hidden leading-none pointer-events-none -mt-0.5 z-20">
         <svg
           viewBox="0 0 1440 50"
           preserveAspectRatio="none"
-          className={`block w-full h-6 md:h-10 ${currentHeaderStyle.fillClass} transition-colors duration-300 drop-shadow-xs`}
+          className={`block w-full h-4 md:h-6 ${currentHeaderStyle.fillClass} transition-colors duration-300 drop-shadow-xs`}
         >
           <path d="M 0,0 C 360,55 1080,-15 1440,30 L 1440,0 L 0,0 Z" />
         </svg>
@@ -1179,17 +1210,27 @@ export default function App() {
       )}
 
       {/* Main Body Layout with Sidebar + Scrollable Content */}
-      <div className="flex flex-1 overflow-hidden h-[calc(100vh-60px)]">
+      <div className="flex flex-1 overflow-hidden min-h-0 md:h-[calc(100vh-165px)]">
 
-        {/* Clean Plain Left Sidebar Navigation */}
-        <aside className="hidden md:flex w-72 bg-slate-900 text-slate-300 flex-col justify-between shrink-0 shadow-md overflow-hidden z-20 border-r border-slate-800 relative group/sidebar">
+        {/* Clean Plain Left Sidebar Navigation with Bright Grey Background */}
+        <aside className="hidden md:flex w-72 bg-slate-100 text-slate-700 flex-col justify-between shrink-0 shadow-sm overflow-hidden z-20 border-r border-slate-200/80 relative group/sidebar">
           <div className="p-5 relative z-10">
             <div className="flex items-center justify-between mb-4 px-1">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">FACILITY DEPARTMENTS</p>
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">FACILITY DEPARTMENTS</p>
+              {totalSystemActiveNotifications > 0 ? (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 border border-rose-200 text-rose-700 text-[10px] font-extrabold shadow-xs animate-pulse">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                  <span>{totalSystemActiveNotifications} Live</span>
+                </span>
+              ) : (
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              )}
             </div>
  
             {/* Navigation Menu (Filtered by feature toggles with Framer Motion slide pills) */}
@@ -1200,6 +1241,8 @@ export default function App() {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
                   const isAllowed = checkTabPermission(item.id).allowed;
+                  const notifCount = getMenuNotificationCount(item.id);
+
                   return (
                     <motion.button
                       key={item.id}
@@ -1207,38 +1250,50 @@ export default function App() {
                       onClick={() => setActiveTab(item.id)}
                       whileHover={{ x: 4 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`group relative w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
+                      className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
                         isActive
                           ? "text-white font-bold"
-                          : "text-slate-300 hover:text-white hover:bg-white/5"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/70"
                       } ${!isAllowed ? "opacity-70" : ""}`}
                     >
                       {/* Animated sliding active background pill */}
                       {isActive && (
                         <motion.div
                           layoutId="activeSideNavPill"
-                          className="absolute inset-0 bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 rounded-xl shadow-[0_4px_20px_rgba(16,185,129,0.4)] border border-emerald-400/30"
+                          className="absolute inset-0 bg-emerald-600 rounded-xl shadow-md shadow-emerald-600/20 border border-emerald-500/30"
                           transition={{ type: "spring", stiffness: 450, damping: 35 }}
                         />
                       )}
 
-                      {/* Active neon strip indicator on left edge */}
+                      {/* Active indicator strip on left edge */}
                       {isActive && (
                         <motion.div
                           layoutId="activeSideNavStrip"
-                          className="absolute left-0 top-2 bottom-2 w-1 bg-emerald-300 rounded-r-full shadow-[0_0_12px_#34d399]"
+                          className="absolute left-0 top-2 bottom-2 w-1 bg-emerald-200 rounded-r-full"
                           transition={{ type: "spring", stiffness: 450, damping: 35 }}
                         />
                       )}
 
-                      <div className="flex items-center gap-3 relative z-10">
-                        <div className={`p-1 rounded-lg transition-transform duration-200 ${isActive ? "scale-105" : "group-hover:scale-110 group-hover:rotate-3"}`}>
-                          <Icon className={`w-4.5 h-4.5 transition-colors ${isActive ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" : "text-slate-400 group-hover:text-emerald-300"}`} />
+                      <div className="flex items-center gap-3 relative z-10 min-w-0">
+                        <div className={`p-1 rounded-lg transition-transform duration-200 shrink-0 ${isActive ? "scale-105" : "group-hover:scale-110 group-hover:rotate-3"}`}>
+                          <Icon className={`w-4.5 h-4.5 transition-colors ${isActive ? "text-white" : "text-slate-500 group-hover:text-emerald-700"}`} />
                         </div>
-                        <span className={!isAllowed ? "text-slate-400 group-hover:text-slate-200" : ""}>{item.label}</span>
+                        <span className={`truncate ${!isAllowed ? "text-slate-400 group-hover:text-slate-600" : ""}`}>{item.label}</span>
                       </div>
 
-                      <div className="relative z-10 flex items-center gap-1.5">
+                      <div className="relative z-10 flex items-center gap-1.5 shrink-0 ml-2">
+                        {/* Red / Pink Notification Badge */}
+                        {notifCount > 0 && (
+                          <span
+                            id={`sidebar-badge-${item.id}`}
+                            className="px-2 py-0.5 text-[10px] font-black rounded-full bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-sm shadow-rose-500/40 ring-1 ring-white/60 animate-pulse flex items-center gap-1 shrink-0"
+                            title={`${notifCount} active / pending notification(s)`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping shrink-0" />
+                            <span>{notifCount > 99 ? "99+" : notifCount}</span>
+                          </span>
+                        )}
+
                         {!isAllowed && (
                           <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                         )}
@@ -1246,7 +1301,7 @@ export default function App() {
                           <motion.span
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
-                            className="w-1.5 h-1.5 rounded-full bg-emerald-200 shadow-[0_0_6px_#fff]"
+                            className="w-1.5 h-1.5 rounded-full bg-emerald-200"
                           />
                         )}
                       </div>
@@ -1255,67 +1310,398 @@ export default function App() {
                 })}
             </nav>
           </div>
- 
-          {/* Seeding Status Notification */}
-          {(seeding || seedSuccess) && (
-            <div className="p-3 border-t border-slate-800 text-[10px] text-slate-400 bg-slate-950/25 space-y-1 relative z-10">
-              {seeding && (
-                <div className="flex items-center gap-1.5 text-emerald-400">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Seeding default records...</span>
-                </div>
-              )}
-              {seedSuccess && (
-                <div className="text-emerald-400 font-semibold flex items-center gap-1">
-                  ✓ Initial Clinical Catalog Seeding Complete!
-                </div>
-              )}
-            </div>
-          )}
         </aside>
 
-        {/* Mobile Bottom Navigation Bar - with motion active tab indicator */}
-        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-gray-150 shadow-[0_-6px_20px_rgba(0,0,0,0.06)] z-50 flex md:hidden items-center justify-start gap-1 overflow-x-auto scrollbar-none px-4">
-          {navItems
-            .filter((item) => item.enabled)
-            .map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              const isAllowed = checkTabPermission(item.id).allowed;
-              return (
-                <motion.button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  whileTap={{ scale: 0.9 }}
-                  className={`flex flex-col items-center justify-center min-w-[68px] h-full transition-all shrink-0 relative ${
-                    isActive ? "text-emerald-600 font-extrabold" : "text-gray-400 font-semibold"
-                  } ${!isAllowed ? "opacity-70" : ""}`}
-                >
-                  {isActive && (
-                    <motion.span
-                      layoutId="activeMobileNavLine"
-                      className="absolute top-0 left-1/2 -translate-x-1/2 w-9 h-1 bg-emerald-600 rounded-b-md shadow-[0_2px_8px_rgba(16,185,129,0.5)]"
-                      transition={{ type: "spring", stiffness: 450, damping: 35 }}
-                    />
-                  )}
-                  <div className="relative">
-                    <Icon className={`w-5 h-5 mb-0.5 transition-transform ${isActive ? "text-emerald-600 scale-110" : "text-gray-400 group-hover:text-emerald-600"}`} />
-                    {!isAllowed && (
-                      <span className="absolute -top-1.5 -right-1.5 bg-amber-500 rounded-full p-0.5 shadow-xs flex items-center justify-center">
-                        <Lock className="w-2.5 h-2.5 text-white" />
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[9px] tracking-wider leading-none">{item.label.split(" ")[0]}</span>
-                </motion.button>
-              );
-            })}
+        {/* Corporate Clean Mobile Bottom Navigation Bar */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white border-t border-slate-200/80 shadow-[0_-2px_12px_rgba(0,0,0,0.04)] px-3 pb-[max(0.6rem,env(safe-area-inset-bottom))] pt-1.5 flex items-center justify-around">
+          {/* 1. Dashboard */}
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+              activeTab === "dashboard"
+                ? "text-emerald-700 font-bold"
+                : "text-slate-500 hover:text-slate-800 font-medium"
+            }`}
+          >
+            <div className="relative">
+              <LayoutDashboard className={`w-5 h-5 transition-colors ${activeTab === "dashboard" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+              {getMenuNotificationCount("dashboard") > 0 && (
+                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                  {getMenuNotificationCount("dashboard") > 99 ? "99+" : getMenuNotificationCount("dashboard")}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] tracking-tight mt-1">Dashboard</span>
+            <div className="h-1 flex items-center justify-center mt-0.5">
+              {activeTab === "dashboard" && (
+                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+              )}
+            </div>
+          </button>
+
+          {/* 2. Tickets */}
+          <button
+            onClick={() => setActiveTab("tickets")}
+            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+              activeTab === "tickets"
+                ? "text-emerald-700 font-bold"
+                : "text-slate-500 hover:text-slate-800 font-medium"
+            }`}
+          >
+            <div className="relative">
+              <Ticket className={`w-5 h-5 transition-colors ${activeTab === "tickets" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+              {openTicketsCount > 0 && (
+                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                  {openTicketsCount > 99 ? "99+" : openTicketsCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] tracking-tight mt-1">Tickets</span>
+            <div className="h-1 flex items-center justify-center mt-0.5">
+              {activeTab === "tickets" && (
+                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+              )}
+            </div>
+          </button>
+
+          {/* 3. Patient Journey / Care Flow */}
+          <button
+            onClick={() => setActiveTab("journey")}
+            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+              activeTab === "journey"
+                ? "text-emerald-700 font-bold"
+                : "text-slate-500 hover:text-slate-800 font-medium"
+            }`}
+          >
+            <div className="relative">
+              <Activity className={`w-5 h-5 transition-colors ${activeTab === "journey" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+              {activeJourneysCount > 0 && (
+                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                  {activeJourneysCount > 99 ? "99+" : activeJourneysCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] tracking-tight mt-1">Journey</span>
+            <div className="h-1 flex items-center justify-center mt-0.5">
+              {activeTab === "journey" && (
+                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+              )}
+            </div>
+          </button>
+
+          {/* 4. Doctor Desk / Queue */}
+          <button
+            onClick={() => setActiveTab(toggles.doctor ? "doctor" : "queue")}
+            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+              activeTab === "doctor" || activeTab === "queue"
+                ? "text-emerald-700 font-bold"
+                : "text-slate-500 hover:text-slate-800 font-medium"
+            }`}
+          >
+            <div className="relative">
+              <Stethoscope className={`w-5 h-5 transition-colors ${activeTab === "doctor" || activeTab === "queue" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+              {(doctorWaitingCount > 0 || pendingQueueCount > 0) && (
+                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                  {(toggles.doctor ? doctorWaitingCount : pendingQueueCount) > 99 ? "99+" : (toggles.doctor ? doctorWaitingCount : pendingQueueCount)}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] tracking-tight mt-1">Doctor</span>
+            <div className="h-1 flex items-center justify-center mt-0.5">
+              {(activeTab === "doctor" || activeTab === "queue") && (
+                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+              )}
+            </div>
+          </button>
+
+          {/* 5. Modules / All Departments */}
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+              isMobileMenuOpen || !["dashboard", "tickets", "journey", "doctor", "queue"].includes(activeTab)
+                ? "text-emerald-700 font-bold"
+                : "text-slate-500 hover:text-slate-800 font-medium"
+            }`}
+          >
+            <div className="relative">
+              <LayoutGrid className={`w-5 h-5 transition-colors ${isMobileMenuOpen || !["dashboard", "tickets", "journey", "doctor", "queue"].includes(activeTab) ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+              {totalSystemActiveNotifications > 0 ? (
+                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                  {totalSystemActiveNotifications > 99 ? "99+" : totalSystemActiveNotifications}
+                </span>
+              ) : isSimulatedOffline ? (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+              ) : null}
+            </div>
+            <span className="text-[10px] tracking-tight mt-1">Modules</span>
+            <div className="h-1 flex items-center justify-center mt-0.5">
+              {(!["dashboard", "tickets", "journey", "doctor", "queue"].includes(activeTab) || isMobileMenuOpen) && (
+                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+              )}
+            </div>
+          </button>
         </nav>
 
+        {/* Mobile Bottom Menu Sheet / All Departments App Launcher Drawer */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <div className="fixed inset-0 z-50 flex flex-col justify-end md:hidden">
+              {/* Backdrop overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
+              />
+
+              {/* Slide-Up Bottom Sheet Card */}
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 26, stiffness: 320 }}
+                className="relative z-10 bg-slate-900 text-white rounded-t-3xl border-t border-slate-700/80 p-5 shadow-2xl max-h-[88vh] overflow-y-auto space-y-5"
+              >
+                {/* Handle Bar & Top Title */}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-1.5 bg-slate-700 rounded-full" />
+                  <div className="w-full flex items-center justify-between pt-1 border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                        <LayoutGrid className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-extrabold uppercase tracking-wide text-white">Facility Modules & Controls</h3>
+                        <p className="text-[10px] text-slate-400">Quick department launcher and system settings</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-all active:scale-95 cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 1. All Department Modules Grid Launcher */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                      All Hospital Departments ({navItems.filter(n => n.enabled).length})
+                    </h4>
+                    <span className="text-[10px] text-emerald-400 font-bold">Tap to launch</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {navItems
+                      .filter((item) => item.enabled)
+                      .map((item) => {
+                        const Icon = item.icon;
+                        const isActive = activeTab === item.id;
+                        const isAllowed = checkTabPermission(item.id).allowed;
+                        const notifCount = getMenuNotificationCount(item.id);
+
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`p-3 rounded-2xl border text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer active:scale-95 ${
+                              isActive
+                                ? "bg-emerald-600/20 border-emerald-400/80 text-white shadow-md shadow-emerald-950/50"
+                                : "bg-slate-950/70 border-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                            } ${!isAllowed ? "opacity-60" : ""}`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`p-2 rounded-xl shrink-0 ${
+                                isActive ? "bg-emerald-600 text-white" : "bg-slate-800 text-emerald-400"
+                              }`}>
+                                <Icon className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className={`text-xs font-bold truncate leading-tight ${isActive ? "text-emerald-300" : "text-slate-200"}`}>
+                                    {item.label}
+                                  </p>
+                                </div>
+                                <span className="text-[9px] text-slate-400 uppercase font-mono block mt-0.5">
+                                  {isActive ? "Active Now" : "Department"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="shrink-0 flex items-center gap-1">
+                              {notifCount > 0 && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-xs animate-pulse">
+                                  {notifCount > 99 ? "99+" : notifCount}
+                                </span>
+                              )}
+                              {!isAllowed ? (
+                                <Lock className="w-3.5 h-3.5 text-amber-500" />
+                              ) : isActive ? (
+                                <Check className="w-4 h-4 text-emerald-400" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* 2. User Profile & Account Actions Card */}
+                <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 flex items-center justify-between gap-3 shadow-inner">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {activeUser.photoURL ? (
+                      <img
+                        src={activeUser.photoURL}
+                        alt="User Avatar"
+                        className="w-11 h-11 rounded-2xl border border-emerald-500/50 object-cover shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
+                        <User className="w-6 h-6" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-white truncate">{activeUser.displayName || "Facility Admin"}</h4>
+                      <p className="text-[10px] text-slate-400 truncate font-mono">{activeUser.email}</p>
+                      <span className="inline-block px-2 py-0.5 mt-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-extrabold rounded-md uppercase">
+                        Tier {tenant.type}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleLogout();
+                    }}
+                    className="px-3.5 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+
+                {/* 3. Network & Offline Synchronization Mode */}
+                <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${isOnline && !isSimulatedOffline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Database Connection</span>
+                    </div>
+                    <button
+                      onClick={toggleOfflineSimulation}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                        isOnline && !isSimulatedOffline
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : "bg-amber-500/20 text-amber-200 border-amber-500/50 animate-pulse"
+                      }`}
+                    >
+                      {isSimulatedOffline ? <WifiOff className="w-4 h-4 text-amber-300" /> : <Wifi className="w-4 h-4 text-emerald-400" />}
+                      <span>{isSimulatedOffline ? "Offline Mode" : "Firebase Sync"}</span>
+                    </button>
+                  </div>
+                  {pendingSyncCount > 0 && (
+                    <p className="text-[10px] text-amber-300 font-mono">⚠️ {pendingSyncCount} pending change(s) waiting to sync.</p>
+                  )}
+                </div>
+
+                {/* 4. Super Admin Specialist Impersonation Jumper */}
+                {isSuperAdmin && (
+                  <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <UserCog className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Admin Employee Impersonator</span>
+                    </div>
+                    <select
+                      value={activeSpecialistId}
+                      onChange={(e) => setActiveSpecialistId(e.target.value)}
+                      className="w-full bg-slate-900 text-slate-100 border border-slate-700 rounded-xl text-xs font-bold p-2.5 focus:outline-none cursor-pointer"
+                    >
+                      <option value="">System Admin (Self)</option>
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name} — {emp.role}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* 5. Header Color Theme Selector */}
+                <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Header Color Theme</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(HEADER_BG_STYLES).map(([key, style]) => (
+                      <button
+                        key={key}
+                        onClick={() => setHeaderBgStyle(key)}
+                        className={`p-2.5 rounded-xl border text-xs font-extrabold flex items-center justify-between transition-all cursor-pointer ${
+                          headerBgStyle === key
+                            ? "bg-emerald-600/30 border-emerald-400 text-emerald-200 shadow-sm"
+                            : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <span className="truncate">{style.name.split(" ")[0]}</span>
+                        {headerBgStyle === key && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 6. Live System Clock Display - Big Bold Font */}
+                <div className="flex items-center justify-between p-4 bg-slate-950/80 rounded-2xl border border-slate-800 text-slate-400">
+                  <div className="flex items-center gap-2.5">
+                    <Clock className="w-5 h-5 text-emerald-400 animate-pulse" />
+                    <div>
+                      <span className="block text-xs font-bold uppercase tracking-wider text-slate-300">Live Facility Time</span>
+                      <span className="text-[10px] font-mono text-slate-400">Timezone: East Africa Time (EAT)</span>
+                    </div>
+                  </div>
+                  <span className="font-black text-emerald-300 text-xl font-mono tracking-wider">
+                    {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* Main Content Area - adjusted padding for bottom mobile nav spacing */}
-        <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto w-full">
+        <main className="flex-1 p-3 sm:p-5 md:p-8 pb-28 md:pb-8 overflow-y-auto w-full">
+          {/* Mobile-Only Active Department Banner */}
+          <div className="md:hidden flex items-center justify-between bg-white border border-slate-200/90 px-3.5 py-2.5 rounded-2xl shadow-xs mb-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
+                {React.createElement(navItems.find(n => n.id === activeTab)?.icon || LayoutDashboard, { className: "w-4 h-4" })}
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-xs font-black uppercase tracking-wide text-slate-800 truncate">
+                  {navItems.find(n => n.id === activeTab)?.label}
+                </h2>
+                <p className="text-[9px] text-slate-400 font-medium truncate">AfyaCare Live Workspace</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold transition-all shrink-0 cursor-pointer"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-emerald-600" />
+              <span>All Modules</span>
+            </button>
+          </div>
+
           {/* Active Workspace renderer with animated entrance/exit transitions */}
-          <div className="max-w-7xl mx-auto space-y-6">
+          <div className="max-w-7xl mx-auto space-y-5 md:space-y-6">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -1480,14 +1866,12 @@ export default function App() {
                 <span className="text-slate-300">•</span>
                 <span className="text-slate-500 text-[11px] font-medium">SHA Portal API v4.2 • KRA eTIMS v2.0 Live Sync</span>
               </div>
-              <div className="flex items-center gap-4 text-[11px] font-medium text-slate-500">
+              <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-500">
                 <span className="flex items-center gap-1 text-slate-600 font-semibold">
                   <ShieldCheck className="w-3.5 h-3.5 text-orange-500" /> 256-Bit SSL Encrypted
                 </span>
                 <span className="text-slate-300">•</span>
-                <span>County Healthcare System</span>
-                <span className="text-slate-300">•</span>
-                <span>© {new Date().getFullYear()} AfyaCare Intelligence Systems</span>
+                <span>All rights reserved <a href="https://urbantechdev.com" target="_blank" rel="noopener noreferrer" className="text-slate-700 hover:text-orange-600 font-bold underline transition-colors">Urban Technology developer (urbantechdev)</a></span>
               </div>
             </footer>
           </div>

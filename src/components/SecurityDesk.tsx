@@ -57,60 +57,10 @@ export default function SecurityDesk() {
       // Sort logs by timestamp descending
       records.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setLogs(records);
-
-      // Seed if empty
-      if (snapshot.empty) {
-        seedSecurityLogs();
-      }
     });
 
     return () => unsub();
   }, []);
-
-  const seedSecurityLogs = async () => {
-    const initialLogs: Omit<SecurityLog, "id">[] = [
-      {
-        type: "vehicle",
-        nameOrPlate: "KCA 482B",
-        entityType: "staff",
-        direction: "entry",
-        checkpoint: "Main Gate",
-        idOrPhone: "0711002233",
-        timestamp: new Date(Date.now() - 3600000 * 4).toISOString(), // 4 hours ago
-        status: "authorized",
-        notes: "Dr. Omondi personal vehicle entry",
-        officerName: "Officer Kipkorir"
-      },
-      {
-        type: "individual",
-        nameOrPlate: "Emily Chemutai",
-        entityType: "visitor",
-        direction: "entry",
-        checkpoint: "Reception Desk",
-        idOrPhone: "34882910",
-        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
-        status: "authorized",
-        notes: "Visiting patient Alice Wambui in Ward 2",
-        officerName: "Officer Wanjala"
-      },
-      {
-        type: "vehicle",
-        nameOrPlate: "KBC 904A",
-        entityType: "delivery",
-        direction: "entry",
-        checkpoint: "Emergency Gate",
-        idOrPhone: "0722334455",
-        timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-        status: "authorized",
-        notes: "Medical oxygen cylinder delivery from KEMSA",
-        officerName: "Officer Kipkorir"
-      }
-    ];
-
-    for (const log of initialLogs) {
-      await addDoc(collection(db, "security_logs"), log);
-    }
-  };
 
   const handleRegisterEntry = async (e: React.FormEvent) => {
     e.preventDefault();

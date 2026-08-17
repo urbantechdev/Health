@@ -540,7 +540,7 @@ export default function PrintDocument({
                     </div>
                     <div className="text-right space-y-1">
                       <p className="text-[9px] uppercase font-bold text-slate-400">Employer Information</p>
-                      <p className="font-bold text-slate-900">Hospital Management System</p>
+                      <p className="font-bold text-slate-900">HMS</p>
                       <p className="text-slate-500">KRA PIN: <span className="font-mono">P051189432K</span></p>
                       <p className="text-slate-500">SHIF Registered No: <span className="font-mono">SHIF-EMP-2026-NGB</span></p>
                     </div>

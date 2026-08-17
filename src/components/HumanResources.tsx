@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, addDoc, updateDoc, writeBatch, deleteDoc, query, where } from "firebase/firestore";
 import { Employee, PayrollRecord } from "../types";
+import { checkDuplicateEmployee } from "../lib/deduplicationService";
 import { 
   Users, 
   UserPlus, 
@@ -23,7 +24,8 @@ import {
   TrendingUp,
   Award,
   Eye,
-  X
+  X,
+  Ban
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 
@@ -126,6 +128,8 @@ export default function HumanResources() {
   const [empPhone, setEmpPhone] = useState("");
   const [empEmail, setEmpEmail] = useState("");
   const [empNationalId, setEmpNationalId] = useState("");
+  const [empAccessLevel, setEmpAccessLevel] = useState<"Super Admin" | "Department Admin" | "Standard Staff">("Standard Staff");
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   // Payslip Printer states
   const [printOpen, setPrintOpen] = useState(false);
@@ -146,11 +150,6 @@ export default function HumanResources() {
         emps.push({ id: doc.id, ...doc.data() } as Employee);
       });
       setEmployees(emps);
-
-      // Auto-seed initial employees if completely empty
-      if (snapshot.empty) {
-        seedInitialEmployees();
-      }
     });
 
     // 2. Listen to Payroll Records
@@ -189,75 +188,6 @@ export default function HumanResources() {
       document.body.style.overflow = "unset";
     };
   }, [viewingEmployee]);
-
-  const seedInitialEmployees = async () => {
-    const initial = [
-      {
-        name: "Dr. James N. Omondi",
-        nationalId: "24891102",
-        role: "Chief Medical Officer",
-        department: "medical",
-        specialty: "Chief Medical Officer",
-        salary: 320000,
-        phone: "0711943210",
-        email: "j.omondi@afyaboraclinic.co.ke",
-        status: "active",
-        hireDate: "2024-01-15",
-      },
-      {
-        name: "Alice Wanjiku Mwangi",
-        nationalId: "29443810",
-        role: "Senior Charge Nurse",
-        department: "nursing",
-        specialty: "Senior Charge Nurse",
-        salary: 115000,
-        phone: "0722334455",
-        email: "a.wanjiku@afyaboraclinic.co.ke",
-        status: "active",
-        hireDate: "2024-06-01",
-      },
-      {
-        name: "Peter Kiprop Rotich",
-        nationalId: "30511894",
-        role: "Head Pharmacist",
-        department: "pharmacy",
-        specialty: "Head Pharmacist",
-        salary: 140000,
-        phone: "0733445566",
-        email: "p.kiprop@afyaboraclinic.co.ke",
-        status: "active",
-        hireDate: "2025-02-10",
-      },
-      {
-        name: "Margaret Akinyi",
-        nationalId: "28412930",
-        role: "Lead Financial Accountant",
-        department: "finance",
-        specialty: "Lead Financial Accountant",
-        salary: 125000,
-        phone: "0712345678",
-        email: "m.akinyi@afyaboraclinic.co.ke",
-        status: "active",
-        hireDate: "2024-11-20",
-      },
-      {
-        name: "Julius Mwenda Kobia",
-        nationalId: "25441092",
-        role: "Security Chief Officer",
-        department: "security",
-        specialty: "Security Chief Officer",
-        salary: 75000,
-        phone: "0720445588",
-        email: "j.mwenda@afyaboraclinic.co.ke",
-        status: "active",
-        hireDate: "2025-01-05",
-      }
-    ];
-
-    for (const emp of initial) {
-      await addDoc(collection(db, "employees"), emp);
-    }
-  };
 
   // Helper to calculate Kenyan statutory deductions
   // 1. NSSF: Pension Fund - standard Tier I + Tier II in Kenya (usually ~ KES 400 - KES 1080)
@@ -310,25 +240,50 @@ export default function HumanResources() {
 
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDuplicateError(null);
     if (!empName || !empRole || !empSalary || !empPhone || !empNationalId) {
-      alert("Please fill all required fields");
+      setDuplicateError("Please fill all required fields");
       return;
     }
 
+    const calculatedEmail = empEmail.trim().toLowerCase() || `${empName.trim().toLowerCase().replace(/\s+/g, ".")}@afyaboraclinic.co.ke`;
+    const cleanNationalId = empNationalId.trim();
+
     setSubmitting(true);
     try {
+      // 1. Strict Duplicate Check across National ID and Email
+      const dupCheck = await checkDuplicateEmployee(cleanNationalId, calculatedEmail);
+      if (dupCheck.isDuplicate) {
+        setDuplicateError(`[DUPLICATE REJECTED] ${dupCheck.reason}`);
+        setSubmitting(false);
+        return;
+      }
+
+      // Check local cache
+      const existingInCache = employees.find(
+        (emp) => 
+          (emp.nationalId && emp.nationalId.trim().toLowerCase() === cleanNationalId.toLowerCase()) ||
+          (emp.email && emp.email.trim().toLowerCase() === calculatedEmail)
+      );
+      if (existingInCache) {
+        setDuplicateError(`[DUPLICATE REJECTED] An employee with National ID ${cleanNationalId} or email ${calculatedEmail} is already registered (${existingInCache.name}).`);
+        setSubmitting(false);
+        return;
+      }
+
       const finalSpecialty = empSpecialty.startsWith("Other") ? (customSpecialty || empSpecialty) : empSpecialty;
       const newEmp = {
-        name: empName,
-        nationalId: empNationalId,
+        name: empName.trim(),
+        nationalId: cleanNationalId,
         role: empRole,
         department: empDept,
         specialty: finalSpecialty,
         salary: parseInt(empSalary),
-        phone: empPhone,
-        email: empEmail || `${empName.toLowerCase().replace(/\s+/g, ".")}@afyaboraclinic.co.ke`,
+        phone: empPhone.trim(),
+        email: calculatedEmail,
         status: "active",
-        hireDate: new Date().toISOString().split("T")[0]
+        hireDate: new Date().toISOString().split("T")[0],
+        accessLevel: empAccessLevel
       };
 
       await addDoc(collection(db, "employees"), newEmp);
@@ -343,8 +298,11 @@ export default function HumanResources() {
       setEmpDept("medical");
       setEmpSpecialty("General Practitioner (GP)");
       setCustomSpecialty("");
+      setEmpAccessLevel("Standard Staff");
+      setDuplicateError(null);
     } catch (err) {
       console.error("Error creating employee:", err);
+      setDuplicateError("Failed to save employee profile. Please check database connection.");
     } finally {
       setSubmitting(false);
     }
@@ -707,15 +665,39 @@ export default function HumanResources() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-gray-600">Corporate Email Address (Optional)</label>
+                  <label className="font-bold text-gray-600">Corporate Email Address (Staff Login ID) *</label>
                   <input
                     type="email"
+                    required
                     value={empEmail}
                     onChange={(e) => setEmpEmail(e.target.value)}
-                    placeholder="e.g. a.conan@afyaboraclinic.co.ke"
+                    placeholder="e.g. staff.user@afyacare.co.ke"
                     className="w-full px-3 py-2 border border-gray-200 bg-gray-50/50 rounded-xl focus:outline-hidden focus:border-emerald-500 font-mono"
                   />
                 </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-600">System Access Level *</label>
+                  <select
+                    value={empAccessLevel}
+                    onChange={(e) => setEmpAccessLevel(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-200 bg-gray-50/50 rounded-xl focus:outline-hidden focus:border-emerald-500 font-semibold text-gray-800"
+                  >
+                    <option value="Standard Staff">Standard Staff (Assigned Dept Only)</option>
+                    <option value="Department Admin">Department Admin (Dept Management)</option>
+                    <option value="Super Admin">Super Admin (Full Platform Root)</option>
+                  </select>
+                </div>
+
+                {duplicateError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-800 text-xs font-semibold animate-shake">
+                    <Ban className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block text-rose-900">Duplicate Employee Blocked</span>
+                      <span className="text-[11px]">{duplicateError}</span>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="submit"

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, addDoc, updateDoc, doc, getDocs, query, where } from "firebase/firestore";
 import { PurchaseRequisition, PurchaseOrder, Supplier, GoodsReceivedNote } from "../types";
+import { checkDuplicateSupplier } from "../lib/deduplicationService";
 import { 
   ShoppingBag, 
   PackageCheck, 
@@ -22,7 +23,8 @@ import {
   Eye,
   Filter,
   CheckSquare,
-  Boxes
+  Boxes,
+  Ban
 } from "lucide-react";
 
 export default function Procurement() {
@@ -57,6 +59,7 @@ export default function Procurement() {
   const [supPhone, setSupPhone] = useState("");
   const [supEmail, setSupEmail] = useState("");
   const [supAddress, setSupAddress] = useState("");
+  const [supDupError, setSupDupError] = useState<string | null>(null);
 
   // New PO State
   const [selectedReq, setSelectedReq] = useState<PurchaseRequisition | null>(null);
@@ -73,7 +76,6 @@ export default function Procurement() {
       const docs: PurchaseRequisition[] = [];
       snap.forEach((d) => docs.push({ id: d.id, ...d.data() } as PurchaseRequisition));
       setRequisitions(docs);
-      if (snap.empty) seedInitialRequisitions();
     });
 
     const unsubPo = onSnapshot(collection(db, "procurement_orders"), (snap) => {
@@ -86,7 +88,6 @@ export default function Procurement() {
       const docs: Supplier[] = [];
       snap.forEach((d) => docs.push({ id: d.id, ...d.data() } as Supplier));
       setSuppliers(docs);
-      if (snap.empty) seedInitialSuppliers();
     });
 
     const unsubGrn = onSnapshot(collection(db, "procurement_grns"), (snap) => {
@@ -102,71 +103,6 @@ export default function Procurement() {
       unsubGrn();
     };
   }, []);
-
-  const seedInitialSuppliers = async () => {
-    const initial: Omit<Supplier, "id">[] = [
-      {
-        name: "Kenya Medical Supplies Authority (KEMSA)",
-        kraPin: "P051189201X",
-        category: "Pharmaceuticals",
-        contactPerson: "Dennis Rotich",
-        phone: "0722100200",
-        email: "orders@kemsa.co.ke",
-        address: "Commercial Street, Industrial Area, Nairobi",
-        status: "active",
-        rating: 5,
-      },
-      {
-        name: "Mission Essential Drugs & Supplies (MEDS)",
-        kraPin: "P051009822W",
-        category: "Medical Consumables",
-        contactPerson: "Sister Anne Wanjiru",
-        phone: "0733800900",
-        email: "supply@meds.or.ke",
-        address: "Mombasa Road, Syokimau, Machakos",
-        status: "active",
-        rating: 5,
-      },
-      {
-        name: "Surgipharm Kenya Limited",
-        kraPin: "P051334901Z",
-        category: "Laboratory Reagents",
-        contactPerson: "Rajesh Patel",
-        phone: "0711404040",
-        email: "info@surgipharm.com",
-        address: "Off Enterprise Road, Nairobi",
-        status: "active",
-        rating: 4,
-      }
-    ];
-
-    for (const s of initial) {
-      await addDoc(collection(db, "procurement_suppliers"), s);
-    }
-  };
-
-  const seedInitialRequisitions = async () => {
-    const initial: Omit<PurchaseRequisition, "id">[] = [
-      {
-        requisitionNo: "REQ-2026-001",
-        department: "pharmacy",
-        requestedBy: "Pharm. Lucy Njeri",
-        items: [
-          { itemName: "Paracetamol 500mg (1000s)", category: "Pharmaceuticals", quantity: 20, estimatedCost: 850 },
-          { itemName: "Amoxicillin 500mg Caps (100s)", category: "Pharmaceuticals", quantity: 50, estimatedCost: 650 }
-        ],
-        totalEstimatedCost: 49500,
-        priority: "High",
-        status: "pending_approval",
-        requestDate: new Date().toLocaleDateString("en-CA"),
-        notes: "Restocking low inventory threshold before weekend."
-      }
-    ];
-
-    for (const r of initial) {
-      await addDoc(collection(db, "procurement_requisitions"), r);
-    }
-  };
 
   const handleCreateRequisition = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -252,17 +188,28 @@ export default function Procurement() {
 
   const handleCreateSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!supName || !supKraPin) return;
+    setSupDupError(null);
+    if (!supName.trim() || !supKraPin.trim()) {
+      setSupDupError("Please provide both supplier business name and KRA PIN.");
+      return;
+    }
 
     try {
+      // 1. Strict Duplicate Supplier Check
+      const dupCheck = await checkDuplicateSupplier(supKraPin.trim(), supName.trim(), supEmail.trim());
+      if (dupCheck.isDuplicate) {
+        setSupDupError(`[DUPLICATE REJECTED] ${dupCheck.reason}`);
+        return;
+      }
+
       await addDoc(collection(db, "procurement_suppliers"), {
-        name: supName,
-        kraPin: supKraPin,
+        name: supName.trim(),
+        kraPin: supKraPin.trim().toUpperCase(),
         category: supCategory,
-        contactPerson: supContact,
-        phone: supPhone,
-        email: supEmail,
-        address: supAddress,
+        contactPerson: supContact.trim(),
+        phone: supPhone.trim(),
+        email: supEmail.trim().toLowerCase(),
+        address: supAddress.trim(),
         status: "active",
         rating: 5
       });
@@ -271,8 +218,13 @@ export default function Procurement() {
       setSupName("");
       setSupKraPin("");
       setSupContact("");
+      setSupPhone("");
+      setSupEmail("");
+      setSupAddress("");
+      setSupDupError(null);
     } catch (err) {
       console.error("Error creating supplier:", err);
+      setSupDupError("Failed to save supplier. Please check connection.");
     }
   };
 
@@ -896,6 +848,16 @@ export default function Procurement() {
                 onChange={(e) => setSupPhone(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-mono"
               />
+
+              {supDupError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-800 text-xs font-semibold animate-shake">
+                  <Ban className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block text-rose-900">Duplicate Supplier Blocked</span>
+                    <span className="text-[11px]">{supDupError}</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button

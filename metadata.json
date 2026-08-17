@@ -1,5 +1,5 @@
 {
-  "name": "Hospital Management System",
+  "name": "HMS",
   "description": "A Multi-Tenant Hospital & Clinic Management System designed for Kenyan healthcare providers, featuring dynamic departmental workflows, paperless billing, smart pharmacy POS, and deep integrations with SHA/Taifa Care, KRA eTIMS, and Safaricom M-PESA.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -137,6 +137,7 @@ export interface Employee {
   email: string;
   status: "active" | "on_leave" | "terminated";
   hireDate: string;
+  accessLevel?: "Super Admin" | "Department Admin" | "Standard Staff";
 }
 
 export interface PayrollRecord {

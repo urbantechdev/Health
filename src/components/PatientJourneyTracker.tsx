@@ -359,18 +359,26 @@ export default function PatientJourneyTracker() {
         // Match & dispense prescriptions
         const updatedVisits = [...matchedPatient.visits];
         let dispensedItems: any[] = [];
-        let itemsTotal = 150; // default consult fee
+        let itemsTotal = 300; // Standard Consultation & Triage Fee KES 300
+
+        dispensedItems.push({
+          description: "General Consultation & Triage Fee",
+          amount: 300,
+          department: "reception"
+        });
 
         if (updatedVisits.length > 0) {
           const lastVisit = updatedVisits[updatedVisits.length - 1];
           if (lastVisit.prescriptions && lastVisit.prescriptions.length > 0) {
             lastVisit.prescriptions = lastVisit.prescriptions.map(p => {
+              const drugUnitPrice = (p as any).unitPrice || 25;
+              const itemCost = p.quantity * drugUnitPrice;
               dispensedItems.push({
-                description: `${p.drugName} (Dispensed x${p.quantity})`,
-                amount: p.quantity * 10, // KES 10 per tab mock price
+                description: `${p.drugName} (${p.dosage} - x${p.quantity})`,
+                amount: itemCost,
                 department: "pharmacy"
               });
-              itemsTotal += p.quantity * 10;
+              itemsTotal += itemCost;
               return { ...p, status: "dispensed" };
             });
             await updateDoc(doc(db, "patients", patientId), { visits: updatedVisits });
@@ -382,12 +390,13 @@ export default function PatientJourneyTracker() {
         const lastVisit = updatedVisits[updatedVisits.length - 1];
         if (lastVisit && lastVisit.referrals) {
           lastVisit.referrals.forEach(ref => {
+            const testFee = (ref as any).cost || 850;
             dispensedItems.push({
-              description: `LIS Lab Test: ${ref.testName}`,
-              amount: 500, // mock KES 500 lab fee
-              department: "laboratory"
+              description: `Diagnostic Panel: ${ref.testName}`,
+              amount: testFee,
+              department: ref.department || "laboratory"
             });
-            itemsTotal += 500;
+            itemsTotal += testFee;
           });
         }
 
