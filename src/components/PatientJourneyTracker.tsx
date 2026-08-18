@@ -9,7 +9,8 @@ import {
   doc,
   addDoc,
   getDocs,
-  where
+  where,
+  deleteDoc
 } from "firebase/firestore";
 import { QueueTicket, MedicalRecord, Invoice, Medication, ClinicalVisit } from "../types";
 import {
@@ -33,7 +34,8 @@ import {
   Smartphone,
   Fingerprint,
   RotateCw,
-  Zap
+  Zap,
+  Trash2
 } from "lucide-react";
 
 export default function PatientJourneyTracker() {
@@ -45,6 +47,22 @@ export default function PatientJourneyTracker() {
   const [loading, setLoading] = useState(true);
   const [simulatingStep, setSimulatingStep] = useState<string | null>(null);
   const [simulationLogs, setSimulationLogs] = useState<string[]>([]);
+
+  const handleDeleteJourneyTicket = async (ticketId: string, ticketNo?: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    // Optimistic removal (0ms)
+    setTickets(prev => prev.filter(t => t.id !== ticketId));
+    if (selectedTicketId === ticketId) {
+      setSelectedTicketId(null);
+    }
+    setSimulationLogs(prev => [`Ticket ${ticketNo || ticketId} removed instantly from queue.`, ...prev.slice(0, 15)]);
+
+    try {
+      await deleteDoc(doc(db, "queue", ticketId));
+    } catch (err) {
+      console.error("Error deleting journey ticket:", err);
+    }
+  };
 
   // Load Firestore data
   useEffect(() => {
@@ -526,7 +544,7 @@ export default function PatientJourneyTracker() {
                     : "bg-amber-50 text-amber-700 border-amber-150";
 
                 return (
-                  <button
+                  <div
                     key={t.id}
                     id={`journey-patient-${t.id}`}
                     onClick={() => setSelectedTicketId(t.id)}
@@ -536,7 +554,7 @@ export default function PatientJourneyTracker() {
                         : "bg-white hover:bg-gray-50 border-gray-150 text-gray-800 hover:-translate-y-0.5"
                     }`}
                   >
-                    <div className="space-y-1.5 truncate">
+                    <div className="space-y-1.5 truncate flex-1">
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${isSelected ? "bg-slate-800 text-emerald-400" : "bg-gray-100 text-gray-700"}`}>
                           {t.ticketNo}
@@ -552,8 +570,17 @@ export default function PatientJourneyTracker() {
                       </p>
                     </div>
 
-                    <ChevronRight className={`w-4 h-4 shrink-0 self-center transition-transform ${isSelected ? "text-white translate-x-0.5" : "text-gray-300"}`} />
-                  </button>
+                    <div className="flex items-center gap-1 self-center">
+                      <button
+                        onClick={(e) => handleDeleteJourneyTicket(t.id, t.ticketNo, e)}
+                        title="Instant Delete Ticket"
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isSelected ? "text-slate-400 hover:text-rose-400 hover:bg-slate-800" : "text-slate-400 hover:text-rose-600 hover:bg-rose-50"}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${isSelected ? "text-white translate-x-0.5" : "text-gray-300"}`} />
+                    </div>
+                  </div>
                 );
               })
             )}
@@ -590,11 +617,22 @@ export default function PatientJourneyTracker() {
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Intake Time</span>
-                  <span className="text-xs font-mono font-bold text-gray-800">
-                    {new Date(selectedTicket.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Intake Time</span>
+                    <span className="text-xs font-mono font-bold text-gray-800">
+                      {new Date(selectedTicket.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={(e) => handleDeleteJourneyTicket(selectedTicket.id, selectedTicket.ticketNo, e)}
+                    title="Instant Delete This Journey Ticket"
+                    className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl border border-rose-200 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete</span>
+                  </button>
                 </div>
               </div>
 

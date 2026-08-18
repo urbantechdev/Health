@@ -2,7 +2,25 @@ import React, { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, getDocs, query, where } from "firebase/firestore";
 import { MedicalRecord, Medication, QueueTicket, PrescriptionItem, ClinicalVisit } from "../types";
-import { Heart, Stethoscope, ClipboardList, AlertTriangle, Sparkles, Check, Send, AlertCircle, RefreshCw, FileText, Printer } from "lucide-react";
+import { 
+  Heart, 
+  Stethoscope, 
+  ClipboardList, 
+  AlertTriangle, 
+  Sparkles, 
+  Check, 
+  Send, 
+  AlertCircle, 
+  RefreshCw, 
+  FileText, 
+  Printer, 
+  BellRing, 
+  Volume2, 
+  X, 
+  ArrowRight, 
+  UserCheck,
+  CheckCircle2
+} from "lucide-react";
 import PrintDocument from "./PrintDocument";
 
 interface DoctorsDeskProps {
@@ -11,12 +29,28 @@ interface DoctorsDeskProps {
   activeSpecialistId?: string;
 }
 
+export interface RoutingCueInfo {
+  ticketNo: string;
+  stationName: string;
+  stationDepartment: string;
+  instructionText: string;
+  patientName: string;
+  nationalId: string;
+  diagnosis: string;
+  details: string;
+}
+
 export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistId }: DoctorsDeskProps) {
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
   const [medications, setMedications] = useState<Medication[]>([]);
   const [queueTickets, setQueueTickets] = useState<QueueTicket[]>([]);
+  const [pendingQueueTickets, setPendingQueueTickets] = useState<QueueTicket[]>([]);
+  const [incomingPatientPrompt, setIncomingPatientPrompt] = useState<QueueTicket | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   
+  // Audio-visual routing modal state
+  const [routingCue, setRoutingCue] = useState<RoutingCueInfo | null>(null);
+
   // Printing digital prescription states
   const [printOpen, setPrintOpen] = useState(false);
   const [printTarget, setPrintTarget] = useState<{ patient: MedicalRecord; visit: ClinicalVisit } | null>(null);
@@ -53,6 +87,40 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Helper to play synthesized audio beep
+  const playAudioTone = (freq: number = 880, duration: number = 0.2) => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {
+      console.log("Audio tone error:", e);
+    }
+  };
+
+  // Helper to speak announcement aloud
+  const speakStationAnnouncement = (text: string) => {
+    try {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        utterance.lang = "en-KE";
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch (e) {
+      console.log("Speech synthesis error:", e);
+    }
+  };
+
   useEffect(() => {
     // Listen to Patients
     const unsubPatients = onSnapshot(collection(db, "patients"), (snapshot) => {
@@ -73,9 +141,9 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
       setMedications(meds);
     });
 
-    // Listen to Active Queue Tickets for Doctor Department
-    const q = query(collection(db, "queue"), where("currentDepartment", "==", "doctor"), where("status", "==", "serving"));
-    const unsubQueue = onSnapshot(q, (snapshot) => {
+    // Listen to Active Serving Queue Tickets for Doctor Department
+    const qServing = query(collection(db, "queue"), where("currentDepartment", "==", "doctor"), where("status", "==", "serving"));
+    const unsubServingQueue = onSnapshot(qServing, (snapshot) => {
       const tickets: QueueTicket[] = [];
       snapshot.forEach((doc) => {
         const tick = { id: doc.id, ...doc.data() } as QueueTicket;
@@ -91,21 +159,72 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
 
       // Auto select called patient if present
       if (tickets.length > 0 && !selectedPatientId) {
-        // Find corresponding patient ID
         const matched = patsFromDbAndQueue(tickets[0].patientName);
         if (matched) setSelectedPatientId(matched.id);
+      }
+    });
+
+    // Listen to Pending Incoming Queue Tickets for Doctor Department (for Real-Time Popup Notification)
+    const qPending = query(collection(db, "queue"), where("currentDepartment", "==", "doctor"), where("status", "==", "pending"));
+    const unsubPendingQueue = onSnapshot(qPending, (snapshot) => {
+      const pending: QueueTicket[] = [];
+      snapshot.forEach((doc) => {
+        const tick = { id: doc.id, ...doc.data() } as QueueTicket;
+        if (activeSpecialistId) {
+          if (tick.assignedSpecialistId === activeSpecialistId || !tick.assignedSpecialistId) {
+            pending.push(tick);
+          }
+        } else {
+          pending.push(tick);
+        }
+      });
+      setPendingQueueTickets(pending);
+
+      // Show real-time popup if there is an incoming pending patient and no active consultation
+      if (pending.length > 0) {
+        const newest = pending[0];
+        setIncomingPatientPrompt((prev) => {
+          if (!prev || prev.id !== newest.id) {
+            playAudioTone(750, 0.25);
+            return newest;
+          }
+          return prev;
+        });
       }
     });
 
     return () => {
       unsubPatients();
       unsubMeds();
-      unsubQueue();
+      unsubServingQueue();
+      unsubPendingQueue();
     };
   }, [activeSpecialistId]);
 
   const patsFromDbAndQueue = (name: string) => {
     return patients.find(p => p.patientName.toLowerCase() === name.toLowerCase());
+  };
+
+  // Accept and call incoming patient from popup prompt
+  const handleAcceptIncomingPatient = async (ticket: QueueTicket) => {
+    try {
+      playAudioTone(1050, 0.3);
+      await updateDoc(doc(db, "queue", ticket.id), {
+        status: "serving",
+      });
+
+      const matched = patsFromDbAndQueue(ticket.patientName);
+      if (matched) {
+        setSelectedPatientId(matched.id);
+      }
+      if (ticket.issue) {
+        setSymptoms(ticket.issue);
+      }
+      setIncomingPatientPrompt(null);
+      speakStationAnnouncement(`Calling ${ticket.patientName}. Ticket ${ticket.ticketNo}. Please enter consultation room.`);
+    } catch (e) {
+      console.error("Error accepting incoming patient:", e);
+    }
   };
 
   // Auto-populate symptom fields from the queue ticket issue
@@ -259,45 +378,100 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
         )
       );
 
+      let assignedStationName = "Billing & Accounts Clearance Desk";
+      let assignedNextDept = "billing";
+      let assignedTicketNo = `BIL-${Math.floor(Math.random() * 900 + 100)}`;
+      let instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Billing & Accounts`;
+      let routingDetails = "Consultation concluded. Proceed to Billing desk for final invoice clearance.";
+
       if (!qSnap.empty) {
         const ticketDoc = qSnap.docs[0];
         const ticketId = ticketDoc.id;
         const ticketData = ticketDoc.data();
+        const baseNum = ticketData.ticketNo?.split("-")[1] || Math.floor(Math.random() * 900 + 100);
 
         if (draftReferrals.length > 0) {
           // If e-referrals are present (e.g., Lab or Radiology), auto-route patient to that queue
           const nextDept = draftReferrals[0].department;
           let nextPrefix = "LAB";
-          if (nextDept === "radiology") nextPrefix = "RAD";
-          else if (nextDept === "labour_room") nextPrefix = "LBR";
-          else if (nextDept === "gyna") nextPrefix = "GYN";
-          const newTicketNo = `${nextPrefix}-${ticketData.ticketNo.split("-")[1] || Math.floor(Math.random() * 900 + 100)}`;
+          if (nextDept === "radiology") {
+            nextPrefix = "RAD";
+            assignedStationName = "Radiology & Imaging Unit (Room 106)";
+            assignedNextDept = "radiology";
+            routingDetails = `Diagnostic Imaging requested: ${draftReferrals.map(r => r.testName).join(", ")}`;
+          } else if (nextDept === "labour_room") {
+            nextPrefix = "LBR";
+            assignedStationName = "Maternity & Labour Ward (Station 3)";
+            assignedNextDept = "labour_room";
+            routingDetails = `Maternity referral: ${draftReferrals.map(r => r.testName).join(", ")}`;
+          } else if (nextDept === "gyna") {
+            nextPrefix = "GYN";
+            assignedStationName = "Gynaecology Clinic (Room 108)";
+            assignedNextDept = "gyna";
+            routingDetails = `Specialized Gynaecological consultation: ${draftReferrals.map(r => r.testName).join(", ")}`;
+          } else {
+            nextPrefix = "LAB";
+            assignedStationName = "Laboratory Diagnostic Station (Room 104)";
+            assignedNextDept = "laboratory";
+            routingDetails = `Diagnostic Tests ordered: ${draftReferrals.map(r => r.testName).join(", ")}`;
+          }
+          
+          assignedTicketNo = `${nextPrefix}-${baseNum}`;
+          instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to ${assignedStationName.split("(")[0].trim()}`;
 
           await updateDoc(doc(db, "queue", ticketId), {
             currentDepartment: nextDept,
-            ticketNo: newTicketNo,
+            ticketNo: assignedTicketNo,
             status: "pending", // place them back to pending queue for lab/rad
-            notes: `Referred by Doctor: ${diagnosis}`,
+            notes: `Referred by Doctor: ${diagnosis || "Diagnostic referral"}`,
           });
         } else if (draftPrescriptions.length > 0) {
           // If only pharmacy prescription was given, route directly to Pharmacy counter
-          const newTicketNo = `PHA-${ticketData.ticketNo.split("-")[1] || Math.floor(Math.random() * 900 + 100)}`;
+          assignedTicketNo = `PHA-${baseNum}`;
+          assignedStationName = "Hospital Pharmacy & POS (Dispensing Counter 1)";
+          assignedNextDept = "pharmacy";
+          instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Pharmacy`;
+          routingDetails = `Prescriptions queued for dispensing (${draftPrescriptions.length} items): ${draftPrescriptions.map(p => p.drugName).join(", ")}`;
+
           await updateDoc(doc(db, "queue", ticketId), {
             currentDepartment: "pharmacy",
-            ticketNo: newTicketNo,
+            ticketNo: assignedTicketNo,
             status: "pending",
             notes: "Prescriptions ready for dispensing",
           });
         } else {
           // No referrals/prescriptions -> direct to Billing or discharge
-          const newTicketNo = `BIL-${ticketData.ticketNo.split("-")[1] || Math.floor(Math.random() * 900 + 100)}`;
+          assignedTicketNo = `BIL-${baseNum}`;
+          assignedStationName = "Billing & Accounts Clearance Desk";
+          assignedNextDept = "billing";
+          instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Billing & Accounts`;
+          routingDetails = "Clinical consultation concluded without medications. Proceed to Billing desk for clearance.";
+
           await updateDoc(doc(db, "queue", ticketId), {
             currentDepartment: "billing",
-            ticketNo: newTicketNo,
+            ticketNo: assignedTicketNo,
             status: "pending",
           });
         }
       }
+
+      // Trigger Audio-Visual Cues
+      playAudioTone(880, 0.25);
+      setTimeout(() => playAudioTone(1174, 0.35), 260);
+
+      const speechAnnouncement = `${instructionPhrase}. ${selectedPatient.patientName}, please proceed immediately to ${assignedStationName.split("(")[0].trim()}.`;
+      speakStationAnnouncement(speechAnnouncement);
+
+      setRoutingCue({
+        ticketNo: assignedTicketNo,
+        stationName: assignedStationName,
+        stationDepartment: assignedNextDept,
+        instructionText: instructionPhrase,
+        patientName: selectedPatient.patientName,
+        nationalId: selectedPatient.nationalId,
+        diagnosis: diagnosis || "General Clinical Encounter",
+        details: routingDetails,
+      });
 
       // Reset states
       setSymptoms("");
@@ -308,7 +482,6 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
       setAiSummary(null);
       setSelectedPatientId(null);
       onRefreshQueue();
-      alert("Consultation complete. Patient routed to next department queue!");
     } catch (err) {
       console.error(err);
     } finally {
@@ -360,6 +533,58 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
           )}
         </div>
       </div>
+
+      {/* Real-Time Incoming Patient Queue Popup Notification Banner */}
+      {incomingPatientPrompt && (
+        <div className="mb-6 p-4 bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white rounded-2xl shadow-lg border border-emerald-500/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="relative p-3 bg-emerald-500/20 border border-emerald-400/40 rounded-xl shrink-0">
+              <BellRing className="w-6 h-6 text-emerald-300 animate-bounce" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-ping"></span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-emerald-400 text-emerald-950 font-mono font-black text-xs rounded-md shadow-xs">
+                  {incomingPatientPrompt.ticketNo}
+                </span>
+                <span className="text-xs font-semibold text-emerald-200 uppercase tracking-wider">
+                  Incoming Patient in Queue
+                </span>
+                {incomingPatientPrompt.specialistTitle && (
+                  <span className="text-[10px] px-2 py-0.5 bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 rounded">
+                    {incomingPatientPrompt.specialistTitle}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-base font-bold text-white mt-0.5">
+                {incomingPatientPrompt.patientName}
+                {incomingPatientPrompt.age ? ` (${incomingPatientPrompt.age} yrs)` : ""}
+              </h3>
+              <p className="text-xs text-emerald-100/80 line-clamp-1 mt-0.5">
+                <strong>Chief Complaint:</strong> {incomingPatientPrompt.issue || "General Consultation / Triage intake"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+            <button
+              id="btn-dismiss-incoming-prompt"
+              onClick={() => setIncomingPatientPrompt(null)}
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white/80 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Dismiss
+            </button>
+            <button
+              id="btn-accept-incoming-patient"
+              onClick={() => handleAcceptIncomingPatient(incomingPatientPrompt)}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>Accept & Call Patient In</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Patient Selection & History timeline */}
@@ -849,6 +1074,104 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
         type="prescription"
         prescriptionData={printTarget}
       />
+
+      {/* Dynamic Audio-Visual Triage Routing Modal */}
+      {routingCue && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border-2 border-emerald-500 overflow-hidden">
+            {/* Header Banner */}
+            <div className="p-6 bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-900 text-white relative">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 bg-emerald-500/20 border border-emerald-400/40 rounded-xl">
+                    <Volume2 className="w-5 h-5 text-emerald-300 animate-pulse" />
+                  </span>
+                  <div>
+                    <h3 className="text-xs uppercase font-extrabold tracking-widest text-emerald-300">
+                      Triage Routing & Audio-Visual Cue
+                    </h3>
+                    <p className="text-sm font-semibold text-white/90">Clinical Consultation Dispatched</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRoutingCue(null)}
+                  className="p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Station Instruction Banner */}
+              <div className="mt-4 p-4 bg-emerald-500/20 border border-emerald-400/50 rounded-2xl text-center space-y-1">
+                <p className="text-[11px] uppercase tracking-wider font-bold text-emerald-200">Station Routing Order</p>
+                <h2 className="text-2xl sm:text-3xl font-black text-white font-mono tracking-tight text-emerald-300">
+                  {routingCue.instructionText}
+                </h2>
+                <div className="flex items-center justify-center gap-1.5 pt-1">
+                  <span className="w-2 h-4 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                  <span className="w-2 h-6 bg-emerald-300 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                  <span className="w-2 h-8 bg-emerald-200 rounded-full animate-bounce"></span>
+                  <span className="w-2 h-6 bg-emerald-300 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                  <span className="w-2 h-4 bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                </div>
+              </div>
+            </div>
+
+            {/* Patient & Next Station Details */}
+            <div className="p-6 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                <div>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase block">Patient Name</span>
+                  <span className="font-extrabold text-sm text-gray-900">{routingCue.patientName}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase block">National ID / Passport</span>
+                  <span className="font-mono font-bold text-gray-800">{routingCue.nationalId}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase block">Clinical Diagnosis</span>
+                  <span className="font-semibold text-gray-800">{routingCue.diagnosis}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase block">Target Station</span>
+                  <span className="font-bold text-emerald-700">{routingCue.stationName}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900">
+                <p className="font-bold text-[11px] mb-0.5 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Clinical Handover Instructions:</span>
+                </p>
+                <p className="text-[11px] text-emerald-800">{routingCue.details}</p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playAudioTone(880, 0.25);
+                    speakStationAnnouncement(`${routingCue.instructionText}. ${routingCue.patientName}, please proceed immediately to ${routingCue.stationName.split("(")[0].trim()}.`);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Volume2 className="w-4 h-4 text-emerald-600" />
+                  <span>Replay Audio Cue</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRoutingCue(null)}
+                  className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span>Acknowledge & Continue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

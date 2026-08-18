@@ -34,6 +34,10 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
   const [kraStatus, setKraStatus] = useState<any | null>(null);
   const [kraLoading, setKraLoading] = useState(false);
 
+  // SHA / Taifa Care Verification state
+  const [shaLoading, setShaLoading] = useState(false);
+  const [shaData, setShaData] = useState<any | null>(null);
+
   // Slade / Insurance Pre-auth
   const [insuranceLoading, setInsuranceLoading] = useState(false);
   const [insuranceAuth, setInsuranceAuth] = useState<any | null>(null);
@@ -70,8 +74,37 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
       setMpesaPhone(selectedInvoice.nationalId ? "07" + Math.floor(10000000 + Math.random() * 90000000) : "");
       setKraStatus(null);
       setInsuranceAuth(null);
+      setShaData(null);
     }
   }, [selectedInvoiceId]);
+
+  // Check SHA (Social Health Authority) eligibility and apply benefit
+  const checkShaEligibility = async () => {
+    if (!selectedInvoice) return;
+    const searchId = selectedInvoice.nationalId || "32441928";
+    setShaLoading(true);
+    try {
+      const response = await fetch("/api/integrations/sha/eligibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nationalId: searchId }),
+      });
+      const data = await response.json();
+      if (data.eligible) {
+        setShaData(data);
+        // Automatically apply SHA coverage (up to 2,500 outpatient capitation or full total)
+        const applicableSha = Math.min(selectedInvoice.total, 2500);
+        setShaCover(applicableSha);
+        setPatientOutPocket(Math.max(0, selectedInvoice.total - applicableSha - insuranceCover));
+      } else {
+        alert(data.error || "Patient SHA status is inactive or defaulted.");
+      }
+    } catch (e) {
+      console.error("SHA check error:", e);
+    } finally {
+      setShaLoading(false);
+    }
+  };
 
   // Handle M-PESA STK Push & Polling
   const triggerMpesaStkPush = async () => {
@@ -381,7 +414,18 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
 
                 <div className="space-y-3 bg-gray-50/50 p-4 border border-gray-100 rounded-2xl text-xs">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase">SHA / Taifa Care Cover (KES)</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase">SHA / Taifa Care Cover (KES)</label>
+                      <button
+                        id="btn-trigger-sha-check"
+                        onClick={checkShaEligibility}
+                        disabled={shaLoading}
+                        className="text-[9px] text-cyan-700 bg-cyan-50 hover:bg-cyan-100 px-2 py-0.5 rounded font-bold uppercase transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        {shaLoading ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <ShieldCheck className="w-2.5 h-2.5" />}
+                        <span>{shaLoading ? "Verifying..." : "Verify SHA"}</span>
+                      </button>
+                    </div>
                     <input
                       id="input-cover-sha"
                       type="number"
@@ -393,6 +437,15 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
                       }}
                       className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg"
                     />
+                    {shaData && (
+                      <div className="p-2 bg-cyan-50 border border-cyan-200 text-cyan-900 rounded-lg text-[10px] space-y-0.5">
+                        <p className="font-bold flex items-center gap-1">
+                          <Check className="w-3 h-3 text-cyan-600" />
+                          <span>SHA Contributor Active ({shaData.shaId})</span>
+                        </p>
+                        <p className="text-cyan-700">Cover Capitation applied: KES {shaCover.toLocaleString()}</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1">

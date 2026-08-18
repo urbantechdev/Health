@@ -4,6 +4,7 @@ import { db, auth, googleProvider } from "./lib/firebase";
 import { collection, getDocs, setDoc, doc, addDoc, onSnapshot, updateDoc, disableNetwork, enableNetwork } from "firebase/firestore";
 import { onAuthStateChanged, signInWithPopup, signOut, User as FirebaseUser } from "firebase/auth";
 import { Tenant, DepartmentToggles, Employee } from "./types";
+import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "./constants/roles";
 import AdminPanel from "./components/AdminPanel";
 import ReceptionKiosk from "./components/ReceptionKiosk";
 import QueueDashboard from "./components/QueueDashboard";
@@ -19,6 +20,9 @@ import TicketSystem from "./components/TicketSystem";
 import SecurityDesk from "./components/SecurityDesk";
 import PatientJourneyTracker from "./components/PatientJourneyTracker";
 import DashboardOverview from "./components/DashboardOverview";
+import DesktopBottomNav from "./components/DesktopBottomNav";
+import MpesaPaymentModal from "./components/MpesaPaymentModal";
+import ShaVerificationModal from "./components/ShaVerificationModal";
 
 import {
   Building2,
@@ -328,6 +332,22 @@ export default function App() {
   const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "yellow-blue-green");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
+  // Global M-Pesa & SHA Modal states
+  const [showMpesaModal, setShowMpesaModal] = useState<boolean>(false);
+  const [mpesaModalData, setMpesaModalData] = useState<{
+    defaultPhone?: string;
+    defaultAmount?: number;
+    defaultReference?: string;
+    patientName?: string;
+    invoiceId?: string;
+  }>({});
+
+  const [showShaModal, setShowShaModal] = useState<boolean>(false);
+  const [shaModalData, setShaModalData] = useState<{
+    defaultNationalId?: string;
+    defaultPatientName?: string;
+  }>({});
+
   useEffect(() => {
     localStorage.setItem("platform_header_bg", headerBgStyle);
   }, [headerBgStyle]);
@@ -446,6 +466,35 @@ export default function App() {
     };
   }, []);
 
+  // Auto full screen the platform on launch and user interaction without requiring a manual toggle
+  useEffect(() => {
+    const triggerFullscreen = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {
+          // Ignored if browser policy blocks programmatic fullscreen before interaction
+        });
+      }
+    };
+
+    // Attempt direct request on load
+    triggerFullscreen();
+
+    // Attach one-shot event listeners for early interaction auto-fullscreen trigger
+    const onUserInteraction = () => {
+      triggerFullscreen();
+    };
+
+    window.addEventListener("click", onUserInteraction, { once: true });
+    window.addEventListener("keydown", onUserInteraction, { once: true });
+    window.addEventListener("touchstart", onUserInteraction, { once: true });
+
+    return () => {
+      window.removeEventListener("click", onUserInteraction);
+      window.removeEventListener("keydown", onUserInteraction);
+      window.removeEventListener("touchstart", onUserInteraction);
+    };
+  }, []);
+
   // Real-time ticking clock
   useEffect(() => {
     const timer = setInterval(() => {
@@ -479,13 +528,22 @@ export default function App() {
     loggedInEmployee?.role === "Super Admin" || 
     loggedInEmployee?.department === "administration";
 
+  // Role simulation override for Super Admin testing
+  const [simulatedRoleOverride, setSimulatedRoleOverride] = useState<SystemRole | null>(null);
+
   // Determine active identity for role checks
   const activeStaffRecord = activeSpecialistId
     ? employees.find(emp => emp.id === activeSpecialistId)
     : loggedInEmployee;
 
-  const activeRoleName = activeStaffRecord?.role || (isSuperAdmin ? "Hospital Superintendent" : "Guest Operator");
-  const activeDepartmentName = activeStaffRecord?.department || (isSuperAdmin ? "administration" : "guest");
+  // Resolve current active SystemRole across all 11 defined roles
+  const currentSystemRole: SystemRole = simulatedRoleOverride
+    ? simulatedRoleOverride
+    : ((activeStaffRecord?.role as SystemRole) || (isSuperAdmin ? "Super Admin" : "Reception"));
+
+  const activeRoleConfig = getRoleConfig(currentSystemRole);
+  const activeRoleName = activeRoleConfig.title || currentSystemRole;
+  const activeDepartmentName = activeRoleConfig.department;
 
   const [loginEmailInput, setLoginEmailInput] = useState("");
 
@@ -507,6 +565,7 @@ export default function App() {
         isSimulated: true,
         photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
       });
+      setSimulatedRoleOverride((matched.role as SystemRole) || null);
     } else if (employees.length === 0) {
       // First setup: No registered staff in system yet! Allow initial admin account setup
       setSimulatedUser({
@@ -515,71 +574,69 @@ export default function App() {
         isSimulated: true,
         photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
       });
+      setSimulatedRoleOverride("Super Admin");
     } else {
       setAuthError(
-        `Access Denied: Email '${cleanEmail}' is not registered in the System User Registry. Please ask an Administrator to create your user account and access level from the dashboard.`
+        `Access Denied: Email '${cleanEmail}' is not registered in the System User Registry. Please ask the Super Admin to create your user account and assign your system role.`
       );
     }
   };
 
   const checkTabPermission = (tabId: string): { allowed: boolean; reason?: string } => {
-    // Super admins have access to all tabs
-    if (isSuperAdmin) {
+    // Super Admin has master unrestricted access across all modules
+    if (currentSystemRole === "Super Admin") {
       return { allowed: true };
     }
 
-    // Public dashboards & ticket desk
-    if (tabId === "journey" || tabId === "queue" || tabId === "dashboard" || tabId === "tickets") {
-      return { allowed: true };
-    }
-
-    // Unregistered guest users can only access public boards
-    if (!loggedInEmployee) {
+    // Unregistered guest users can only access public overview
+    if (!loggedInEmployee && !simulatedUser) {
       return {
         allowed: false,
-        reason: "Your email address is not registered in the System User Registry. Please ask an Administrator to create your account in the Admin Panel to obtain department clearance."
+        reason: "Your session is not registered in the System User Registry. Please ask the Super Admin to create your account and assign your system role."
       };
     }
 
-    const dept = loggedInEmployee.department?.toLowerCase();
-
-    switch (tabId) {
-      case "admin":
-        return { allowed: false, reason: "Requires System Administrator (Administration) privileges." };
-      case "reception":
-        if (["reception", "nursing", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires Reception, Nursing, or Administration department clearance." };
-      case "doctor":
-        if (dept === "medical") return { allowed: true };
-        return { allowed: false, reason: "Requires Medical clearance (registered Doctors / Practitioners only)." };
-      case "diagnostics":
-        if (["laboratory", "radiology", "medical", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires Laboratory, Radiology, or Medical department clearance." };
-      case "pharmacy":
-        if (["pharmacy", "medical", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires Pharmacy or Medical clearance." };
-      case "billing":
-        if (["finance", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires Finance or Administration clearance." };
-      case "finance":
-        if (["finance", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires Finance or Administration clearance." };
-      case "hr":
-        if (["hr", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires Human Resources or Administration department clearance." };
-      case "payroll":
-        if (["hr", "finance", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires HR, Finance, or Administration clearance." };
-      case "procurement":
-        if (["finance", "pharmacy", "laboratory", "hr", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires Supply Chain, Procurement, Finance, or Dept Clearance." };
-      case "security":
-        if (["security", "administration"].includes(dept)) return { allowed: true };
-        return { allowed: false, reason: "Requires Security or Administration clearance." };
-      default:
-        return { allowed: false, reason: "Access restricted." };
+    // Global dashboard overview is accessible to all logged-in roles
+    if (tabId === "dashboard") {
+      return { allowed: true };
     }
+
+    // Strict Need-to-Know RBAC Verification against role's allowedModules
+    const isAllowed = activeRoleConfig.allowedModules.includes(tabId);
+    if (isAllowed) {
+      return { allowed: true };
+    }
+
+    return {
+      allowed: false,
+      reason: `Strict Need-to-Know Access Restriction: User role '${currentSystemRole}' (${activeRoleConfig.department}) is only permitted to access: ${activeRoleConfig.allowedModules.map((m) => m.toUpperCase()).join(", ")}. Access to '${tabId}' requires authorization.`
+    };
   };
+
+  // Desktop Keyboard Shortcuts: Alt+1 to Alt+8 for rapid module switching
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const keyMap: Record<string, string> = {
+          "1": "dashboard",
+          "2": "reception",
+          "3": "doctor",
+          "4": "diagnostics",
+          "5": "pharmacy",
+          "6": "billing",
+          "7": "finance",
+          "8": "admin",
+        };
+        const targetTab = keyMap[e.key];
+        if (targetTab && checkTabPermission(targetTab).allowed) {
+          e.preventDefault();
+          setActiveTab(targetTab);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentSystemRole, employees, simulatedUser]);
 
   const handleGoogleLogin = async () => {
     setAuthError(null);
@@ -1068,6 +1125,36 @@ export default function App() {
 
           {/* Desktop Top Header Controls */}
           <div className="hidden md:flex flex-wrap items-center gap-1.5 md:gap-2 relative z-10">
+            {/* RBAC 11-Role Simulation Switcher (Super Admin Need-to-Know Testing) */}
+            <div 
+              title="System RBAC Role Simulation Switcher (11 Roles)" 
+              className="flex items-center gap-1.5 bg-purple-950/80 hover:bg-purple-900 px-3 py-1.5 rounded-xl border border-purple-400/50 shadow-2xs hover:shadow-md hover:scale-105 transition-all duration-200 text-purple-100 group"
+            >
+              <Shield className="w-4 h-4 text-purple-300 group-hover:scale-110 transition-transform duration-200 shrink-0" />
+              <div className="flex flex-col text-left leading-none">
+                <span className="text-[8px] font-black uppercase text-purple-300 tracking-wider">Simulate Role</span>
+                <select
+                  id="rbac-role-simulator"
+                  value={currentSystemRole}
+                  onChange={(e) => {
+                    const role = e.target.value as SystemRole;
+                    setSimulatedRoleOverride(role);
+                    const cfg = getRoleConfig(role);
+                    if (!cfg.allowedModules.includes(activeTab) && role !== "Super Admin" && activeTab !== "dashboard") {
+                      setActiveTab(cfg.allowedModules[0] || "dashboard");
+                    }
+                  }}
+                  className="bg-transparent text-purple-100 border-none text-xs font-black focus:outline-hidden cursor-pointer p-0"
+                >
+                  {SYSTEM_ROLES_DIRECTORY.map((r) => (
+                    <option key={r.role} value={r.role} className="bg-slate-900 text-white font-bold">
+                      {r.role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             {/* Offline/Online Status Indicator & Toggle Icon Button */}
             <button
               onClick={toggleOfflineSimulation}
@@ -1788,6 +1875,9 @@ export default function App() {
                         tenant={tenant}
                         toggles={toggles}
                         onNavigateToTab={(tabId) => setActiveTab(tabId)}
+                        currentUserRole={currentSystemRole}
+                        currentUserEmail={activeUser?.email || ""}
+                        currentEmployee={loggedInEmployee}
                       />
                     )}
 
@@ -1797,6 +1887,7 @@ export default function App() {
                         onTenantChange={setTenant}
                         toggles={toggles}
                         onToggleChange={setToggles}
+                        currentUserRole={currentSystemRole}
                       />
                     )}
 
@@ -1954,6 +2045,56 @@ export default function App() {
         ))}
       </div>
     )}
+    {/* Fixed Desktop Bottom Navigation Bar */}
+    <DesktopBottomNav
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      currentUserRole={currentSystemRole}
+      queueCount={queueItems.filter(q => q.status === "pending" || q.status === "serving").length}
+      isOffline={isSimulatedOffline || !isOnline}
+      onOpenMpesa={() => {
+        setMpesaModalData({
+          defaultPhone: "0712345678",
+          defaultAmount: 1500,
+          defaultReference: "AFYA-DIRECT",
+          patientName: "Direct Hospital Client",
+        });
+        setShowMpesaModal(true);
+      }}
+      onOpenSha={() => {
+        setShaModalData({
+          defaultNationalId: "32441928",
+          defaultPatientName: "SHA Beneficiary",
+        });
+        setShowShaModal(true);
+      }}
+      checkTabPermission={checkTabPermission}
+    />
+
+    {/* Safaricom M-Pesa Express Modal */}
+    <MpesaPaymentModal
+      isOpen={showMpesaModal}
+      onClose={() => setShowMpesaModal(false)}
+      defaultPhone={mpesaModalData.defaultPhone}
+      defaultAmount={mpesaModalData.defaultAmount}
+      defaultReference={mpesaModalData.defaultReference}
+      patientName={mpesaModalData.patientName}
+      invoiceId={mpesaModalData.invoiceId}
+      onPaymentSuccess={(receiptNo, amount, phone) => {
+        console.log(`Payment confirmed: ${receiptNo}, KES ${amount}, Phone: ${phone}`);
+      }}
+    />
+
+    {/* Social Health Authority (SHA) Portal Modal */}
+    <ShaVerificationModal
+      isOpen={showShaModal}
+      onClose={() => setShowShaModal(false)}
+      defaultNationalId={shaModalData.defaultNationalId}
+      defaultPatientName={shaModalData.defaultPatientName}
+      onShaVerified={(shaData) => {
+        console.log("SHA Verified data:", shaData);
+      }}
+    />
   </div>
   );
 }

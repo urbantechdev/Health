@@ -4,6 +4,7 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import KenyanIntegrationsShowcase from "./KenyanIntegrationsShowcase";
 import { runFullDatabaseDeduplication, checkDuplicateEmployee, DeduplicationReport } from "../lib/deduplicationService";
+import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "../constants/roles";
 import { 
   ToggleLeft, 
   ToggleRight, 
@@ -33,7 +34,10 @@ import {
   Database,
   RefreshCw,
   Ban,
-  Check
+  Check,
+  Lock,
+  Eye,
+  CheckSquare
 } from "lucide-react";
 
 const GOOGLE_FONTS = [
@@ -61,6 +65,7 @@ interface AdminPanelProps {
   onTenantChange: (tenant: Tenant) => void;
   toggles: DepartmentToggles;
   onToggleChange: (toggles: DepartmentToggles) => void;
+  currentUserRole?: SystemRole | string;
 }
 
 interface CustomFeature {
@@ -140,9 +145,11 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   const [userEmail, setUserEmail] = React.useState("");
   const [userDept, setUserDept] = React.useState("administration");
   const [userRole, setUserRole] = React.useState("System Administrator");
-  const [userAccessLevel, setUserAccessLevel] = React.useState<"Super Admin" | "Department Admin" | "Standard Staff">("Super Admin");
+  const [selectedSystemRole, setSelectedSystemRole] = React.useState<SystemRole>("Doctor");
+  const [userAccessLevel, setUserAccessLevel] = React.useState<"Super Admin" | "Department Admin" | "Standard Staff">("Department Admin");
   const [userSubmitting, setUserSubmitting] = React.useState(false);
   const [userCreationError, setUserCreationError] = React.useState("");
+  const [showRbacMatrix, setShowRbacMatrix] = React.useState(false);
 
   // Deduplication Scanner States
   const [isDeduplicating, setIsDeduplicating] = React.useState(false);
@@ -175,6 +182,20 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
     }
   };
 
+  const handleSystemRoleChange = (role: SystemRole) => {
+    setSelectedSystemRole(role);
+    const cfg = getRoleConfig(role);
+    setUserDept(cfg.department);
+    setUserRole(cfg.title);
+    if (role === "Super Admin") {
+      setUserAccessLevel("Super Admin");
+    } else if (role === "Admin" || role === "Finance" || role === "HR") {
+      setUserAccessLevel("Department Admin");
+    } else {
+      setUserAccessLevel("Standard Staff");
+    }
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserCreationError("");
@@ -204,11 +225,13 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
         return;
       }
 
+      const roleConfig = getRoleConfig(selectedSystemRole);
+
       await addDoc(collection(db, "employees"), {
         name: cleanName,
         email: cleanEmail,
-        department: userDept,
-        role: userRole.trim() || "Staff Member",
+        department: roleConfig.department,
+        role: selectedSystemRole,
         accessLevel: userAccessLevel,
         status: "active",
         salary: 100000,
@@ -218,7 +241,6 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       });
       setUserName("");
       setUserEmail("");
-      setUserRole("System Administrator");
       setUserCreationError("");
       setShowAddUserModal(false);
     } catch (err) {
@@ -226,6 +248,19 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       setUserCreationError("Failed to create user. Please check Firestore connection.");
     } finally {
       setUserSubmitting(false);
+    }
+  };
+
+  const handleUpdateSystemRole = async (userId: string, newRole: SystemRole) => {
+    const roleConfig = getRoleConfig(newRole);
+    try {
+      await updateDoc(doc(db, "employees", userId), {
+        role: newRole,
+        department: roleConfig.department,
+        accessLevel: newRole === "Super Admin" ? "Super Admin" : newRole === "Admin" ? "Department Admin" : "Standard Staff"
+      });
+    } catch (err) {
+      console.error("Error updating system role:", err);
     }
   };
 
@@ -563,45 +598,102 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
         </p>
       </div>
 
-      {/* 3. System Users & Access Levels Control */}
+      {/* 3. System Users & Role Access Control (Super Admin Exclusive Authority) */}
       <div className="pt-6 border-t border-gray-100 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
-              <Users className="w-4 h-4" />
+            <div className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+              <Shield className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-800">3. System Users & Access Level Control</h3>
-              <p className="text-[11px] text-gray-400">Manage registered staff accounts, emails, and authorization levels</p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-gray-900">3. System Roles & User Accounts Management (RBAC)</h3>
+                <span className="px-2 py-0.5 bg-purple-100 border border-purple-200 text-purple-900 text-[10px] font-extrabold rounded-md uppercase tracking-wider flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-purple-700" />
+                  <span>Super Admin Exclusive</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-500">
+                Exclusive Creation: All 11 system roles and user accounts are managed strictly by Super Admin on a "need-to-know" basis.
+              </p>
             </div>
           </div>
-          <button
-            id="btn-add-system-user"
-            onClick={() => setShowAddUserModal(!showAddUserModal)}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-          >
-            {showAddUserModal ? <X className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
-            <span>{showAddUserModal ? "Cancel" : "Create New User Account"}</span>
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              id="btn-toggle-rbac-matrix"
+              type="button"
+              onClick={() => setShowRbacMatrix(!showRbacMatrix)}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Eye className="w-3.5 h-3.5 text-slate-600" />
+              <span>{showRbacMatrix ? "Hide RBAC Matrix" : "View 11-Role RBAC Matrix"}</span>
+            </button>
+
+            <button
+              id="btn-add-system-user"
+              type="button"
+              onClick={() => setShowAddUserModal(!showAddUserModal)}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+            >
+              {showAddUserModal ? <X className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
+              <span>{showAddUserModal ? "Cancel" : "Create New User Account"}</span>
+            </button>
+          </div>
         </div>
+
+        {/* RBAC Matrix Reference Guide */}
+        {showRbacMatrix && (
+          <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-2xl space-y-3 animate-in fade-in duration-150">
+            <div className="flex justify-between items-center">
+              <h4 className="text-xs font-black uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
+                <CheckSquare className="w-4 h-4 text-purple-700" />
+                <span>Hospital System Role Hierarchy & Need-to-Know Matrix (11 Defined Roles)</span>
+              </h4>
+              <span className="text-[10px] text-purple-700 font-mono">11 Active System Roles</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {SYSTEM_ROLES_DIRECTORY.map((r) => (
+                <div key={r.role} className="p-2.5 bg-white border border-purple-100 rounded-xl text-xs space-y-1.5 shadow-2xs">
+                  <div className="flex justify-between items-start">
+                    <span className="font-extrabold text-purple-950 text-xs">{r.role}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 bg-purple-100 text-purple-800 font-mono font-bold rounded">
+                      {r.department}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 line-clamp-2 leading-relaxed">{r.description}</p>
+                  <div className="flex flex-wrap gap-1 pt-1 border-t border-purple-50">
+                    <span className="text-[9px] font-bold text-gray-400">Allowed:</span>
+                    {r.allowedModules.map((m) => (
+                      <span key={m} className="px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[8px] font-semibold rounded capitalize">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* User Creation Form */}
         {showAddUserModal && (
-          <form onSubmit={handleCreateUser} className="p-4 bg-emerald-50/40 rounded-xl border border-emerald-100 space-y-3">
-            <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-              <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Register New System User & Assign Access Level</span>
+          <form onSubmit={handleCreateUser} className="p-4 bg-purple-50/40 rounded-2xl border border-purple-200 space-y-3 shadow-xs">
+            <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5 text-purple-700" />
+              <span>Super Admin: Register New System User & Assign Role</span>
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Full Name *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Dr. Jane Doe"
+                  placeholder="e.g. Dr. Amina Wanjiku"
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:border-emerald-500 font-semibold"
+                  className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:border-purple-500 font-semibold"
                 />
               </div>
               <div>
@@ -609,41 +701,37 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                 <input
                   type="email"
                   required
-                  placeholder="e.g. jane.doe@afyacare.co.ke"
+                  placeholder="e.g. amina.wanjiku@afyacare.co.ke"
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:border-emerald-500"
+                  className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:border-purple-500"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Department</label>
+                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Assigned System Role (11 Roles) *</label>
                 <select
-                  value={userDept}
-                  onChange={(e) => setUserDept(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:border-emerald-500"
+                  value={selectedSystemRole}
+                  onChange={(e) => handleSystemRoleChange(e.target.value as SystemRole)}
+                  className="w-full px-3 py-1.5 bg-white border border-purple-300 rounded-lg text-xs font-bold text-purple-950 focus:border-purple-500"
                 >
-                  <option value="administration">Administration</option>
-                  <option value="medical">Medical Practice</option>
-                  <option value="pharmacy">Pharmacy</option>
-                  <option value="finance">Finance & Billing</option>
-                  <option value="hr">Human Resources</option>
-                  <option value="reception">Reception & Triage</option>
-                  <option value="laboratory">Laboratory</option>
-                  <option value="radiology">Radiology</option>
-                  <option value="security">Security</option>
+                  {SYSTEM_ROLES_DIRECTORY.map((r) => (
+                    <option key={r.role} value={r.role}>
+                      {r.role} ({r.department})
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Access Level *</label>
-                <select
-                  value={userAccessLevel}
-                  onChange={(e) => setUserAccessLevel(e.target.value as any)}
-                  className="w-full px-3 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-900 focus:border-emerald-500"
-                >
-                  <option value="Super Admin">Super Admin (Full Control)</option>
-                  <option value="Department Admin">Department Admin</option>
-                  <option value="Standard Staff">Standard Staff</option>
-                </select>
+            </div>
+
+            {/* Need-to-know preview */}
+            <div className="p-2.5 bg-white rounded-xl border border-purple-100 text-xs flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold text-purple-900 uppercase">Need-to-Know Workspaces for {selectedSystemRole}:</span>
+              <div className="flex flex-wrap gap-1">
+                {getRoleConfig(selectedSystemRole).allowedModules.map((mod) => (
+                  <span key={mod} className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-bold rounded-md capitalize">
+                    {mod}
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -658,61 +746,68 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
               <button
                 type="submit"
                 disabled={userSubmitting}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Save User Account</span>
+                <span>{userSubmitting ? "Registering..." : "Save User Account to Registry"}</span>
               </button>
             </div>
           </form>
         )}
 
         {/* System Users List */}
-        <div className="bg-slate-50/50 rounded-xl border border-gray-200/80 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs">
           {systemUsers.length === 0 ? (
             <div className="p-6 text-center text-xs text-gray-500">
               <p className="font-semibold text-gray-700 mb-1">No System Users Registered</p>
-              <p>Click "Create New User Account" above to add administrators and staff with specific access levels.</p>
+              <p>Click "Create New User Account" above to register staff under the 11 defined roles.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100/80 border-b border-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                <thead className="bg-slate-50 border-b border-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
                   <tr>
-                    <th className="p-3">User / Staff Name</th>
+                    <th className="p-3">User / Staff Member</th>
                     <th className="p-3">Email Address (Login ID)</th>
-                    <th className="p-3">Department</th>
-                    <th className="p-3">Access Level</th>
+                    <th className="p-3">Assigned System Role (RBAC)</th>
+                    <th className="p-3">Need-to-Know Workspaces</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200/60 bg-white">
+                <tbody className="divide-y divide-gray-100 bg-white">
                   {systemUsers.map((u) => {
-                    const currentAccess = u.accessLevel || (u.department === "administration" ? "Super Admin" : "Standard Staff");
+                    const matchedRole = SYSTEM_ROLES_DIRECTORY.find((r) => r.role === u.role) || SYSTEM_ROLES_DIRECTORY.find((r) => r.department === u.department) || SYSTEM_ROLES_DIRECTORY[0];
+                    const activeRoleName = (u.role as SystemRole) || matchedRole.role;
+                    const roleCfg = getRoleConfig(activeRoleName);
+
                     return (
                       <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-3 font-semibold text-gray-900">
                           <div>{u.name}</div>
-                          <div className="text-[10px] text-gray-400 font-normal">{u.role}</div>
+                          <div className="text-[10px] text-gray-400 font-mono">ID: {u.nationalId || u.id.slice(0, 8)}</div>
                         </td>
                         <td className="p-3 font-mono text-gray-700">{u.email}</td>
-                        <td className="p-3 font-semibold capitalize text-gray-600">{u.department}</td>
                         <td className="p-3">
                           <select
-                            value={currentAccess}
-                            onChange={(e) => handleUpdateAccessLevel(u.id, e.target.value as any)}
-                            className={`px-2 py-1 rounded-md text-[11px] font-bold border transition-colors cursor-pointer ${
-                              currentAccess === "Super Admin"
-                                ? "bg-purple-50 text-purple-800 border-purple-200"
-                                : currentAccess === "Department Admin"
-                                ? "bg-indigo-50 text-indigo-800 border-indigo-200"
-                                : "bg-slate-100 text-slate-700 border-slate-200"
-                            }`}
+                            value={activeRoleName}
+                            onChange={(e) => handleUpdateSystemRole(u.id, e.target.value as SystemRole)}
+                            className="px-2 py-1 bg-purple-50 text-purple-900 border border-purple-200 rounded-lg text-xs font-bold cursor-pointer focus:outline-hidden"
                           >
-                            <option value="Super Admin">Super Admin</option>
-                            <option value="Department Admin">Department Admin</option>
-                            <option value="Standard Staff">Standard Staff</option>
+                            {SYSTEM_ROLES_DIRECTORY.map((r) => (
+                              <option key={r.role} value={r.role}>
+                                {r.role}
+                              </option>
+                            ))}
                           </select>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {roleCfg.allowedModules.map((mod) => (
+                              <span key={mod} className="px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[9px] font-semibold rounded capitalize">
+                                {mod}
+                              </span>
+                            ))}
+                          </div>
                         </td>
                         <td className="p-3 text-right">
                           <button

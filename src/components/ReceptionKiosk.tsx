@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Employee, MedicalRecord, SystemTicket, QueueTicket } from "../types";
 import { createAutoTicket, checkActivePatientEncounter, findPatientByNationalId, DuplicateEncounterCheck } from "../lib/ticketService";
+import { HOSPITAL_SPECIALISTS_DIRECTORY, SPECIALIST_CATEGORIES, SpecialistDefinition, getSpecialistByName } from "../constants/specialists";
 
 interface ReceptionKioskProps {
   onTicketCreated: () => void;
@@ -39,6 +40,15 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   // Specialists state
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assignedSpecialistId, setAssignedSpecialistId] = useState<string>("");
+  const [selectedSpecialistName, setSelectedSpecialistName] = useState<string>("");
+  const [specialistCategory, setSpecialistCategory] = useState<string>("all");
+  const [specialistSearch, setSpecialistSearch] = useState<string>("");
+  const [assignedDoctorId, setAssignedDoctorId] = useState<string>("");
+  const [issuedSpecialistInfo, setIssuedSpecialistInfo] = useState<{
+    specialist?: SpecialistDefinition;
+    doctorName?: string;
+    room?: string;
+  } | null>(null);
 
   // Real-time lookup & duplicate check states
   const [existingPatientProfile, setExistingPatientProfile] = useState<MedicalRecord | null>(null);
@@ -211,15 +221,38 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       }
 
       // Dynamic prefix generator & mapping specialist details
+      const specialistDef = selectedSpecialistName ? getSpecialistByName(selectedSpecialistName) : undefined;
       let prefix = "GEN";
       let currentDept: any = "doctor";
       let selectedServiceName = service;
       let specName = "";
+      let specialistTitle = "";
+      let consultationRoom = "";
 
-      if (assignedSpecialistId) {
+      if (specialistDef) {
+        specialistTitle = specialistDef.name;
+        prefix = specialistDef.shortCode;
+        currentDept = specialistDef.department;
+        consultationRoom = specialistDef.defaultRoom || "Room 101 - Specialist OPD";
+        
+        if (assignedDoctorId) {
+          const docObj = employees.find(e => e.id === assignedDoctorId);
+          if (docObj) {
+            specName = docObj.name;
+            selectedServiceName = `Consultation with ${docObj.name} (${specialistDef.name})`;
+          } else {
+            specName = `${specialistDef.name} (Specialist OPD)`;
+            selectedServiceName = `Consultation with ${specialistDef.name}`;
+          }
+        } else {
+          specName = `${specialistDef.name} (Specialist OPD)`;
+          selectedServiceName = `Consultation with ${specialistDef.name}`;
+        }
+      } else if (assignedSpecialistId) {
         const spec = employees.find(e => e.id === assignedSpecialistId);
         if (spec) {
           specName = spec.name;
+          specialistTitle = spec.specialty || spec.role;
           const dept = spec.department.toLowerCase();
           if (dept === "medical" || dept === "nursing") {
             currentDept = "doctor";
@@ -275,8 +308,8 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
           pulse: "72",
           weight: "68",
         },
-        symptoms: issue.trim() || "Walk-in registration. Presenting for routine assessment/consultation.",
-        diagnosis: "Initial checkup pending clinical consultation",
+        symptoms: issue.trim() || `Walk-in registration. Presenting for ${specialistDef ? specialistDef.name : service} assessment/consultation.`,
+        diagnosis: specialistDef ? `Pending specialist review (${specialistDef.name})` : "Initial checkup pending clinical consultation",
         prescriptions: [],
         referrals: [],
       };
@@ -329,8 +362,10 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         phone: phone.trim() || "N/A",
         age: parseInt(age) || 30,
         issue: issue.trim() || "Not Specified",
-        assignedSpecialistId: assignedSpecialistId || "",
+        assignedSpecialistId: assignedDoctorId || assignedSpecialistId || (specialistDef ? specialistDef.id : ""),
         assignedSpecialistName: specName || "",
+        specialistTitle: specialistTitle || "",
+        consultationRoom: consultationRoom || "",
       };
 
       await addDoc(collection(db, "queue"), queueData);
@@ -342,11 +377,21 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         phone: phone.trim(),
         department: currentDept,
         visitReason: issue.trim() || selectedServiceName || "Outpatient Clinical Intake",
-        priority: "Normal",
-        patientId: resolvedPatientId
+        priority: specialistDef?.department === "emergency" ? "Emergency" : "Normal",
+        patientId: resolvedPatientId,
+        assignedSpecialistId: assignedDoctorId || assignedSpecialistId || (specialistDef ? specialistDef.id : ""),
+        assignedSpecialistName: specName || "",
+        specialistTitle: specialistTitle || "",
+        consultationRoom: consultationRoom || ""
       });
 
       setSuccessTicket(ticketNo);
+      setIssuedSpecialistInfo(specialistDef ? {
+        specialist: specialistDef,
+        doctorName: assignedDoctorId ? employees.find(e => e.id === assignedDoctorId)?.name : undefined,
+        room: consultationRoom
+      } : null);
+
       // Reset form fields
       setPatientName("");
       setNationalId("");
@@ -354,6 +399,8 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       setAge("");
       setIssue("");
       setAssignedSpecialistId("");
+      setSelectedSpecialistName("");
+      setAssignedDoctorId("");
       setBiometricsCaptured(false);
       setShaStatus(null);
       setExistingPatientProfile(null);
@@ -660,47 +707,182 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
             />
           </div>
 
-          {/* Specialist / Staff Assignment */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-gray-600">Assign to Specific Specialist (Optional)</label>
-              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">Real-time Employee Registry</span>
+          {/* DIRECT SPECIALIST ASSIGNMENT PANEL */}
+          <div className="space-y-3 p-4 bg-slate-50/80 rounded-2xl border border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
+                  <Stethoscope className="w-4 h-4" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-800">
+                    Direct Specialist Assignment ({HOSPITAL_SPECIALISTS_DIRECTORY.length} Available)
+                  </label>
+                  <p className="text-[10px] text-gray-500">
+                    Assign incoming patient directly to a specialist discipline or on-duty physician
+                  </p>
+                </div>
+              </div>
+
+              {selectedSpecialistName && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSpecialistName("");
+                    setAssignedDoctorId("");
+                    setAssignedSpecialistId("");
+                    setService("General Doctor");
+                  }}
+                  className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Clear Specialist (General Pool)</span>
+                </button>
+              )}
             </div>
-            <div className="relative">
-              <select
-                id="select-specialist"
-                value={assignedSpecialistId}
-                onChange={(e) => {
-                  const specId = e.target.value;
-                  setAssignedSpecialistId(specId);
-                  if (specId) {
-                    const spec = employees.find(emp => emp.id === specId);
-                    if (spec) {
-                      // Auto-select correct category based on department
-                      const dept = spec.department.toLowerCase();
-                      if (dept === "laboratory" || dept === "lab") setService("Laboratory");
-                      else if (dept === "radiology") setService("Radiology");
-                      else if (dept === "pharmacy") setService("Pharmacy");
-                      else setService("General Doctor");
-                    }
-                  }
-                }}
-                className="w-full pl-3 pr-10 py-2 border border-gray-200 rounded-xl text-sm focus:border-emerald-500 focus:outline-hidden bg-white appearance-none"
+
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] scrollbar-thin">
+              <button
+                type="button"
+                onClick={() => setSpecialistCategory("all")}
+                className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-colors ${
+                  specialistCategory === "all"
+                    ? "bg-slate-900 text-white shadow-2xs"
+                    : "bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200"
+                }`}
               >
-                <option value="">-- General Pool (Dispatch to department queue) --</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} — {emp.role} [{emp.specialty || emp.department}]
-                  </option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
-                <Stethoscope className="w-4 h-4" />
+                All Categories ({HOSPITAL_SPECIALISTS_DIRECTORY.length})
+              </button>
+              {SPECIALIST_CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setSpecialistCategory(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-colors ${
+                    specialistCategory === cat.id
+                      ? "bg-emerald-600 text-white shadow-2xs"
+                      : "bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200"
+                  }`}
+                >
+                  {cat.title}
+                </button>
+              ))}
+            </div>
+
+            {/* Live Search & Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Filter by organ, disease, or title (e.g., heart, brain, kidney)..."
+                  value={specialistSearch}
+                  onChange={(e) => setSpecialistSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs focus:border-emerald-500 focus:outline-hidden bg-white"
+                />
+              </div>
+
+              <div className="relative">
+                <select
+                  id="select-specialist-role"
+                  value={selectedSpecialistName}
+                  onChange={(e) => {
+                    const chosen = e.target.value;
+                    setSelectedSpecialistName(chosen);
+                    setAssignedDoctorId("");
+                    if (chosen) {
+                      const specDef = getSpecialistByName(chosen);
+                      if (specDef) {
+                        if (specDef.department === "laboratory") setService("Laboratory");
+                        else if (specDef.department === "radiology") setService("Radiology");
+                        else if (specDef.department === "pharmacy") setService("Pharmacy");
+                        else if (specDef.department === "labour_room") setService("Labour Room");
+                        else if (specDef.department === "gyna") setService("Gynecology (Gyna)");
+                        else setService("General Doctor");
+                      }
+                    }
+                  }}
+                  className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-xl text-xs font-bold text-gray-800 focus:border-emerald-500 focus:outline-hidden bg-white"
+                >
+                  <option value="">-- Select Specialist from Hospital Taxonomy --</option>
+                  {HOSPITAL_SPECIALISTS_DIRECTORY
+                    .filter((s) => {
+                      const matchesCategory = specialistCategory === "all" || s.category === specialistCategory;
+                      const q = specialistSearch.toLowerCase().trim();
+                      const matchesSearch = !q || 
+                        s.name.toLowerCase().includes(q) || 
+                        s.description.toLowerCase().includes(q) ||
+                        (s.focusAreas && s.focusAreas.toLowerCase().includes(q));
+                      return matchesCategory && matchesSearch;
+                    })
+                    .map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name} [{s.shortCode}] — {s.description.substring(0, 45)}...
+                      </option>
+                    ))}
+                </select>
               </div>
             </div>
-            <p className="text-[10px] text-gray-400">
-              Assigning a specific specialist will immediately route this patient to their personal workbench and trigger an instant ticket notification.
-            </p>
+
+            {/* Selected Specialist Highlighted Card */}
+            {selectedSpecialistName && (() => {
+              const activeSpec = getSpecialistByName(selectedSpecialistName);
+              if (!activeSpec) return null;
+              
+              // Doctors matching this specialty or all medical doctors
+              const candidateDoctors = employees.filter(emp => {
+                const dept = (emp.department || "").toLowerCase();
+                const spec = (emp.specialty || "").toLowerCase();
+                const role = (emp.role || "").toLowerCase();
+                return dept.includes("med") || spec.includes(activeSpec.name.toLowerCase()) || role.includes("dr") || role.includes("doctor") || role.includes("physician");
+              });
+
+              return (
+                <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2.5 text-xs animate-fade-in">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-emerald-700 text-white font-mono font-black rounded-lg text-[10px]">
+                        {activeSpec.shortCode}
+                      </span>
+                      <h4 className="font-bold text-emerald-950 text-sm">{activeSpec.name}</h4>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                      {activeSpec.defaultRoom}
+                    </span>
+                  </div>
+
+                  <p className="text-emerald-900 text-[11px] leading-relaxed">
+                    <strong>Clinical Focus:</strong> {activeSpec.description}
+                  </p>
+
+                  {activeSpec.focusAreas && (
+                    <p className="text-emerald-800/80 text-[10px]">
+                      <strong>Key Clinical Domains:</strong> {activeSpec.focusAreas}
+                    </p>
+                  )}
+
+                  {/* Optional Doctor Assignment */}
+                  <div className="pt-2 border-t border-emerald-200/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-emerald-900">
+                      Assign to specific on-duty doctor (Optional):
+                    </span>
+                    <select
+                      value={assignedDoctorId}
+                      onChange={(e) => setAssignedDoctorId(e.target.value)}
+                      className="w-full sm:w-64 px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-semibold text-gray-800"
+                    >
+                      <option value="">-- Specialist Pool (Auto Queue Routing) --</option>
+                      {candidateDoctors.map((doc) => (
+                        <option key={doc.id} value={doc.id}>
+                          {doc.name} — {doc.specialty || doc.role}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Submit Button */}
@@ -727,7 +909,9 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
             ) : (
               <>
                 <Ticket className="w-4 h-4" />
-                <span>Issue Digital Queue Ticket</span>
+                <span>
+                  {selectedSpecialistName ? `Issue Ticket for ${selectedSpecialistName}` : "Issue Digital Queue Ticket"}
+                </span>
               </>
             )}
           </button>
@@ -772,15 +956,31 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
 
           {/* Output Ticket Receipt Simulator */}
           {successTicket && (
-            <div id="thermal-ticket" className="p-5 border-2 border-emerald-100 bg-emerald-50/20 rounded-2xl space-y-3 relative overflow-hidden">
+            <div id="thermal-ticket" className="p-5 border-2 border-emerald-100 bg-emerald-50/20 rounded-2xl space-y-3 relative overflow-hidden animate-scale-up">
               <div className="absolute right-0 top-0 bg-emerald-500 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-bl-xl">
                 Printed
               </div>
               <h4 className="text-xs font-bold text-emerald-800">Queue Receipt Issued</h4>
-              <div className="bg-white p-4 border border-gray-100 rounded-xl text-center space-y-1 shadow-xs font-mono">
+              <div className="bg-white p-4 border border-gray-100 rounded-xl text-center space-y-1.5 shadow-xs font-mono">
                 <p className="text-[10px] text-gray-400 uppercase">A.B.M Clinic Reception</p>
                 <h3 className="text-2xl font-bold text-gray-900 tracking-wider">{successTicket}</h3>
-                <p className="text-[11px] font-semibold text-gray-600 capitalize">{service} Intake</p>
+                
+                {issuedSpecialistInfo?.specialist ? (
+                  <div className="py-1 px-2 bg-emerald-50 rounded-lg border border-emerald-200 text-left text-xs font-sans space-y-0.5">
+                    <div className="font-bold text-emerald-950 flex items-center justify-between">
+                      <span>Specialist: {issuedSpecialistInfo.specialist.name}</span>
+                    </div>
+                    {issuedSpecialistInfo.room && (
+                      <p className="text-[11px] text-emerald-800 font-semibold">{issuedSpecialistInfo.room}</p>
+                    )}
+                    {issuedSpecialistInfo.doctorName && (
+                      <p className="text-[10px] text-slate-600">Attending: {issuedSpecialistInfo.doctorName}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[11px] font-semibold text-gray-600 capitalize">{service} Intake</p>
+                )}
+                
                 <p className="text-[9px] text-gray-400">{new Date().toLocaleString()}</p>
               </div>
               <p className="text-[10px] text-emerald-700 text-center">

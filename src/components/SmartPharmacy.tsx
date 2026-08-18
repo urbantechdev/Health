@@ -2,21 +2,46 @@ import React, { useState, useEffect, useRef } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
 import { Medication, QueueTicket, PrescriptionItem, Invoice, MedicalRecord } from "../types";
-import { ShoppingCart, PackageOpen, AlertTriangle, Check, Search, CreditCard, RefreshCw, Barcode, Trash2, Printer, Camera, CameraOff, X } from "lucide-react";
+import { 
+  ShoppingCart, 
+  PackageOpen, 
+  AlertTriangle, 
+  Check, 
+  Search, 
+  CreditCard, 
+  RefreshCw, 
+  Barcode, 
+  Trash2, 
+  Printer, 
+  Camera, 
+  CameraOff, 
+  X,
+  PackagePlus,
+  DollarSign,
+  Smartphone,
+  Pill
+} from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { Html5Qrcode } from "html5-qrcode";
+import PharmacyInventoryModal from "./PharmacyInventoryModal";
+import PharmacyPOSCheckoutModal from "./PharmacyPOSCheckoutModal";
 
 interface SmartPharmacyProps {
   toggles: any;
   onDispenseCompleted: () => void;
+  userRole?: string;
 }
 
-export default function SmartPharmacy({ toggles, onDispenseCompleted }: SmartPharmacyProps) {
+export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole = "Pharmacy" }: SmartPharmacyProps) {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [activePrescriptions, setActivePrescriptions] = useState<any[]>([]);
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
   const [cart, setCart] = useState<{ med: Medication; qty: number }[]>([]);
   
+  // Modals
+  const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
+  const [posCheckoutModalOpen, setPosCheckoutModalOpen] = useState(false);
+
   // Scannable search bar
   const [scanQuery, setScanQuery] = useState("");
   const [selectedPrescriptionId, setSelectedPrescriptionId] = useState<string | null>(null);
@@ -420,30 +445,42 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted }: SmartPha
           </div>
         </div>
 
-        {/* Selected Prescription Queue */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-bold text-gray-500">Queue Prescriptions:</label>
-          {activePrescriptions.length === 0 ? (
-            <span className="text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-150">
-              No pending prescriptions
-            </span>
-          ) : (
-            <select
-              id="select-pending-prescription"
-              value={selectedPrescriptionId || ""}
-              onChange={(e) => {
-                setSelectedPrescriptionId(e.target.value || null);
-              }}
-              className="px-3 py-1.5 border border-emerald-300 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold focus:outline-hidden"
-            >
-              <option value="">-- Choose Queue Ticket --</option>
-              {activePrescriptions.map((tick) => (
-                <option key={tick.id} value={tick.id}>
-                  {tick.ticketNo} - {tick.patientName}
-                </option>
-              ))}
-            </select>
-          )}
+        {/* Selected Prescription Queue & Inventory Control */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="btn-open-drug-inventory"
+            type="button"
+            onClick={() => setInventoryModalOpen(true)}
+            className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+          >
+            <Pill className="w-4 h-4 text-teal-300" />
+            <span>Drug Inventory Database</span>
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs font-bold text-gray-500">Queue Prescriptions:</label>
+            {activePrescriptions.length === 0 ? (
+              <span className="text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-150">
+                No pending prescriptions
+              </span>
+            ) : (
+              <select
+                id="select-pending-prescription"
+                value={selectedPrescriptionId || ""}
+                onChange={(e) => {
+                  setSelectedPrescriptionId(e.target.value || null);
+                }}
+                className="px-3 py-1.5 border border-emerald-300 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold focus:outline-hidden"
+              >
+                <option value="">-- Choose Queue Ticket --</option>
+                {activePrescriptions.map((tick) => (
+                  <option key={tick.id} value={tick.id}>
+                    {tick.ticketNo} - {tick.patientName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
       </div>
 
@@ -894,7 +931,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted }: SmartPha
             </div>
           </div>
 
-          <div className="space-y-4 border-t border-gray-150 pt-4 mt-4">
+          <div className="space-y-3 border-t border-gray-150 pt-4 mt-4">
             <div className="flex justify-between items-center text-sm">
               <span className="font-semibold text-gray-600">Total Invoice Amount:</span>
               <span className="text-lg font-black text-gray-900 font-mono">
@@ -902,18 +939,56 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted }: SmartPha
               </span>
             </div>
 
-            <button
-              id="btn-pos-checkout-dispense"
-              onClick={handlePOSCheckout}
-              disabled={submitting || cart.length === 0}
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer"
-            >
-              <CreditCard className="w-4.5 h-4.5" />
-              {submitting ? "Processing FIFO Depletion..." : "Dispense & Generate Central Invoice"}
-            </button>
+            <div className="space-y-2">
+              <button
+                id="btn-open-pos-checkout"
+                type="button"
+                onClick={() => setPosCheckoutModalOpen(true)}
+                disabled={submitting || cart.length === 0}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-40 cursor-pointer"
+              >
+                <Smartphone className="w-4.5 h-4.5" />
+                <span>Proceed to POS Checkout (M-Pesa / Cash)</span>
+              </button>
+
+              <button
+                id="btn-pos-checkout-dispense"
+                type="button"
+                onClick={handlePOSCheckout}
+                disabled={submitting || cart.length === 0}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>{submitting ? "Processing..." : "Direct Dispense to Central Billing (eTIMS)"}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Drug Inventory Database Modal (Exclusive Authority) */}
+      <PharmacyInventoryModal
+        isOpen={inventoryModalOpen}
+        onClose={() => setInventoryModalOpen(false)}
+        medications={medications}
+        userRole={userRole}
+      />
+
+      {/* Integrated Pharmacy POS Checkout Modal (M-Pesa / Cash) */}
+      <PharmacyPOSCheckoutModal
+        isOpen={posCheckoutModalOpen}
+        onClose={() => setPosCheckoutModalOpen(false)}
+        cart={cart}
+        patientName={selectedTicket?.patientName || matchedPatient?.patientName || "Walk-in Patient"}
+        nationalId={selectedTicket?.nationalId || matchedPatient?.nationalId || ""}
+        patientPhone={matchedPatient?.phone || "0712345678"}
+        ticketId={selectedPrescriptionId}
+        onCheckoutComplete={() => {
+          setCart([]);
+          setSelectedPrescriptionId(null);
+          onDispenseCompleted();
+        }}
+      />
 
       {/* Print Overlay Modal for Digital Prescriptions */}
       {matchedPatient && latestVisit && (

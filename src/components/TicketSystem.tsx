@@ -79,6 +79,12 @@ export default function TicketSystem() {
     context: "create" | "edit";
   } | null>(null);
 
+  // Delete Confirmation Modal State
+  const [ticketToDelete, setTicketToDelete] = useState<SystemTicket | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+
   // Success Prompt State
   const [successPrompt, setSuccessPrompt] = useState<{
     show: boolean;
@@ -88,7 +94,7 @@ export default function TicketSystem() {
     patientName?: string;
     department?: string;
     priority?: string;
-    type: "create" | "edit" | "close";
+    type: "create" | "edit" | "close" | "delete";
   } | null>(null);
   const [copiedTicketNo, setCopiedTicketNo] = useState(false);
 
@@ -300,6 +306,126 @@ export default function TicketSystem() {
     } finally {
       setIsSubmittingClose(false);
     }
+  };
+
+  const handleInstantDeleteTicket = async (ticket: SystemTicket, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    
+    // 1. Instant Optimistic UI Removal (0ms delay)
+    setTickets(prev => prev.filter(t => t.id !== ticket.id));
+    setSelectedTicketIds(prev => prev.filter(id => id !== ticket.id));
+    if (editingTicket?.id === ticket.id) setEditingTicket(null);
+    if (ticketToDelete?.id === ticket.id) setTicketToDelete(null);
+
+    // 2. Immediate Toast notification
+    setSuccessPrompt({
+      show: true,
+      title: "Ticket Removed Instantly",
+      message: `Ticket ${ticket.ticketNumber} for ${ticket.patientName} was permanently deleted.`,
+      ticketNumber: ticket.ticketNumber,
+      patientName: ticket.patientName,
+      type: "delete"
+    });
+
+    // 3. Background Firestore Delete
+    try {
+      await deleteTicketById(ticket.id);
+    } catch (err) {
+      console.error("Error deleting ticket in background:", err);
+    }
+  };
+
+  const handleDeleteSingleTicket = async () => {
+    if (!ticketToDelete) return;
+    const target = ticketToDelete;
+    
+    // Optimistic instant removal
+    setTickets(prev => prev.filter(t => t.id !== target.id));
+    setSelectedTicketIds(prev => prev.filter(id => id !== target.id));
+    if (editingTicket?.id === target.id) setEditingTicket(null);
+    setTicketToDelete(null);
+
+    setSuccessPrompt({
+      show: true,
+      title: "Ticket Deleted Permanently",
+      message: `Ticket ${target.ticketNumber} for ${target.patientName} has been removed from the system.`,
+      ticketNumber: target.ticketNumber,
+      patientName: target.patientName,
+      type: "delete"
+    });
+
+    try {
+      await deleteTicketById(target.id);
+    } catch (err) {
+      console.error("Error deleting ticket:", err);
+    }
+  };
+
+  const handleBatchDeleteTickets = async () => {
+    if (selectedTicketIds.length === 0) return;
+    const idsToDelete = [...selectedTicketIds];
+    const count = idsToDelete.length;
+
+    // Optimistic instant batch removal
+    setTickets(prev => prev.filter(t => !idsToDelete.includes(t.id)));
+    if (editingTicket && idsToDelete.includes(editingTicket.id)) {
+      setEditingTicket(null);
+    }
+    setSelectedTicketIds([]);
+    setShowBatchDeleteModal(false);
+
+    setSuccessPrompt({
+      show: true,
+      title: `${count} Tickets Deleted Instantly`,
+      message: `Successfully purged ${count} unwanted patient tickets from the system database.`,
+      type: "delete"
+    });
+
+    try {
+      await deleteMultipleTicketsById(idsToDelete);
+    } catch (err) {
+      console.error("Error batch deleting tickets:", err);
+    }
+  };
+
+  const handlePurgeClosedTickets = async () => {
+    const closedTicketIds = tickets.filter(t => t.status === "closed").map(t => t.id);
+    if (closedTicketIds.length === 0) {
+      alert("No closed tickets found to purge.");
+      return;
+    }
+
+    const count = closedTicketIds.length;
+    // Optimistic removal
+    setTickets(prev => prev.filter(t => t.status !== "closed"));
+    setSelectedTicketIds(prev => prev.filter(id => !closedTicketIds.includes(id)));
+
+    setSuccessPrompt({
+      show: true,
+      title: `${count} Closed Tickets Purged`,
+      message: `Cleaned up ${count} resolved patient tickets from the database.`,
+      type: "delete"
+    });
+
+    try {
+      await deleteMultipleTicketsById(closedTicketIds);
+    } catch (err) {
+      console.error("Error purging closed tickets:", err);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTicketIds.length === filteredTickets.length) {
+      setSelectedTicketIds([]);
+    } else {
+      setSelectedTicketIds(filteredTickets.map(t => t.id));
+    }
+  };
+
+  const handleToggleSelectTicket = (ticketId: string) => {
+    setSelectedTicketIds(prev =>
+      prev.includes(ticketId) ? prev.filter(id => id !== ticketId) : [...prev, ticketId]
+    );
   };
 
   const copyToClipboard = (text: string) => {
@@ -515,19 +641,57 @@ export default function TicketSystem() {
 
       {/* Tickets List / Table */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Ticket className="w-4 h-4 text-emerald-600" />
-            <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Hospital Patient Tickets ({filteredTickets.length})</h2>
+        <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Ticket className="w-4 h-4 text-emerald-600" />
+              <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Hospital Patient Tickets ({filteredTickets.length})</h2>
+            </div>
+            {selectedTicketIds.length > 0 && (
+              <span className="px-2.5 py-0.5 bg-rose-100 text-rose-800 font-bold rounded-full text-[10px] border border-rose-200">
+                {selectedTicketIds.length} Selected
+              </span>
+            )}
           </div>
-          <span className="text-[10px] font-bold text-gray-400 font-mono">Real-Time Sync Active</span>
+          
+          <div className="flex items-center gap-2">
+            {closedCount > 0 && (
+              <button
+                onClick={handlePurgeClosedTickets}
+                title="Purge all closed and completed tickets from the system"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
+              >
+                <Trash className="w-3.5 h-3.5" />
+                <span>Purge Closed ({closedCount})</span>
+              </button>
+            )}
+
+            {selectedTicketIds.length > 0 && (
+              <button
+                onClick={() => setShowBatchDeleteModal(true)}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Selected ({selectedTicketIds.length})</span>
+              </button>
+            )}
+            <span className="text-[10px] font-bold text-gray-400 font-mono">Real-Time Sync Active</span>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-gray-100/70 text-gray-500 font-bold uppercase text-[9px] tracking-wider border-b border-gray-200">
-                <th className="py-3 px-4">Ticket No</th>
+                <th className="py-3 px-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={filteredTickets.length > 0 && selectedTicketIds.length === filteredTickets.length}
+                    onChange={handleSelectAll}
+                    className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                  />
+                </th>
+                <th className="py-3 px-3">Ticket No</th>
                 <th className="py-3 px-4">Patient Name</th>
                 <th className="py-3 px-4">Visit Reason / Issue</th>
                 <th className="py-3 px-4">Department</th>
@@ -540,14 +704,22 @@ export default function TicketSystem() {
             <tbody className="divide-y divide-gray-100 text-gray-700">
               {filteredTickets.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-400 font-medium">
+                  <td colSpan={9} className="py-8 text-center text-gray-400 font-medium">
                     No tickets found matching your filter criteria.
                   </td>
                 </tr>
               ) : (
                 filteredTickets.map((ticket) => (
-                  <tr key={ticket.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                  <tr key={ticket.id} className={`hover:bg-gray-50/80 transition-colors ${selectedTicketIds.includes(ticket.id) ? "bg-rose-50/30" : ""}`}>
+                    <td className="py-3.5 px-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedTicketIds.includes(ticket.id)}
+                        onChange={() => handleToggleSelectTicket(ticket.id)}
+                        className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                      />
+                    </td>
+                    <td className="py-3.5 px-3 font-mono font-bold text-slate-900">
                       <div className="flex items-center gap-1.5">
                         <span>{ticket.ticketNumber}</span>
                         {ticket.autoGenerated && (
@@ -563,6 +735,18 @@ export default function TicketSystem() {
 
                     <td className="py-3.5 px-4 max-w-xs">
                       <p className="font-semibold text-gray-800 truncate" title={ticket.visitReason}>{ticket.visitReason}</p>
+                      {(ticket.specialistTitle || ticket.assignedSpecialistName) && (
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-bold">
+                            👨‍⚕️ {ticket.specialistTitle || ticket.assignedSpecialistName}
+                          </span>
+                          {ticket.consultationRoom && (
+                            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-medium">
+                              📍 {ticket.consultationRoom}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -612,7 +796,7 @@ export default function TicketSystem() {
                         <button
                           onClick={() => handleOpenEditModal(ticket)}
                           title="Edit Ticket Details"
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs border border-slate-200"
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs border border-slate-200"
                         >
                           <Pencil className="w-3 h-3 text-slate-500" />
                           <span>Edit</span>
@@ -621,7 +805,7 @@ export default function TicketSystem() {
                         {ticket.status !== "closed" ? (
                           <button
                             onClick={() => setResolvingTicket(ticket)}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-xs inline-flex items-center gap-1"
+                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-xs inline-flex items-center gap-1"
                           >
                             <Check className="w-3 h-3" />
                             <span>Close</span>
@@ -629,6 +813,15 @@ export default function TicketSystem() {
                         ) : (
                           <span className="text-[10px] font-bold text-gray-400 italic px-1">Resolved</span>
                         )}
+
+                        {/* Instant One-Click Delete for Unwanted Tickets */}
+                        <button
+                          onClick={(e) => handleInstantDeleteTicket(ticket, e)}
+                          title="Instant Delete Unwanted Ticket"
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer group"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -918,8 +1111,20 @@ export default function TicketSystem() {
                 ></textarea>
               </div>
 
-              <div className="pt-2 flex items-center justify-between border-t border-gray-100">
-                <span className="text-[10px] text-gray-400 font-mono">ID: {editingTicket.id}</span>
+              <div className="pt-3 flex items-center justify-between border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editingTicket) {
+                      handleInstantDeleteTicket(editingTicket);
+                    }
+                  }}
+                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-rose-200 shadow-2xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Instant Delete</span>
+                </button>
+
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -1078,6 +1283,145 @@ export default function TicketSystem() {
                 >
                   <FileEdit className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Open Existing Ticket</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SINGLE TICKET DELETE CONFIRMATION MODAL */}
+      {ticketToDelete && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-60 animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border-2 border-rose-200 overflow-hidden animate-scale-up">
+            <div className="p-4.5 bg-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-rose-700/60 rounded-xl">
+                  <Trash2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm uppercase tracking-wide">Delete Ticket Permanently</h3>
+                  <p className="text-[11px] text-rose-100 font-medium">{ticketToDelete.ticketNumber}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setTicketToDelete(null)}
+                className="p-1 rounded-xl hover:bg-rose-700/50 text-rose-100 hover:text-white cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <p className="text-rose-900 font-medium leading-relaxed">
+                  Are you sure you want to permanently delete ticket <strong className="font-bold text-rose-950">{ticketToDelete.ticketNumber}</strong> for patient <strong className="font-bold text-rose-950">{ticketToDelete.patientName}</strong>? This action cannot be undone.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 space-y-2 text-slate-700 font-sans">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block text-[9px] uppercase font-bold">National ID</span>
+                    <span className="font-mono font-bold text-slate-900">{ticketToDelete.nationalId}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[9px] uppercase font-bold">Department</span>
+                    <span className="font-bold text-slate-900 uppercase">{ticketToDelete.department}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[9px] uppercase font-bold">Status</span>
+                    <span className="font-bold text-slate-900 capitalize">{ticketToDelete.status}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[9px] uppercase font-bold">Created</span>
+                    <span className="font-medium text-slate-700">{ticketToDelete.createdTime}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTicketToDelete(null)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteSingleTicket}
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs uppercase cursor-pointer shadow-md disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isDeleting ? (
+                    <span>Deleting...</span>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Confirm Delete</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BATCH TICKET DELETE CONFIRMATION MODAL */}
+      {showBatchDeleteModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-60 animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border-2 border-rose-200 overflow-hidden animate-scale-up">
+            <div className="p-4.5 bg-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-rose-700/60 rounded-xl">
+                  <Trash2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm uppercase tracking-wide">Delete {selectedTicketIds.length} Selected Tickets</h3>
+                  <p className="text-[11px] text-rose-100 font-medium">Batch Removal Action</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowBatchDeleteModal(false)}
+                className="p-1 rounded-xl hover:bg-rose-700/50 text-rose-100 hover:text-white cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <p className="text-rose-900 font-medium leading-relaxed">
+                  You are about to permanently delete <strong className="font-bold text-rose-950">{selectedTicketIds.length} hospital tickets</strong>. This operation will remove all associated ticket history from the active system.
+                </p>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBatchDeleteModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBatchDeleteTickets}
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs uppercase cursor-pointer shadow-md disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isDeleting ? (
+                    <span>Deleting Batch...</span>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Confirm Batch Delete</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

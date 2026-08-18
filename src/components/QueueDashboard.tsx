@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../lib/firebase";
-import { collection, onSnapshot, updateDoc, doc, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, updateDoc, doc, query, orderBy, deleteDoc, writeBatch } from "firebase/firestore";
 import { QueueTicket } from "../types";
-import { Monitor, Volume2, UserCheck, RefreshCw, Layers, ExternalLink, Play } from "lucide-react";
+import { Monitor, Volume2, UserCheck, RefreshCw, Layers, ExternalLink, Play, Trash2, Trash } from "lucide-react";
 
 interface QueueDashboardProps {
   toggles: any;
@@ -13,6 +13,7 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [isSignageView, setIsSignageView] = useState(false);
   const [announcingTicket, setAnnouncingTicket] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     // Read queue tickets ordered by timestamp
@@ -29,6 +30,11 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
     return () => unsubscribe();
   }, []);
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   const announceTicket = (ticketNo: string, room: string) => {
     setAnnouncingTicket(ticketNo);
     // Simulate vocal announcment via web synthesis
@@ -43,6 +49,42 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
     setTimeout(() => {
       setAnnouncingTicket(null);
     }, 4000);
+  };
+
+  // Instant delete single unwanted queue ticket
+  const handleDeleteQueueTicket = async (ticketId: string, ticketNo?: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    // 1. Optimistic removal (0ms delay)
+    setTickets((prev) => prev.filter((t) => t.id !== ticketId));
+    showToast(`Queue Ticket ${ticketNo || ticketId} removed immediately.`);
+
+    // 2. Background Firestore delete
+    try {
+      await deleteDoc(doc(db, "queue", ticketId));
+    } catch (err) {
+      console.error("Failed to delete queue ticket:", err);
+    }
+  };
+
+  // Clear completed or skipped tickets
+  const handleClearCompleted = async () => {
+    const targets = tickets.filter(t => t.status === "completed" || t.status === "skipped");
+    if (targets.length === 0) {
+      alert("No completed or finished tickets in queue to clear.");
+      return;
+    }
+    const count = targets.length;
+    // Optimistic removal
+    setTickets(prev => prev.filter(t => t.status === "pending" || t.status === "serving"));
+    showToast(`Cleared ${count} completed tickets from queue.`);
+
+    try {
+      const batch = writeBatch(db);
+      targets.forEach(t => batch.delete(doc(db, "queue", t.id)));
+      await batch.commit();
+    } catch (err) {
+      console.error("Error clearing completed queue:", err);
+    }
   };
 
   const handleUpdateStatus = async (ticketId: string, status: "serving" | "completed" | "skipped", currentDept: string) => {
@@ -197,7 +239,15 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
   }
 
   return (
-    <div id="queue-dashboard" className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+    <div id="queue-dashboard" className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm relative">
+      {/* Instant Notification Toast */}
+      {toastMessage && (
+        <div className="absolute top-4 right-4 z-40 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -210,6 +260,17 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
         </div>
         
         <div className="flex items-center gap-2">
+          {completedTickets.length > 0 && (
+            <button
+              onClick={handleClearCompleted}
+              title="Clear all completed tickets from queue"
+              className="px-3 py-2 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
+            >
+              <Trash className="w-3.5 h-3.5" />
+              <span>Clear Completed ({completedTickets.length})</span>
+            </button>
+          )}
+
           <button
             id="btn-launch-signage"
             onClick={() => setIsSignageView(true)}
@@ -287,7 +348,7 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
                             if (t.currentDepartment === "pharmacy") roomName = "Pharmacy Counter";
                             announceTicket(t.ticketNo, roomName);
                           }}
-                          className="p-1.5 hover:bg-gray-100 text-gray-500 rounded-lg transition-colors border border-gray-200"
+                          className="p-1.5 hover:bg-gray-100 text-gray-500 rounded-lg transition-colors border border-gray-200 cursor-pointer"
                           title="Re-announce Ticket Vocal Alert"
                         >
                           <Volume2 className="w-4 h-4" />
@@ -295,9 +356,16 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
                         <button
                           id={`btn-complete-serv-${t.id}`}
                           onClick={() => handleUpdateStatus(t.id, "completed", t.currentDepartment)}
-                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
                         >
                           Finish
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteQueueTicket(t.id, t.ticketNo, e)}
+                          title="Instant Delete Unwanted Queue Ticket"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -358,14 +426,23 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
                           </span>
                         </td>
                         <td className="p-3 text-right">
-                          <button
-                            id={`btn-start-serve-${t.id}`}
-                            onClick={() => handleUpdateStatus(t.id, "serving", t.currentDepartment)}
-                            className="px-2.5 py-1.5 bg-gray-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-                          >
-                            <Play className="w-3 h-3 fill-white" />
-                            Call Now
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              id={`btn-start-serve-${t.id}`}
+                              onClick={() => handleUpdateStatus(t.id, "serving", t.currentDepartment)}
+                              className="px-2.5 py-1.5 bg-gray-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Play className="w-3 h-3 fill-white" />
+                              Call Now
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteQueueTicket(t.id, t.ticketNo, e)}
+                              title="Instant Delete Unwanted Queue Ticket"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
