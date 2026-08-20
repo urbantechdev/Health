@@ -148,6 +148,10 @@ export interface SystemUserAccount {
   department: string;
   phone?: string;
   nationalId?: string;
+  photoURL?: string;
+  avatarUrl?: string;
+  pin?: string;
+  password?: string;
   status: "active" | "inactive" | "suspended";
   createdDate: string;
   createdBy?: string;
@@ -164,10 +168,16 @@ export interface Employee {
   salary: number; // Base salary in KES
   phone: string;
   email: string;
+  photoURL?: string;
+  avatarUrl?: string;
+  pin?: string;
+  password?: string;
+  signatureUrl?: string;
   status: "active" | "on_leave" | "terminated";
   hireDate: string;
   accessLevel?: "Super Admin" | "Department Admin" | "Standard Staff";
   systemRole?: SystemRole;
+  lastLogin?: string;
 }
 
 export interface PayrollRecord {

@@ -113,6 +113,14 @@ export default function DashboardOverview({
     };
   }, []);
 
+  // Real-time clock for top hero digital time display
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Format currency
   const formatKES = (value: number) => {
     return new Intl.NumberFormat("en-KE", {
@@ -121,6 +129,24 @@ export default function DashboardOverview({
       maximumFractionDigits: 0
     }).format(value);
   };
+
+  // Live Digital Time Component placed on top of Hero Right Side
+  const renderHeroDigitalClock = () => (
+    <div 
+      title="Hospital Live Real-Time Clock (East Africa Time - EAT)"
+      className="flex items-center gap-2.5 bg-black/40 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 text-white shadow-xl shrink-0"
+    >
+      <Clock className="w-5 h-5 md:w-6 md:h-6 text-emerald-400 animate-pulse shrink-0" />
+      <div className="flex flex-col text-right leading-tight">
+        <span className="text-xl md:text-2xl font-black font-mono tracking-wider text-emerald-300 drop-shadow-xs">
+          {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        </span>
+        <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-300 opacity-90">
+          Live EAT Time
+        </span>
+      </div>
+    </div>
+  );
 
   // Determine user identity
   const userName = currentEmployee?.name || currentUserEmail?.split("@")[0] || currentUserRole;
@@ -169,10 +195,13 @@ export default function DashboardOverview({
               </div>
             </div>
 
-            <div className="bg-cyan-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-cyan-700/50 text-right">
-              <span className="text-[9px] text-cyan-300 font-black tracking-widest uppercase block">TODAY'S CONSULTATIONS</span>
-              <span className="text-3xl font-black text-cyan-200 font-mono">{doctorCompletedToday.length}</span>
-              <p className="text-[10px] text-cyan-300/90 font-semibold">Patients Evaluated</p>
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              {renderHeroDigitalClock()}
+              <div className="bg-cyan-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-cyan-700/50 text-right">
+                <span className="text-[9px] text-cyan-300 font-black tracking-widest uppercase block">TODAY'S CONSULTATIONS</span>
+                <span className="text-3xl font-black text-cyan-200 font-mono">{doctorCompletedToday.length}</span>
+                <p className="text-[10px] text-cyan-300/90 font-semibold">Patients Evaluated</p>
+              </div>
             </div>
           </div>
         </div>
@@ -315,10 +344,13 @@ export default function DashboardOverview({
               </div>
             </div>
 
-            <div className="bg-teal-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-teal-700/50 text-right">
-              <span className="text-[9px] text-teal-300 font-black tracking-widest uppercase block">MEDICATION LINES</span>
-              <span className="text-3xl font-black text-teal-200 font-mono">{meds.length}</span>
-              <p className="text-[10px] text-teal-300/90 font-semibold">Active Formulary Items</p>
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              {renderHeroDigitalClock()}
+              <div className="bg-teal-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-teal-700/50 text-right">
+                <span className="text-[9px] text-teal-300 font-black tracking-widest uppercase block">MEDICATION LINES</span>
+                <span className="text-3xl font-black text-teal-200 font-mono">{meds.length}</span>
+                <p className="text-[10px] text-teal-300/90 font-semibold">Active Formulary Items</p>
+              </div>
             </div>
           </div>
         </div>
@@ -436,10 +468,13 @@ export default function DashboardOverview({
               </div>
             </div>
 
-            <div className="bg-emerald-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-emerald-700/50 text-right">
-              <span className="text-[9px] text-emerald-300 font-black tracking-widest uppercase block">TOTAL REGISTRATIONS</span>
-              <span className="text-3xl font-black text-emerald-200 font-mono">{registeredToday}</span>
-              <p className="text-[10px] text-emerald-300/90 font-semibold">Patients Admitted Today</p>
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              {renderHeroDigitalClock()}
+              <div className="bg-emerald-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-emerald-700/50 text-right">
+                <span className="text-[9px] text-emerald-300 font-black tracking-widest uppercase block">TOTAL REGISTRATIONS</span>
+                <span className="text-3xl font-black text-emerald-200 font-mono">{registeredToday}</span>
+                <p className="text-[10px] text-emerald-300/90 font-semibold">Patients Admitted Today</p>
+              </div>
             </div>
           </div>
         </div>
@@ -533,6 +568,10 @@ export default function DashboardOverview({
                 </p>
               </div>
             </div>
+
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              {renderHeroDigitalClock()}
+            </div>
           </div>
         </div>
 
@@ -585,10 +624,13 @@ export default function DashboardOverview({
               </div>
             </div>
 
-            <div className="bg-rose-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-rose-700/50 text-right">
-              <span className="text-[9px] text-rose-300 font-black tracking-widest uppercase block">ACTIVE STAFF</span>
-              <span className="text-3xl font-black text-rose-200 font-mono">{employees.length}</span>
-              <p className="text-[10px] text-rose-300/90 font-semibold">Registered Workers</p>
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              {renderHeroDigitalClock()}
+              <div className="bg-rose-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-rose-700/50 text-right">
+                <span className="text-[9px] text-rose-300 font-black tracking-widest uppercase block">ACTIVE STAFF</span>
+                <span className="text-3xl font-black text-rose-200 font-mono">{employees.length}</span>
+                <p className="text-[10px] text-rose-300/90 font-semibold">Registered Workers</p>
+              </div>
             </div>
           </div>
         </div>
@@ -652,10 +694,13 @@ export default function DashboardOverview({
               </div>
             </div>
 
-            <div className="bg-emerald-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-emerald-700/50 text-right">
-              <span className="text-[9px] text-emerald-300 font-black tracking-widest uppercase block">TOTAL RECONCILED</span>
-              <span className="text-3xl font-black text-emerald-200 font-mono">{formatKES(totalRevenue)}</span>
-              <p className="text-[10px] text-emerald-300/90 font-semibold">Cleared Collections</p>
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              {renderHeroDigitalClock()}
+              <div className="bg-emerald-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-emerald-700/50 text-right">
+                <span className="text-[9px] text-emerald-300 font-black tracking-widest uppercase block">TOTAL RECONCILED</span>
+                <span className="text-3xl font-black text-emerald-200 font-mono">{formatKES(totalRevenue)}</span>
+                <p className="text-[10px] text-emerald-300/90 font-semibold">Cleared Collections</p>
+              </div>
             </div>
           </div>
         </div>

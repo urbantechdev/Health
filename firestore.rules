@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Hospital Patients & EHR Medical Records
+    match /patients/{patientId} {
+      allow read, write: if true;
+    }
+
+    // Hospital Staff & Employees
+    match /staff/{staffId} {
+      allow read, write: if true;
+    }
+    match /employees/{employeeId} {
+      allow read, write: if true;
+    }
+
+    // System Tickets (Intake, Encounters, Services)
+    match /system_tickets/{ticketId} {
+      allow read, write: if true;
+    }
+
+    // Live Queue & Routing Tokens
+    match /queue/{queueId} {
+      allow read, write: if true;
+    }
+
+    // Hospital Billing & Invoices
+    match /invoices/{invoiceId} {
+      allow read, write: if true;
+    }
+
+    // Pharmacy Stock & Inventory
+    match /medications/{medicationId} {
+      allow read, write: if true;
+    }
+
+    // Staff Payroll
+    match /payroll/{payrollId} {
+      allow read, write: if true;
+    }
+
+    // Security Gate Logs
+    match /security_logs/{logId} {
+      allow read, write: if true;
+    }
+
+    // Procurement & Requisitions
+    match /suppliers/{supplierId} {
+      allow read, write: if true;
+    }
+    match /purchase_orders/{poId} {
+      allow read, write: if true;
+    }
+    match /purchase_requisitions/{reqId} {
+      allow read, write: if true;
+    }
+    match /goods_received/{grnId} {
+      allow read, write: if true;
+    }
+
+    // System Settings & Branding
+    match /system_settings/{settingId} {
+      allow read, write: if true;
+    }
+    match /branding/{brandId} {
+      allow read, write: if true;
+    }
+    
+    // Catch-all fallback
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

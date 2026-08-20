@@ -769,16 +769,32 @@ export default function HumanResources() {
                     {filteredEmployees.map((emp) => (
                       <tr key={emp.id} className="hover:bg-gray-50/40">
                         <td className="p-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-extrabold text-gray-950 text-sm">{emp.name}</p>
-                            {emp.specialty && (
-                              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                {emp.specialty}
-                              </span>
+                          <div className="flex items-center gap-3">
+                            {emp.photoURL || emp.avatarUrl ? (
+                              <img
+                                src={emp.photoURL || emp.avatarUrl}
+                                alt={emp.name}
+                                className="w-9 h-9 rounded-xl object-cover border border-emerald-300 shadow-xs shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-xl bg-emerald-700 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
+                                {emp.name.charAt(0).toUpperCase()}
+                              </div>
                             )}
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-extrabold text-gray-950 text-sm">{emp.name}</p>
+                                {emp.specialty && (
+                                  <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                    {emp.specialty}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-gray-500 text-[10px] font-medium">{emp.role} • {emp.email}</p>
+                              <p className="text-gray-400 text-[9px] font-mono mt-0.5">Tel: {emp.phone} • Hired: {emp.hireDate}</p>
+                            </div>
                           </div>
-                          <p className="text-gray-500 text-[10px] font-medium">{emp.role} • {emp.email}</p>
-                          <p className="text-gray-400 text-[9px] font-mono mt-0.5">Tel: {emp.phone} • Hired: {emp.hireDate}</p>
                         </td>
                         <td className="p-3 font-semibold uppercase text-[10px] text-emerald-800">
                           <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-150 rounded">

@@ -23,6 +23,9 @@ import DashboardOverview from "./components/DashboardOverview";
 import DesktopBottomNav from "./components/DesktopBottomNav";
 import MpesaPaymentModal from "./components/MpesaPaymentModal";
 import ShaVerificationModal from "./components/ShaVerificationModal";
+import LogoUploadModal from "./components/LogoUploadModal";
+import UserProfileModal from "./components/UserProfileModal";
+import { bootstrapCloudFirestore } from "./lib/dbInit";
 
 import {
   Building2,
@@ -189,6 +192,17 @@ export const THEME_PALETTES: Record<string, { name: string; hex: string; colors:
 };
 
 const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClass: string; textClass: string; borderClass: string; pillClass: string; btnClass: string; accentClass: string; titleClass: string }> = {
+  "solid-pink": {
+    name: "Solid Pink (Hero)",
+    bgClass: "bg-pink-600",
+    fillClass: "fill-pink-600",
+    textClass: "text-white",
+    borderClass: "border-pink-500",
+    pillClass: "bg-pink-700/80 backdrop-blur-md text-white border-pink-400/50 shadow-xs",
+    btnClass: "bg-pink-700 hover:bg-pink-800 text-white border border-pink-400/60 shadow-xs",
+    accentClass: "text-pink-200",
+    titleClass: "text-white",
+  },
   "sunset-orange": {
     name: "Sunset Orange & Green",
     bgClass: "bg-gradient-to-r from-orange-950 via-amber-950 to-orange-900",
@@ -282,7 +296,7 @@ const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClas
 export default function App() {
   const [tenant, setTenant] = useState<Tenant>({
     id: "tenant-9943",
-    name: "HMS",
+    name: "HMIS",
     type: "clinic",
     county: "Nairobi",
   });
@@ -303,8 +317,8 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [simulatedUser, setSimulatedUser] = useState<{ email: string; displayName: string; isSimulated: boolean; photoURL?: string } | null>(() => {
     return {
-      email: "admin@hospital.ke",
-      displayName: "System Administrator",
+      email: "naisiaetext@gmail.com",
+      displayName: "Dr. Sarah Naisiae (Super Admin)",
       isSimulated: true,
       photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
     };
@@ -323,8 +337,9 @@ export default function App() {
   });
 
   // Dynamic branding state values
-  const [headerBgStyle, setHeaderBgStyle] = useState<string>(() => localStorage.getItem("platform_header_bg") || "dark-slate");
-  const [brandLogoUrl, setBrandLogoUrl] = useState<string>(() => localStorage.getItem("platform_logo_url") || "");
+  const DEFAULT_BRAND_LOGO = "https://i.pinimg.com/1200x/0d/21/0a/0d210ae7221bc218df223d59b16d2198.jpg";
+  const [headerBgStyle, setHeaderBgStyle] = useState<string>(() => localStorage.getItem("platform_header_bg") || "solid-pink");
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string>(() => localStorage.getItem("platform_logo_url") || DEFAULT_BRAND_LOGO);
   const [brandFaviconUrl, setBrandFaviconUrl] = useState<string>(() => localStorage.getItem("platform_favicon_url") || "");
   const [brandCustomName, setBrandCustomName] = useState<string>(() => localStorage.getItem("platform_custom_brand_name") || "");
   const [brandFontId, setBrandFontId] = useState<string>(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
@@ -332,7 +347,8 @@ export default function App() {
   const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "yellow-blue-green");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
-  // Global M-Pesa & SHA Modal states
+  // Global M-Pesa, SHA & Logo Modal states
+  const [showLogoModal, setShowLogoModal] = useState<boolean>(false);
   const [showMpesaModal, setShowMpesaModal] = useState<boolean>(false);
   const [mpesaModalData, setMpesaModalData] = useState<{
     defaultPhone?: string;
@@ -347,6 +363,20 @@ export default function App() {
     defaultNationalId?: string;
     defaultPatientName?: string;
   }>({});
+
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [profileOverride, setProfileOverride] = useState<{
+    displayName?: string;
+    photoURL?: string;
+    email?: string;
+  }>(() => {
+    const savedPhoto = localStorage.getItem("user_profile_avatar");
+    const savedName = localStorage.getItem("user_profile_name");
+    return {
+      photoURL: savedPhoto || undefined,
+      displayName: savedName || undefined,
+    };
+  });
 
   useEffect(() => {
     localStorage.setItem("platform_header_bg", headerBgStyle);
@@ -495,6 +525,13 @@ export default function App() {
     };
   }, []);
 
+  // Bootstrap Cloud Firestore independent database collections
+  useEffect(() => {
+    bootstrapCloudFirestore().catch((err) => {
+      console.warn("Cloud Firestore initial check:", err);
+    });
+  }, []);
+
   // Real-time ticking clock
   useEffect(() => {
     const timer = setInterval(() => {
@@ -512,18 +549,99 @@ export default function App() {
   }, []);
 
   const activeUser = user 
-    ? { email: user.email || "", displayName: user.displayName || "Google User", isSimulated: false, photoURL: user.photoURL || undefined } 
-    : simulatedUser;
+    ? { 
+        email: profileOverride.email || user.email || "", 
+        displayName: profileOverride.displayName || user.displayName || "Google User", 
+        isSimulated: false, 
+        photoURL: profileOverride.photoURL || user.photoURL || undefined 
+      } 
+    : (simulatedUser 
+        ? {
+            ...simulatedUser,
+            displayName: profileOverride.displayName || simulatedUser.displayName,
+            email: profileOverride.email || simulatedUser.email,
+            photoURL: profileOverride.photoURL || simulatedUser.photoURL || undefined
+          }
+        : null);
 
   // Find employee matching logged-in user email
   const loggedInEmployee = employees.find(
     (emp) => emp.email?.toLowerCase().trim() === activeUser?.email?.toLowerCase().trim()
   );
 
+  // If logged in employee has photo and activeUser doesn't have custom override, display employee's avatar
+  const resolvedPhotoURL = activeUser?.photoURL || loggedInEmployee?.photoURL || loggedInEmployee?.avatarUrl;
+
+  const handleUpdateUserProfile = (updatedData: {
+    displayName: string;
+    email: string;
+    photoURL?: string;
+    phone?: string;
+    nationalId?: string;
+    specialty?: string;
+    systemRole?: SystemRole;
+    department?: string;
+  }) => {
+    setProfileOverride({
+      displayName: updatedData.displayName,
+      email: updatedData.email,
+      photoURL: updatedData.photoURL,
+    });
+    if (updatedData.photoURL) {
+      localStorage.setItem("user_profile_avatar", updatedData.photoURL);
+    } else {
+      localStorage.removeItem("user_profile_avatar");
+    }
+    if (updatedData.displayName) {
+      localStorage.setItem("user_profile_name", updatedData.displayName);
+    }
+    if (simulatedUser) {
+      setSimulatedUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              displayName: updatedData.displayName,
+              email: updatedData.email,
+              photoURL: updatedData.photoURL || prev.photoURL,
+            }
+          : null
+      );
+    }
+    if (updatedData.systemRole) {
+      setSimulatedRoleOverride(updatedData.systemRole);
+    }
+    // Update local employees cache
+    setEmployees((prev) =>
+      prev.map((emp) => {
+        if (
+          emp.email?.toLowerCase().trim() === updatedData.email.toLowerCase().trim() ||
+          emp.id === loggedInEmployee?.id
+        ) {
+          return {
+            ...emp,
+            name: updatedData.displayName,
+            email: updatedData.email,
+            phone: updatedData.phone || emp.phone,
+            nationalId: updatedData.nationalId || emp.nationalId,
+            specialty: updatedData.specialty || emp.specialty,
+            photoURL: updatedData.photoURL,
+            avatarUrl: updatedData.photoURL,
+            department: updatedData.department || emp.department,
+            systemRole: updatedData.systemRole || emp.systemRole,
+            role: updatedData.systemRole || emp.role,
+          };
+        }
+        return emp;
+      })
+    );
+  };
+
   // Dynamic Super Admin check:
   // 1. If database has 0 employees registered yet, initial user acts as Super Admin to set up facility
-  // 2. OR if loggedInEmployee has accessLevel === "Super Admin" || role === "Super Admin" || department === "administration"
+  // 2. OR if active user email is naisiaetext@gmail.com
+  // 3. OR if loggedInEmployee has accessLevel === "Super Admin" || role === "Super Admin" || department === "administration"
   const isSuperAdmin = employees.length === 0 || 
+    activeUser?.email?.toLowerCase().trim() === "naisiaetext@gmail.com" ||
     loggedInEmployee?.accessLevel === "Super Admin" || 
     loggedInEmployee?.role === "Super Admin" || 
     loggedInEmployee?.department === "administration";
@@ -646,7 +764,7 @@ export default function App() {
     } catch (err: any) {
       console.error("Google Auth popup error:", err);
       setAuthError(
-        "Google Popup Blocked or Mismatched config. Inside the sandboxed iframe, popups might be blocked by your browser settings. Please click 'Super Admin Quick Bypass' to login instantly as muyamoz@gmail.com, or use 'Open in New Tab'."
+        "Google Popup Blocked or Mismatched config. Inside the sandboxed iframe, popups might be blocked by your browser settings. Please click 'Super Admin Quick Bypass' to login instantly as naisiaetext@gmail.com, or use 'Open in New Tab'."
       );
     }
   };
@@ -996,125 +1114,135 @@ export default function App() {
     );
   }
 
-  const currentHeaderStyle = HEADER_BG_STYLES[headerBgStyle] || HEADER_BG_STYLES["dark-slate"];
+  const currentHeaderStyle = HEADER_BG_STYLES[headerBgStyle] || HEADER_BG_STYLES["solid-pink"];
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col text-gray-800 font-sans pb-16 md:pb-0">
-      {/* End-to-End Top Header Bar with Single Wave Curved Bottom Edge & Motion Ray Scanner */}
+    <div className="h-screen w-screen overflow-hidden bg-gray-100 flex flex-col text-gray-800 font-sans pb-16 md:pb-0">
+      {/* End-to-End Top Header Bar with Single Wave Curved Bottom Edge */}
       <div className="relative w-full z-30 shrink-0 shadow-xs overflow-hidden">
         <header className={`relative w-full ${currentHeaderStyle.bgClass} ${currentHeaderStyle.textClass} py-3.5 sm:py-5 md:py-9 min-h-[84px] md:min-h-[150px] px-3.5 sm:px-6 md:px-8 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 md:gap-4 transition-colors duration-300 overflow-hidden`}>
           
-          {/* Motion Ray Scanner Effect Moving Continuously from Left to Right */}
+          {/* Continuous Motion Gentle Shimmer Effect (Identical to Bottom Nav) */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-            {/* Soft Ambient Sweeping Light Ray Beam */}
+            {/* Ambient Sweeping Beam */}
             <motion.div
-              className="absolute top-0 bottom-0 w-48 md:w-80 bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent blur-md -skew-x-12"
+              className="absolute top-0 bottom-0 w-48 md:w-80 bg-gradient-to-r from-transparent via-white/10 to-transparent blur-lg -skew-x-12"
               initial={{ left: "-40%" }}
               animate={{ left: "120%" }}
               transition={{
                 repeat: Infinity,
-                duration: 4.5,
+                duration: 6.0,
                 ease: "easeInOut",
-                repeatDelay: 0.6,
+                repeatDelay: 1.2,
               }}
             />
 
-            {/* Core Sharp Laser Scan Ray Line */}
+            {/* Gentle Light Ray Line with Soft Glow */}
             <motion.div
-              className="absolute top-0 bottom-0 w-1.5 md:w-2 bg-gradient-to-b from-transparent via-emerald-300 to-transparent -skew-x-12 opacity-90 shadow-[0_0_20px_#34d399]"
+              className="absolute top-0 bottom-0 w-1 bg-gradient-to-b from-transparent via-white/40 to-transparent -skew-x-12 opacity-60 shadow-[0_0_10px_rgba(255,255,255,0.4)]"
               initial={{ left: "-40%" }}
               animate={{ left: "120%" }}
               transition={{
                 repeat: Infinity,
-                duration: 4.5,
+                duration: 6.0,
                 ease: "easeInOut",
-                repeatDelay: 0.6,
+                repeatDelay: 1.2,
               }}
             >
-              {/* Secondary Intense White Core Flare */}
-              <div className="absolute top-1/4 bottom-1/4 w-0.5 left-1/2 -translate-x-1/2 bg-white/90 blur-[1px]" />
+              {/* Core Bright Light Spark */}
+              <div className="absolute top-1/4 bottom-1/4 w-0.5 left-1/2 -translate-x-1/2 bg-white/70 blur-[0.5px]" />
             </motion.div>
 
-            {/* Top Scanning Edge Particle / Flare Tracer */}
+            {/* Edge Tracer Line */}
             <motion.div
-              className="absolute top-0 w-24 h-1 bg-gradient-to-r from-transparent via-emerald-300 to-transparent blur-[0.5px]"
+              className="absolute top-0 w-24 h-0.5 bg-gradient-to-r from-transparent via-white/30 to-transparent blur-[0.5px]"
               initial={{ left: "-40%" }}
               animate={{ left: "120%" }}
               transition={{
                 repeat: Infinity,
-                duration: 4.5,
+                duration: 6.0,
                 ease: "easeInOut",
-                repeatDelay: 0.6,
+                repeatDelay: 1.2,
               }}
             />
           </div>
-          
+
           {/* Mobile Top Header: Row Layout with Brand Left, Quick Stats & Profile Right */}
           <div className="relative z-10 flex items-center justify-between gap-2.5 w-full md:w-auto">
             {/* Brand and Active Facility */}
-            <div className="flex items-center gap-2.5 sm:gap-3 group cursor-pointer min-w-0">
-              <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:rotate-3 group-hover:bg-emerald-500 group-hover:shadow-emerald-500/40 transition-all duration-300">
+            <div
+              onClick={() => setShowLogoModal(true)}
+              title="Click to upload, change or configure Hospital Logo"
+              className="flex items-center gap-3 sm:gap-4 group cursor-pointer min-w-0"
+            >
+              <div className="relative p-1.5 sm:p-2 bg-white/20 text-white rounded-2xl shadow-lg border border-white/40 backdrop-blur-md flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:rotate-1 group-hover:bg-white/30 transition-all duration-300 overflow-hidden">
                 {brandLogoUrl ? (
-                  <img src={brandLogoUrl} alt="Logo" className="w-5 h-5 sm:w-6 sm:h-6 object-contain rounded transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
+                  <img
+                    src={brandLogoUrl}
+                    alt="HMIS Hospital Logo"
+                    className="w-9 h-9 sm:w-12 sm:h-12 object-cover rounded-xl shadow-inner transition-transform group-hover:scale-105"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
-                  <Building2 className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse group-hover:animate-none" />
+                  <Building2 className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-pulse group-hover:animate-none" />
                 )}
+                {/* Upload indicator pill on hover */}
+                <div className="absolute -bottom-1 -right-1 bg-pink-700 text-white p-1 rounded-full border border-white text-[8px] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs">
+                  <Sparkles className="w-2.5 h-2.5" />
+                </div>
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <h1 className={`text-base sm:text-lg md:text-xl lg:text-2xl font-extrabold tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-tight font-sans truncate group-hover:text-emerald-300 transition-colors duration-200`}>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <h1 className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-none font-sans truncate drop-shadow-md group-hover:text-pink-200 transition-colors duration-200`}>
                     {brandCustomName || tenant.name}
                   </h1>
-                  <span className="px-1.5 py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[9px] sm:text-[10px] font-extrabold rounded uppercase tracking-wider shrink-0 transition-all duration-200">
+                  <span className="px-2 py-0.5 bg-white/20 hover:bg-white/30 text-white border border-white/40 text-[10px] sm:text-xs font-black rounded-lg uppercase tracking-wider shrink-0 transition-all duration-200 shadow-xs">
                     Tier {tenant.type}
                   </span>
                 </div>
-                <p className="text-[10px] text-emerald-300/70 font-medium truncate hidden sm:block">
+                <p className="text-xs sm:text-sm text-pink-100 font-medium truncate hidden sm:block mt-0.5 tracking-wide">
                   {tenant.county} County • SHA Portal • eTIMS Live
                 </p>
               </div>
             </div>
 
-            {/* Mobile Header Quick Actions: Live Clock & Profile Trigger */}
-            <div className="md:hidden flex items-center gap-1.5 shrink-0">
-              {/* Compact Live Clock on Mobile Header */}
-              <div className="flex items-center gap-1 bg-black/40 border border-white/15 px-2 py-1 rounded-xl text-emerald-300 font-mono shadow-inner">
-                <Clock className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
-                <span className="text-[11px] font-black tracking-tight">
+            {/* Mobile Header Quick Actions: Large Grey Icons with No Background */}
+            <div className="md:hidden flex items-center gap-2.5 shrink-0">
+              {/* Compact Live Clock with Large Grey Icon */}
+              <div 
+                title="Live Time (EAT)"
+                className="flex items-center gap-1.5 px-1 py-1 text-slate-300 font-mono"
+              >
+                <Clock className="w-5 h-5 text-slate-300 animate-pulse shrink-0" />
+                <span className="text-xs font-black tracking-tight text-slate-200">
                   {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
 
-              {/* Mobile Offline/Online Indicator */}
+              {/* Mobile Offline/Online Indicator - Large Grey Icon (No Background) */}
               <button
                 onClick={toggleOfflineSimulation}
-                title={isSimulatedOffline ? "Offline Mode" : "Online Mode"}
-                className={`p-1.5 rounded-xl border transition-all active:scale-90 ${
-                  isOnline && !isSimulatedOffline
-                    ? "bg-emerald-950/70 border-emerald-500/40 text-emerald-300"
-                    : "bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse"
-                }`}
+                title={isSimulatedOffline ? "Offline Mode (Click to connect)" : "Online Mode (Connected)"}
+                className="p-1 text-slate-300 hover:text-white transition-all active:scale-90 cursor-pointer"
               >
-                {isSimulatedOffline ? <WifiOff className="w-3.5 h-3.5" /> : <Wifi className="w-3.5 h-3.5" />}
+                {isSimulatedOffline ? <WifiOff className="w-5 h-5 text-amber-400" /> : <Wifi className="w-5 h-5 text-slate-300" />}
               </button>
 
-              {/* Mobile Profile & System Menu Button */}
+              {/* Mobile Profile & System Menu Button - Large Avatar / Icon (No Background) */}
               <button
                 onClick={() => setIsMobileMenuOpen(true)}
                 title={activeUser.displayName || activeUser.email}
-                className="p-0.5 bg-white/20 hover:bg-white/30 border border-white/40 rounded-full shadow-md active:scale-90 transition-all cursor-pointer relative group"
+                className="p-0.5 text-slate-300 hover:text-white transition-all active:scale-90 cursor-pointer relative group"
               >
-                {activeUser.photoURL ? (
+                {resolvedPhotoURL ? (
                   <img 
-                    src={activeUser.photoURL} 
+                    src={resolvedPhotoURL} 
                     alt={activeUser.displayName || activeUser.email} 
-                    className="w-7 h-7 rounded-full object-cover border-2 border-emerald-400 group-hover:scale-105 transition-transform" 
+                    className="w-8 h-8 rounded-xl object-cover border border-slate-400/50 group-hover:border-white transition-colors" 
                     referrerPolicy="no-referrer" 
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs border border-emerald-400 shadow-inner group-hover:bg-emerald-500 transition-colors">
-                    <User className="w-3.5 h-3.5" />
-                  </div>
+                  <User className="w-6 h-6 text-slate-300 hover:text-white" />
                 )}
                 {isSimulatedOffline && (
                   <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border border-slate-900 animate-pulse" />
@@ -1123,142 +1251,155 @@ export default function App() {
             </div>
           </div>
 
-          {/* Desktop Top Header Controls */}
-          <div className="hidden md:flex flex-wrap items-center gap-1.5 md:gap-2 relative z-10">
-            {/* RBAC 11-Role Simulation Switcher (Super Admin Need-to-Know Testing) */}
+          {/* Desktop Top Header Controls - Large Grey Icons without Background Color */}
+          <div className="hidden md:flex flex-wrap items-center gap-3 lg:gap-4 relative z-10">
+            {/* RBAC 11-Role Simulation Switcher - Large Grey Icon (No Background) */}
             <div 
-              title="System RBAC Role Simulation Switcher (11 Roles)" 
-              className="flex items-center gap-1.5 bg-purple-950/80 hover:bg-purple-900 px-3 py-1.5 rounded-xl border border-purple-400/50 shadow-2xs hover:shadow-md hover:scale-105 transition-all duration-200 text-purple-100 group"
+              title={`Simulate Role: ${currentSystemRole} (Click to switch 11 roles)`} 
+              className="relative flex items-center justify-center p-1.5 text-slate-300 hover:text-white hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
             >
-              <Shield className="w-4 h-4 text-purple-300 group-hover:scale-110 transition-transform duration-200 shrink-0" />
-              <div className="flex flex-col text-left leading-none">
-                <span className="text-[8px] font-black uppercase text-purple-300 tracking-wider">Simulate Role</span>
-                <select
-                  id="rbac-role-simulator"
-                  value={currentSystemRole}
-                  onChange={(e) => {
-                    const role = e.target.value as SystemRole;
-                    setSimulatedRoleOverride(role);
-                    const cfg = getRoleConfig(role);
-                    if (!cfg.allowedModules.includes(activeTab) && role !== "Super Admin" && activeTab !== "dashboard") {
-                      setActiveTab(cfg.allowedModules[0] || "dashboard");
-                    }
-                  }}
-                  className="bg-transparent text-purple-100 border-none text-xs font-black focus:outline-hidden cursor-pointer p-0"
-                >
-                  {SYSTEM_ROLES_DIRECTORY.map((r) => (
-                    <option key={r.role} value={r.role} className="bg-slate-900 text-white font-bold">
-                      {r.role}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Shield className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 group-hover:text-white group-hover:rotate-6 transition-all duration-200 shrink-0" />
+              
+              {/* Subtle Mini Floating Dot / Badge */}
+              <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-slate-700 text-slate-200 text-[8px] font-black uppercase rounded-md tracking-wider border border-slate-500 shadow-xs max-w-[60px] truncate">
+                {currentSystemRole.split(" ")[0]}
+              </span>
+
+              {/* Seamless Full-Cover Select Trigger */}
+              <select
+                id="rbac-role-simulator"
+                value={currentSystemRole}
+                onChange={(e) => {
+                  const role = e.target.value as SystemRole;
+                  setSimulatedRoleOverride(role);
+                  const cfg = getRoleConfig(role);
+                  if (!cfg.allowedModules.includes(activeTab) && role !== "Super Admin" && activeTab !== "dashboard") {
+                    setActiveTab(cfg.allowedModules[0] || "dashboard");
+                  }
+                }}
+                aria-label="Switch RBAC Role Simulation"
+                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+              >
+                {SYSTEM_ROLES_DIRECTORY.map((r) => (
+                  <option key={r.role} value={r.role} className="bg-slate-900 text-white font-bold py-1">
+                    {r.role} ({r.department})
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Offline/Online Status Indicator & Toggle Icon Button */}
+            {/* Offline/Online Status Indicator & Toggle - Large Grey Icon (No Background) */}
             <button
               onClick={toggleOfflineSimulation}
-              title={isSimulatedOffline ? "Offline Mode (Click to connect & sync with Firebase)" : "Online Mode (Click to switch to offline cached database)"}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-md hover:scale-105 active:scale-95 ${
-                isOnline && !isSimulatedOffline
-                  ? `${currentHeaderStyle.pillClass} hover:bg-white/20 hover:border-emerald-300/60`
-                  : "bg-amber-500/20 text-amber-200 border-amber-500/50 hover:bg-amber-500/30 animate-pulse hover:animate-none"
-              }`}
+              title={isSimulatedOffline ? "Offline Mode (Click to reconnect with Cloud Firestore)" : "Online Mode (Connected to Cloud Firestore)"}
+              className="relative flex items-center justify-center p-1.5 text-slate-300 hover:text-white hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
             >
-              <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline && !isSimulatedOffline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></span>
               {isSimulatedOffline ? (
-                <WifiOff className="w-4 h-4 text-amber-300 shrink-0 transition-transform duration-200 hover:rotate-12" />
+                <WifiOff className="w-6 h-6 lg:w-7 lg:h-7 text-amber-400 transition-transform duration-200 hover:rotate-12" />
               ) : (
-                <Wifi className={`w-4 h-4 ${currentHeaderStyle.accentClass} shrink-0 transition-transform duration-200 hover:scale-110`} />
+                <Wifi className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 hover:text-white transition-transform duration-200" />
               )}
+              
+              {/* Online Pulse Indicator Dot */}
+              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full shrink-0 ${isOnline && !isSimulatedOffline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></span>
+
               {pendingSyncCount > 0 && (
-                <span className="text-[10px] font-mono font-bold text-emerald-400 animate-pulse">{pendingSyncCount}</span>
+                <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-slate-700 text-emerald-300 text-[9px] font-mono font-bold rounded-full border border-slate-500 animate-pulse">
+                  {pendingSyncCount}
+                </span>
               )}
             </button>
 
-            {/* Admin Account Jumper - Icon + Select */}
+            {/* Admin Specialist / Account Jumper - Large Grey Icon (No Background) */}
             {isSuperAdmin && (
               <div 
-                title="Admin Account Jumper" 
-                className="flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 px-3 py-1.5 rounded-xl border border-emerald-400/40 hover:border-emerald-400/80 shadow-2xs hover:shadow-md hover:scale-105 transition-all duration-200 text-emerald-100 group"
+                title={`Admin Account Jumper: ${activeSpecialistId ? employees.find(e => e.id === activeSpecialistId)?.name : "System Admin"}`} 
+                className="relative flex items-center justify-center p-1.5 text-slate-300 hover:text-white hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
               >
-                <UserCog className="w-4 h-4 text-emerald-400 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-200 shrink-0" />
+                <UserCog className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 group-hover:text-white group-hover:rotate-12 transition-all duration-200 shrink-0" />
+                
+                {activeSpecialistId && (
+                  <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-slate-700 text-emerald-300 text-[8px] font-black uppercase rounded-md tracking-wider border border-slate-500 shadow-xs max-w-[60px] truncate">
+                    Jumped
+                  </span>
+                )}
+
                 <select
                   id="admin-specialist-jumper"
                   value={activeSpecialistId}
                   onChange={(e) => setActiveSpecialistId(e.target.value)}
-                  className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-100 border-none rounded-lg text-xs font-bold focus:outline-hidden cursor-pointer max-w-[130px] truncate p-1 transition-colors duration-200"
+                  aria-label="Admin Account Jumper"
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                 >
-                  <option value="" className="bg-slate-900 text-white">System Admin</option>
+                  <option value="" className="bg-slate-900 text-white">System Admin (Dr. Sarah Naisiae)</option>
                   {employees.map(emp => (
                     <option key={emp.id} value={emp.id} className="bg-slate-900 text-white">
-                      {emp.name} ({emp.role.split(" ")[0]})
+                      {emp.name} ({emp.role})
                     </option>
                   ))}
                 </select>
               </div>
             )}
 
-            {/* Active User Profile & Logout - Icon Centric */}
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-200 shadow-2xs hover:shadow-md hover:scale-105 ${currentHeaderStyle.pillClass} hover:bg-white/20 hover:border-white/40 group`}>
-              {activeUser.photoURL ? (
-                <img 
-                  src={activeUser.photoURL} 
-                  alt={activeUser.displayName || activeUser.email} 
-                  title={activeUser.displayName || activeUser.email}
-                  className="w-6 h-6 rounded-full border border-emerald-500/50 object-cover shrink-0 group-hover:scale-110 transition-transform duration-200" 
-                  referrerPolicy="no-referrer" 
-                />
-              ) : (
-                <div title={activeUser.displayName || activeUser.email} className="p-1 bg-emerald-600 text-white rounded-lg shrink-0 group-hover:bg-emerald-500 group-hover:scale-110 transition-all duration-200">
-                  <User className="w-3.5 h-3.5" />
-                </div>
-              )}
-              <span className="text-xs font-bold truncate max-w-[90px] group-hover:text-emerald-200 transition-colors duration-200" title={activeUser.displayName || activeUser.email}>
-                {activeUser.displayName ? activeUser.displayName.split(" ")[0] : "Admin"}
-              </span>
-
-              <button
-                onClick={handleLogout}
-                title="Sign out of system"
-                className="p-1 hover:bg-rose-500/30 text-rose-300 hover:text-rose-100 rounded-lg transition-all duration-200 cursor-pointer shrink-0 hover:scale-125 active:scale-90"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Header Background Color Palette Icon Dropdown */}
+            {/* Header Color Theme Customizer - Large Grey Icon (No Background) */}
             <div 
-              title="Header Color Theme"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-200 hover:shadow-md hover:scale-105 bg-emerald-900/80 text-emerald-100 border-emerald-500/40 hover:bg-white/20 group"
+              title="Header Theme Color Palette (Click to Change Color Scheme)"
+              className="relative flex items-center justify-center p-1.5 text-slate-300 hover:text-white hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
             >
-              <Palette className={`w-4 h-4 ${currentHeaderStyle.accentClass} shrink-0 group-hover:rotate-45 group-hover:scale-110 transition-transform duration-300`} />
+              <Palette className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 group-hover:text-white group-hover:rotate-45 transition-all duration-300 shrink-0" />
+              
               <select
                 id="header-bg-color-select"
                 value={headerBgStyle}
                 onChange={(e) => setHeaderBgStyle(e.target.value)}
-                className={`bg-transparent border-none text-xs font-extrabold focus:outline-hidden p-0 cursor-pointer ${currentHeaderStyle.textClass}`}
+                aria-label="Change Header Color Theme"
+                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
               >
                 {Object.entries(HEADER_BG_STYLES).map(([key, style]) => (
-                  <option key={key} value={key} className="bg-slate-900 text-white">
+                  <option key={key} value={key} className="bg-slate-900 text-white font-bold py-1">
                     {style.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Timestamp Clock Icon Badge - Big Bold Font */}
+            {/* Active User Profile & Logout - Large Grey Icons (No Background) */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowProfileModal(true)}
+                title={`Profile: ${activeUser.displayName || activeUser.email} (Click to edit credentials & avatar)`}
+                className="flex items-center cursor-pointer focus:outline-hidden hover:scale-110 active:scale-95 transition-transform text-slate-300 hover:text-white"
+              >
+                {resolvedPhotoURL ? (
+                  <img 
+                    src={resolvedPhotoURL} 
+                    alt={activeUser.displayName || activeUser.email} 
+                    className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl border border-slate-400/50 hover:border-white object-cover shrink-0 shadow-xs transition-colors" 
+                    referrerPolicy="no-referrer" 
+                  />
+                ) : (
+                  <User className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 hover:text-white" />
+                )}
+              </button>
+
+              <button
+                onClick={handleLogout}
+                title="Sign out of hospital terminal"
+                className="p-1.5 text-slate-300 hover:text-rose-300 rounded-xl transition-all duration-200 cursor-pointer shrink-0 hover:scale-110 active:scale-90"
+              >
+                <LogOut className="w-6 h-6 lg:w-7 lg:h-7" />
+              </button>
+            </div>
+
+            {/* Timestamp Clock Badge - Large Grey Clock Icon + Minimalist Time (No Background) */}
             <div 
-              title="System Clock"
-              className={`flex items-center gap-2.5 font-mono px-3.5 py-1.5 md:py-2 rounded-2xl border transition-all duration-200 hover:shadow-lg hover:scale-105 ${currentHeaderStyle.pillClass} hover:bg-white/20 hover:border-white/40 group cursor-default shadow-xs`}
+              title="Hospital Live Real-Time Clock (EAT)"
+              className="flex items-center gap-1.5 font-mono text-slate-300 px-1 py-1 cursor-default"
             >
-              <Clock className={`w-4 h-4 md:w-5 md:h-5 ${currentHeaderStyle.accentClass} animate-pulse group-hover:scale-110 shrink-0 transition-transform duration-200`} />
-              <div className="flex flex-col items-start leading-none">
-                <span className="text-base md:text-xl font-black tracking-wider font-mono group-hover:text-emerald-200 transition-colors duration-200">
-                  {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </span>
-                <span className="text-[8px] font-extrabold uppercase tracking-widest opacity-80 mt-0.5">Live Time (EAT)</span>
-              </div>
+              <Clock className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 animate-pulse shrink-0" />
+              <span className="text-base lg:text-lg font-black tracking-wider font-mono text-slate-200">
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
             </div>
           </div>
       </header>
@@ -1297,10 +1438,10 @@ export default function App() {
       )}
 
       {/* Main Body Layout with Sidebar + Scrollable Content */}
-      <div className="flex flex-1 overflow-hidden min-h-0 md:h-[calc(100vh-165px)]">
+      <div className="flex flex-1 overflow-hidden min-h-0 w-full">
 
-        {/* Clean Plain Left Sidebar Navigation with Bright Grey Background */}
-        <aside className="hidden md:flex w-72 bg-slate-100 text-slate-700 flex-col justify-between shrink-0 shadow-sm overflow-hidden z-20 border-r border-slate-200/80 relative group/sidebar">
+        {/* Clean Plain Left Sidebar Navigation with Bright Grey Background - Fixed / Independent Scroll */}
+        <aside className="hidden md:flex w-72 bg-slate-100 text-slate-700 flex-col justify-between shrink-0 shadow-sm overflow-y-auto z-20 border-r border-slate-200/80 relative group/sidebar">
           <div className="p-5 relative z-10">
             <div className="flex items-center justify-between mb-4 px-1">
               <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">FACILITY DEPARTMENTS</p>
@@ -1641,37 +1782,50 @@ export default function App() {
                 </div>
 
                 {/* 2. User Profile & Account Actions Card */}
-                <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 flex items-center justify-between gap-3 shadow-inner">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {activeUser.photoURL ? (
-                      <img
-                        src={activeUser.photoURL}
-                        alt="User Avatar"
-                        className="w-11 h-11 rounded-2xl border border-emerald-500/50 object-cover shrink-0"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
-                        <User className="w-6 h-6" />
+                <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 space-y-3 shadow-inner">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {resolvedPhotoURL ? (
+                        <img
+                          src={resolvedPhotoURL}
+                          alt="User Avatar"
+                          className="w-11 h-11 rounded-2xl border border-emerald-500/50 object-cover shrink-0"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
+                          <User className="w-6 h-6" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-white truncate">{activeUser.displayName || "Facility Admin"}</h4>
+                        <p className="text-[10px] text-slate-400 truncate font-mono">{activeUser.email}</p>
+                        <span className="inline-block px-2 py-0.5 mt-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-extrabold rounded-md uppercase">
+                          Tier {tenant.type}
+                        </span>
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <h4 className="text-xs font-bold text-white truncate">{activeUser.displayName || "Facility Admin"}</h4>
-                      <p className="text-[10px] text-slate-400 truncate font-mono">{activeUser.email}</p>
-                      <span className="inline-block px-2 py-0.5 mt-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-extrabold rounded-md uppercase">
-                        Tier {tenant.type}
-                      </span>
                     </div>
+                    <button
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="px-3.5 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
                   </div>
+
                   <button
                     onClick={() => {
                       setIsMobileMenuOpen(false);
-                      handleLogout();
+                      setShowProfileModal(true);
                     }}
-                    className="px-3.5 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer"
+                    className="w-full py-2 px-3 bg-slate-900 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/50 text-emerald-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                   >
-                    <LogOut className="w-4 h-4" />
-                    <span>Sign Out</span>
+                    <User className="w-3.5 h-3.5" />
+                    <span>Edit Profile, Photo & Credentials</span>
                   </button>
                 </div>
 
@@ -2094,6 +2248,32 @@ export default function App() {
       onShaVerified={(shaData) => {
         console.log("SHA Verified data:", shaData);
       }}
+    />
+
+    {/* Quick Hospital Logo Upload Modal */}
+    <LogoUploadModal
+      isOpen={showLogoModal}
+      onClose={() => setShowLogoModal(false)}
+      currentLogo={brandLogoUrl}
+      onSaveLogo={(url) => {
+        setBrandLogoUrl(url);
+        localStorage.setItem("platform_logo_url", url);
+      }}
+    />
+
+    {/* User Account Profile & Credentials Management Modal */}
+    <UserProfileModal
+      isOpen={showProfileModal}
+      onClose={() => setShowProfileModal(false)}
+      currentUser={{
+        email: activeUser?.email || "naisiaetext@gmail.com",
+        displayName: activeUser?.displayName || "Dr. Sarah Naisiae (Super Admin)",
+        photoURL: resolvedPhotoURL,
+        isSimulated: activeUser?.isSimulated
+      }}
+      employeeRecord={loggedInEmployee}
+      isSuperAdmin={isSuperAdmin}
+      onUpdateUserProfile={handleUpdateUserProfile}
     />
   </div>
   );

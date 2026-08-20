@@ -5,6 +5,7 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "fireb
 import KenyanIntegrationsShowcase from "./KenyanIntegrationsShowcase";
 import { runFullDatabaseDeduplication, checkDuplicateEmployee, DeduplicationReport } from "../lib/deduplicationService";
 import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "../constants/roles";
+import { bootstrapCloudFirestore, cleanSystemAndPurgeTestData, CleanSystemReport, CollectionCounts } from "../lib/dbInit";
 import { 
   ToggleLeft, 
   ToggleRight, 
@@ -37,7 +38,9 @@ import {
   Check,
   Lock,
   Eye,
-  CheckSquare
+  CheckSquare,
+  Upload,
+  Image as ImageIcon
 } from "lucide-react";
 
 const GOOGLE_FONTS = [
@@ -131,7 +134,8 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
     return localStorage.getItem("platform_font_size") || "base";
   });
 
-  const [logoUrlInput, setLogoUrlInput] = React.useState(() => localStorage.getItem("platform_logo_url") || "");
+  const DEFAULT_BRAND_LOGO = "https://i.pinimg.com/1200x/0d/21/0a/0d210ae7221bc218df223d59b16d2198.jpg";
+  const [logoUrlInput, setLogoUrlInput] = React.useState(() => localStorage.getItem("platform_logo_url") || DEFAULT_BRAND_LOGO);
   const [faviconUrlInput, setFaviconUrlInput] = React.useState(() => localStorage.getItem("platform_favicon_url") || "");
   const [customBrandNameInput, setCustomBrandNameInput] = React.useState(() => localStorage.getItem("platform_custom_brand_name") || "");
   const [selectedFont, setSelectedFont] = React.useState(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
@@ -156,16 +160,107 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   const [dedupReport, setDedupReport] = React.useState<DeduplicationReport | null>(null);
   const [dedupStatusMessage, setDedupStatusMessage] = React.useState<string | null>(null);
 
+  // Live Cloud Firestore Storage Counters
+  const [dbCounts, setDbCounts] = React.useState<CollectionCounts>({
+    patients: 0,
+    employees: 0,
+    system_tickets: 0,
+    queue: 0,
+    invoices: 0,
+    medications: 0,
+    payroll: 0
+  });
+  const [isBootstrappingDb, setIsBootstrappingDb] = React.useState(false);
+  const [dbSyncMessage, setDbSyncMessage] = React.useState<string | null>(null);
+
   React.useEffect(() => {
-    const unsub = onSnapshot(collection(db, "employees"), (snapshot) => {
+    const unsubEmployees = onSnapshot(collection(db, "employees"), (snapshot) => {
       const usersList: Employee[] = [];
       snapshot.forEach((doc) => {
         usersList.push({ id: doc.id, ...doc.data() } as Employee);
       });
       setSystemUsers(usersList);
+      setDbCounts((prev) => ({ ...prev, employees: snapshot.size }));
     });
-    return () => unsub();
+
+    const unsubPatients = onSnapshot(collection(db, "patients"), (snapshot) => {
+      setDbCounts((prev) => ({ ...prev, patients: snapshot.size }));
+    });
+
+    const unsubTickets = onSnapshot(collection(db, "system_tickets"), (snapshot) => {
+      setDbCounts((prev) => ({ ...prev, system_tickets: snapshot.size }));
+    });
+
+    const unsubQueue = onSnapshot(collection(db, "queue"), (snapshot) => {
+      setDbCounts((prev) => ({ ...prev, queue: snapshot.size }));
+    });
+
+    const unsubInvoices = onSnapshot(collection(db, "invoices"), (snapshot) => {
+      setDbCounts((prev) => ({ ...prev, invoices: snapshot.size }));
+    });
+
+    const unsubMeds = onSnapshot(collection(db, "medications"), (snapshot) => {
+      setDbCounts((prev) => ({ ...prev, medications: snapshot.size }));
+    });
+
+    const unsubPayroll = onSnapshot(collection(db, "payroll"), (snapshot) => {
+      setDbCounts((prev) => ({ ...prev, payroll: snapshot.size }));
+    });
+
+    return () => {
+      unsubEmployees();
+      unsubPatients();
+      unsubTickets();
+      unsubQueue();
+      unsubInvoices();
+      unsubMeds();
+      unsubPayroll();
+    };
   }, []);
+
+  const [isPurgingSystem, setIsPurgingSystem] = React.useState(false);
+  const [purgeReport, setPurgeReport] = React.useState<CleanSystemReport | null>(null);
+
+  const handlePurgeAndCleanSystem = async () => {
+    const confirmWipe = window.confirm(
+      "CONFIRM SYSTEM DATA WIPE:\n\nAre you sure you want to remove ALL test patients, tickets, queue encounters, invoices, pharmacy stocks, payroll, and TEST USER ACCOUNTS?\n\nOnly the Master Super Admin (naisiaetext@gmail.com) will be retained to allow fresh onboarding of real hospital users."
+    );
+    if (!confirmWipe) return;
+
+    setIsPurgingSystem(true);
+    setDbSyncMessage("Cleaning system database: Purging all dummy test records and test user accounts...");
+    try {
+      const report = await cleanSystemAndPurgeTestData();
+      setPurgeReport(report);
+      setDbSyncMessage(
+        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. Only Master Super Admin is active for fresh staff onboarding.`
+      );
+    } catch (err) {
+      console.error("Error wiping system:", err);
+      setDbSyncMessage("Failed to complete system purge. Please check Firestore connection.");
+    } finally {
+      setIsPurgingSystem(false);
+    }
+  };
+
+  const handleBootstrapDatabase = async () => {
+    setIsBootstrappingDb(true);
+    setDbSyncMessage("Verifying collections and checking database status...");
+    try {
+      const res = await bootstrapCloudFirestore();
+      setDbCounts(res.counts);
+      if (res.seeded) {
+        setDbSyncMessage("Database verified: Master Super Admin account confirmed and active for fresh onboarding.");
+      } else {
+        setDbSyncMessage("Database connection verified. Clean database is active and storing permanently in Cloud Firestore.");
+      }
+    } catch (err) {
+      console.error("Error bootstrapping database:", err);
+      setDbSyncMessage("Database synchronization error. Please check network connection.");
+    } finally {
+      setIsBootstrappingDb(false);
+    }
+  };
 
   const handleRunFullDeduplication = async () => {
     setIsDeduplicating(true);
@@ -783,8 +878,24 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                     return (
                       <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-3 font-semibold text-gray-900">
-                          <div>{u.name}</div>
-                          <div className="text-[10px] text-gray-400 font-mono">ID: {u.nationalId || u.id.slice(0, 8)}</div>
+                          <div className="flex items-center gap-2.5">
+                            {u.photoURL || u.avatarUrl ? (
+                              <img
+                                src={u.photoURL || u.avatarUrl}
+                                alt={u.name}
+                                className="w-8 h-8 rounded-xl object-cover border border-purple-200 shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-800 font-bold flex items-center justify-center text-xs shrink-0">
+                                {u.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <div>{u.name}</div>
+                              <div className="text-[10px] text-gray-400 font-mono">ID: {u.nationalId || u.id.slice(0, 8)}</div>
+                            </div>
+                          </div>
                         </td>
                         <td className="p-3 font-mono text-gray-700">{u.email}</td>
                         <td className="p-3">
@@ -938,7 +1049,116 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
         )}
       </div>
 
-      {/* 5. Advanced Features Management */}
+      {/* 5. Cloud Firestore Independent Database & Permanent Storage */}
+      <div className="pt-6 border-t border-gray-100 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <span>5. Cloud Firestore Independent Database & Permanent Storage</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider border border-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                  <span>Cloud Active</span>
+                </span>
+              </h3>
+              <p className="text-[11px] text-gray-500">All registered patients, medical staff, system tickets, queue encounters, invoices, and pharmacy stock persist permanently across all devices and sessions.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              id="btn-purge-clean-system"
+              onClick={handlePurgeAndCleanSystem}
+              disabled={isPurgingSystem}
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer ${
+                isPurgingSystem
+                  ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                  : "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20 active:scale-95"
+              }`}
+            >
+              <Trash2 className={`w-3.5 h-3.5 ${isPurgingSystem ? "animate-spin" : ""}`} />
+              <span>{isPurgingSystem ? "Purging System Data..." : "Clean System & Purge All Test Data"}</span>
+            </button>
+
+            <button
+              id="btn-sync-bootstrap-firestore"
+              onClick={handleBootstrapDatabase}
+              disabled={isBootstrappingDb}
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer ${
+                isBootstrappingDb
+                  ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 active:scale-95"
+              }`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isBootstrappingDb ? "animate-spin" : ""}`} />
+              <span>{isBootstrappingDb ? "Synchronizing Cloud..." : "Verify Clean Database Status"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Live Permanent Collection Counts Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Patients (EHR)</span>
+            <span className="text-xl font-black text-slate-800 block">{dbCounts.patients}</span>
+            <span className="text-[9px] text-emerald-600 font-bold flex items-center justify-center gap-0.5">
+              <Check className="w-2.5 h-2.5" /> Persistent
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Staff / Doctors</span>
+            <span className="text-xl font-black text-slate-800 block">{dbCounts.employees}</span>
+            <span className="text-[9px] text-emerald-600 font-bold flex items-center justify-center gap-0.5">
+              <Check className="w-2.5 h-2.5" /> Persistent
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">System Tickets</span>
+            <span className="text-xl font-black text-slate-800 block">{dbCounts.system_tickets}</span>
+            <span className="text-[9px] text-emerald-600 font-bold flex items-center justify-center gap-0.5">
+              <Check className="w-2.5 h-2.5" /> Persistent
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Live Queue</span>
+            <span className="text-xl font-black text-slate-800 block">{dbCounts.queue}</span>
+            <span className="text-[9px] text-emerald-600 font-bold flex items-center justify-center gap-0.5">
+              <Check className="w-2.5 h-2.5" /> Real-time
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Invoices & Bills</span>
+            <span className="text-xl font-black text-slate-800 block">{dbCounts.invoices}</span>
+            <span className="text-[9px] text-emerald-600 font-bold flex items-center justify-center gap-0.5">
+              <Check className="w-2.5 h-2.5" /> Permanent
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Pharmacy Stock</span>
+            <span className="text-xl font-black text-slate-800 block">{dbCounts.medications}</span>
+            <span className="text-[9px] text-emerald-600 font-bold flex items-center justify-center gap-0.5">
+              <Check className="w-2.5 h-2.5" /> Persistent
+            </span>
+          </div>
+        </div>
+
+        {dbSyncMessage && (
+          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <p className="font-semibold">{dbSyncMessage}</p>
+          </div>
+        )}
+      </div>
+
+      {/* 6. Advanced Features Management */}
       <div className="pt-6 border-t border-gray-100 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -1289,24 +1509,63 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Logo URL Input */}
+            {/* Logo URL and File Upload Input */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                <Link2 className="w-3.5 h-3.5 text-slate-400" />
-                <span>Custom Logo URL (Image Link)</span>
-              </label>
-              <input
-                type="url"
-                value={logoUrlInput}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setLogoUrlInput(val);
-                  updateBrandingSettings("platform_logo_url", val);
-                }}
-                placeholder="https://example.com/logo.png"
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-emerald-500"
-              />
-              <p className="text-[9px] text-gray-400">Provide an absolute image URL to replace the default hospital logo.</p>
+              <div className="flex items-center justify-between">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Link2 className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Custom Logo (Upload or URL)</span>
+                </label>
+                <label className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer bg-emerald-50 px-2 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">
+                  <Upload className="w-3 h-3" />
+                  <span>Browse Image File</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const res = ev.target?.result as string;
+                          if (res) {
+                            setLogoUrlInput(res);
+                            updateBrandingSettings("platform_logo_url", res);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={logoUrlInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setLogoUrlInput(val);
+                    updateBrandingSettings("platform_logo_url", val);
+                  }}
+                  placeholder="Paste URL or upload image file above"
+                  className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-emerald-500"
+                />
+                {logoUrlInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogoUrlInput("");
+                      updateBrandingSettings("platform_logo_url", "");
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl border border-rose-200"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <p className="text-[9px] text-gray-400">Click "Browse Image File" to upload from your computer or paste an image URL.</p>
             </div>
 
             {/* Favicon URL Input */}
