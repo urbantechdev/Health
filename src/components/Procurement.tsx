@@ -3,6 +3,7 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, addDoc, updateDoc, doc, getDocs, query, where } from "firebase/firestore";
 import { PurchaseRequisition, PurchaseOrder, Supplier, GoodsReceivedNote } from "../types";
 import { checkDuplicateSupplier } from "../lib/deduplicationService";
+import { toast, modernAlert } from "../lib/promptService";
 import { 
   ShoppingBag, 
   PackageCheck, 
@@ -142,7 +143,7 @@ export default function Procurement() {
 
   const handleGeneratePoFromReq = async (req: PurchaseRequisition) => {
     if (suppliers.length === 0) {
-      alert("Please register at least one supplier first.");
+      toast.warning("Please register at least one approved supplier before creating an LPO.", "Supplier Required");
       return;
     }
 
@@ -181,8 +182,10 @@ export default function Procurement() {
       await updateDoc(doc(db, "procurement_requisitions", req.id), { status: "ordered" });
       setShowPoModal(false);
       setSelectedReq(null);
+      toast.success(`Generated Local Purchase Order ${poNo} for ${sup.name}`, "LPO Issued");
     } catch (err) {
       console.error("Error generating LPO:", err);
+      toast.error("Failed to generate LPO order document.", "Order Error");
     }
   };
 
@@ -283,9 +286,13 @@ export default function Procurement() {
 
       setShowGrnModal(false);
       setSelectedPo(null);
-      alert(`GRN [${grnNo}] processed! Pharmacy & Lab stock inventory auto-updated with received quantities.`);
+      toast.success(
+        `GRN [${grnNo}] processed! Pharmacy & Lab stock inventory auto-updated with received quantities.`,
+        "Goods Received & Stock Updated"
+      );
     } catch (err) {
       console.error("Error processing GRN:", err);
+      toast.error("Failed to process Goods Received Note.", "GRN Error");
     }
   };
 

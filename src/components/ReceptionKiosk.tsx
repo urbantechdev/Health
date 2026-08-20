@@ -21,7 +21,9 @@ import {
 } from "lucide-react";
 import { Employee, MedicalRecord, SystemTicket, QueueTicket } from "../types";
 import { createAutoTicket, checkActivePatientEncounter, findPatientByNationalId, DuplicateEncounterCheck } from "../lib/ticketService";
+import { upsertUnifiedPatientRecord, findUnifiedPatient } from "../lib/patientSyncService";
 import { HOSPITAL_SPECIALISTS_DIRECTORY, SPECIALIST_CATEGORIES, SpecialistDefinition, getSpecialistByName } from "../constants/specialists";
+import { toast } from "../lib/promptService";
 
 interface ReceptionKioskProps {
   onTicketCreated: () => void;
@@ -161,7 +163,7 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
 
   const checkSHAEligibility = async () => {
     if (!nationalId) {
-      alert("Please scan or enter a National ID / Passport number first.");
+      toast.warning("Please scan or enter a National ID / Passport number first.", "ID Required");
       return;
     }
     setShaLoading(true);
@@ -176,9 +178,13 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       setShaStatus(data);
       if (data.eligible && data.patientName) {
         setPatientName(data.patientName);
+        toast.success(`SHA Active for ${data.patientName} (${data.shaId})`, "SHA Verified");
+      } else if (!data.eligible) {
+        toast.error(data.reason || "Patient is not currently active on SHA portal.", "SHA Inactive");
       }
     } catch (e) {
       console.error(e);
+      toast.error("Failed to connect to SHA eligibility verification portal.", "Connection Error");
     } finally {
       setShaLoading(false);
     }
@@ -189,6 +195,7 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
     setTimeout(() => {
       setBiometricsCaptured(true);
       setCapturing(false);
+      toast.success("Biometric fingerprint verification captured successfully.", "Biometrics Active");
     }, 2000);
   };
 
@@ -198,7 +205,7 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
     const cleanName = patientName.trim();
 
     if (!cleanName || !cleanId) {
-      alert("Please fill out patient name and scan/input ID.");
+      toast.warning("Please fill out patient name and scan/input ID.", "Incomplete Patient Information");
       return;
     }
 
@@ -295,13 +302,16 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
 
       const ticketNo = `${prefix}-${Math.floor(Math.random() * 900 + 100)}`;
 
-      // STEP 2: EHR Record Management (Prevent Duplicate Patient Document)
-      let resolvedPatientId = "";
-      const existingPatient = await findPatientByNationalId(cleanId);
-
-      const newVisit = {
-        id: `vst-${Date.now()}`,
-        date: new Date().toISOString().split("T")[0],
+      // STEP 2: Unified EHR Auto-Sync Engine (Creates or Updates Master Patient Profile)
+      const patientSyncResult = await upsertUnifiedPatientRecord({
+        patientName: cleanName,
+        nationalId: cleanId,
+        phone: phone.trim(),
+        age: parseInt(age) || 30,
+        gender,
+        bloodType,
+        shaEligible: shaStatus?.eligible ? "eligible" : "not_eligible",
+        shaId: shaStatus?.shaId || "",
         vitals: {
           temp: "36.8",
           bp: "120/80",
@@ -310,43 +320,12 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         },
         symptoms: issue.trim() || `Walk-in registration. Presenting for ${specialistDef ? specialistDef.name : service} assessment/consultation.`,
         diagnosis: specialistDef ? `Pending specialist review (${specialistDef.name})` : "Initial checkup pending clinical consultation",
-        prescriptions: [],
-        referrals: [],
-      };
+        currentDepartment: currentDept,
+        activeTicketNo: ticketNo,
+        sourceStation: "Reception Kiosk"
+      });
 
-      if (existingPatient) {
-        // Patient already exists in database -> DO NOT create duplicate record.
-        // Update existing record by appending the visit and updating latest contact info.
-        resolvedPatientId = existingPatient.id;
-        const updatedVisits = [...(existingPatient.visits || []), newVisit];
-        await updateDoc(doc(db, "patients", existingPatient.id), {
-          patientName: cleanName,
-          phone: phone.trim() || existingPatient.phone,
-          age: parseInt(age) || existingPatient.age || 30,
-          gender: gender || existingPatient.gender,
-          bloodType: bloodType || existingPatient.bloodType,
-          shaEligible: shaStatus?.eligible ? "eligible" : (existingPatient.shaEligible || "not_eligible"),
-          shaId: shaStatus?.shaId || existingPatient.shaId || "",
-          visits: updatedVisits,
-        });
-        console.log(`Updated existing patient EHR profile [${existingPatient.id}] with new visit.`);
-      } else {
-        // Brand new patient -> Create new document in `patients`
-        const newPatientData = {
-          patientName: cleanName,
-          nationalId: cleanId,
-          phone: phone.trim(),
-          age: parseInt(age) || 30,
-          gender,
-          bloodType,
-          shaEligible: shaStatus?.eligible ? "eligible" : "not_eligible",
-          shaId: shaStatus?.shaId || "",
-          visits: [newVisit],
-        };
-        const patientRef = await addDoc(collection(db, "patients"), newPatientData);
-        resolvedPatientId = patientRef.id;
-        console.log(`Created new patient EHR profile [${patientRef.id}].`);
-      }
+      const resolvedPatientId = patientSyncResult.patientId;
 
       // STEP 3: Create active Queue ticket in database
       const queueData = {

@@ -25,6 +25,7 @@ import MpesaPaymentModal from "./components/MpesaPaymentModal";
 import ShaVerificationModal from "./components/ShaVerificationModal";
 import LogoUploadModal from "./components/LogoUploadModal";
 import UserProfileModal from "./components/UserProfileModal";
+import { ModernPromptHost } from "./components/ModernPromptHost";
 import { bootstrapCloudFirestore } from "./lib/dbInit";
 
 import {
@@ -192,16 +193,38 @@ export const THEME_PALETTES: Record<string, { name: string; hex: string; colors:
 };
 
 const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClass: string; textClass: string; borderClass: string; pillClass: string; btnClass: string; accentClass: string; titleClass: string }> = {
+  "plain-yellow": {
+    name: "Plain Yellow (Hero)",
+    bgClass: "bg-yellow-400",
+    fillClass: "fill-yellow-400",
+    textClass: "text-slate-950",
+    borderClass: "border-yellow-400",
+    pillClass: "bg-yellow-500/80 text-slate-950 border-yellow-600/40 shadow-xs font-bold",
+    btnClass: "bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-bold border border-yellow-600/40 shadow-xs",
+    accentClass: "text-slate-950",
+    titleClass: "text-slate-950 font-black",
+  },
+  "gold-yellow": {
+    name: "Plain Yellow (Hero)",
+    bgClass: "bg-yellow-400",
+    fillClass: "fill-yellow-400",
+    textClass: "text-slate-950",
+    borderClass: "border-yellow-400",
+    pillClass: "bg-yellow-500/80 text-slate-950 border-yellow-600/40 shadow-xs font-bold",
+    btnClass: "bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-bold border border-yellow-600/40 shadow-xs",
+    accentClass: "text-slate-950",
+    titleClass: "text-slate-950 font-black",
+  },
   "solid-pink": {
-    name: "Solid Pink (Hero)",
-    bgClass: "bg-pink-600",
-    fillClass: "fill-pink-600",
-    textClass: "text-white",
-    borderClass: "border-pink-500",
-    pillClass: "bg-pink-700/80 backdrop-blur-md text-white border-pink-400/50 shadow-xs",
-    btnClass: "bg-pink-700 hover:bg-pink-800 text-white border border-pink-400/60 shadow-xs",
-    accentClass: "text-pink-200",
-    titleClass: "text-white",
+    name: "Plain Yellow (Hero)",
+    bgClass: "bg-yellow-400",
+    fillClass: "fill-yellow-400",
+    textClass: "text-slate-950",
+    borderClass: "border-yellow-400",
+    pillClass: "bg-yellow-500/80 text-slate-950 border-yellow-600/40 shadow-xs font-bold",
+    btnClass: "bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-bold border border-yellow-600/40 shadow-xs",
+    accentClass: "text-slate-950",
+    titleClass: "text-slate-950 font-black",
   },
   "sunset-orange": {
     name: "Sunset Orange & Green",
@@ -338,13 +361,13 @@ export default function App() {
 
   // Dynamic branding state values
   const DEFAULT_BRAND_LOGO = "https://i.pinimg.com/1200x/0d/21/0a/0d210ae7221bc218df223d59b16d2198.jpg";
-  const [headerBgStyle, setHeaderBgStyle] = useState<string>(() => localStorage.getItem("platform_header_bg") || "solid-pink");
+  const [headerBgStyle, setHeaderBgStyle] = useState<string>(() => localStorage.getItem("platform_header_bg") || "gold-yellow");
   const [brandLogoUrl, setBrandLogoUrl] = useState<string>(() => localStorage.getItem("platform_logo_url") || DEFAULT_BRAND_LOGO);
   const [brandFaviconUrl, setBrandFaviconUrl] = useState<string>(() => localStorage.getItem("platform_favicon_url") || "");
   const [brandCustomName, setBrandCustomName] = useState<string>(() => localStorage.getItem("platform_custom_brand_name") || "");
   const [brandFontId, setBrandFontId] = useState<string>(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
   const [brandThemeColor, setBrandThemeColor] = useState<string>(() => localStorage.getItem("platform_theme_color") || "emerald");
-  const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "yellow-blue-green");
+  const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "#eab308");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Global M-Pesa, SHA & Logo Modal states
@@ -426,29 +449,23 @@ export default function App() {
       });
     }
 
-    // Calculate and set Block Right Edge Gradient & Glow
+    // Calculate and set Block Right Edge Single Faded/Silent Color & Glow
     if (brandBlockEdgeColor === "transparent") {
       root.style.setProperty("--block-edge-width", "0px");
       root.style.setProperty("--block-edge-gradient", "transparent");
-      root.style.setProperty("--block-edge-glow", "transparent");
+      root.style.setProperty("--block-edge-opacity", "0");
+      root.style.setProperty("--block-edge-hover-opacity", "0");
     } else {
-      root.style.setProperty("--block-edge-width", "5px");
-      if (brandBlockEdgeColor === "yellow-blue-green" || !brandBlockEdgeColor) {
-        root.style.setProperty("--block-edge-gradient", "linear-gradient(180deg, #eab308 0%, #2563eb 50%, #10b981 100%)");
-        root.style.setProperty("--block-edge-glow", "rgba(37, 99, 235, 0.4)");
-      } else if (brandBlockEdgeColor === "yellow-blue-green-diag") {
-        root.style.setProperty("--block-edge-gradient", "linear-gradient(135deg, #facc15 0%, #2563eb 50%, #10b981 100%)");
-        root.style.setProperty("--block-edge-glow", "rgba(250, 204, 21, 0.4)");
-      } else if (brandBlockEdgeColor === "yellow-blue-green-soft") {
-        root.style.setProperty("--block-edge-gradient", "linear-gradient(180deg, #fde047 0%, #60a5fa 50%, #34d399 100%)");
-        root.style.setProperty("--block-edge-glow", "rgba(96, 165, 250, 0.4)");
+      root.style.setProperty("--block-edge-width", "3px");
+      root.style.setProperty("--block-edge-opacity", "0.3");
+      root.style.setProperty("--block-edge-hover-opacity", "0.5");
+      if (brandBlockEdgeColor === "yellow-blue-green" || brandBlockEdgeColor === "yellow-blue-green-diag" || brandBlockEdgeColor === "yellow-blue-green-soft" || brandBlockEdgeColor === "yellow" || brandBlockEdgeColor === "#eab308" || !brandBlockEdgeColor) {
+        root.style.setProperty("--block-edge-gradient", "#eab308");
       } else if (brandBlockEdgeColor === "theme") {
-        const themeHex = palette ? palette.colors["600"] : "#059669";
-        root.style.setProperty("--block-edge-gradient", `linear-gradient(180deg, ${themeHex}, ${themeHex})`);
-        root.style.setProperty("--block-edge-glow", "rgba(5, 150, 105, 0.35)");
+        const themeHex = palette ? palette.colors["600"] : "#eab308";
+        root.style.setProperty("--block-edge-gradient", themeHex);
       } else {
-        root.style.setProperty("--block-edge-gradient", `linear-gradient(180deg, ${brandBlockEdgeColor}, ${brandBlockEdgeColor})`);
-        root.style.setProperty("--block-edge-glow", "rgba(37, 99, 235, 0.35)");
+        root.style.setProperty("--block-edge-gradient", brandBlockEdgeColor);
       }
     }
 
@@ -1114,7 +1131,7 @@ export default function App() {
     );
   }
 
-  const currentHeaderStyle = HEADER_BG_STYLES[headerBgStyle] || HEADER_BG_STYLES["solid-pink"];
+  const currentHeaderStyle = HEADER_BG_STYLES[headerBgStyle] || HEADER_BG_STYLES["gold-yellow"] || HEADER_BG_STYLES["solid-pink"];
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-gray-100 flex flex-col text-gray-800 font-sans pb-16 md:pb-0">
@@ -1175,7 +1192,7 @@ export default function App() {
               title="Click to upload, change or configure Hospital Logo"
               className="flex items-center gap-3 sm:gap-4 group cursor-pointer min-w-0"
             >
-              <div className="relative p-1.5 sm:p-2 bg-white/20 text-white rounded-2xl shadow-lg border border-white/40 backdrop-blur-md flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:rotate-1 group-hover:bg-white/30 transition-all duration-300 overflow-hidden">
+              <div className="relative p-1.5 sm:p-2 bg-yellow-300 text-white rounded-2xl shadow-md border border-yellow-500 flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-yellow-200 transition-all duration-300 overflow-hidden">
                 {brandLogoUrl ? (
                   <img
                     src={brandLogoUrl}
@@ -1187,62 +1204,51 @@ export default function App() {
                   <Building2 className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-pulse group-hover:animate-none" />
                 )}
                 {/* Upload indicator pill on hover */}
-                <div className="absolute -bottom-1 -right-1 bg-pink-700 text-white p-1 rounded-full border border-white text-[8px] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs">
-                  <Sparkles className="w-2.5 h-2.5" />
+                <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-white p-1 rounded-full border border-yellow-600 text-[8px] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs">
+                  <Sparkles className="w-2.5 h-2.5 text-white" />
                 </div>
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <h1 className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-none font-sans truncate drop-shadow-md group-hover:text-pink-200 transition-colors duration-200`}>
+                  <h1 className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-none font-sans truncate drop-shadow-xs group-hover:text-slate-800 transition-colors duration-200`}>
                     {brandCustomName || tenant.name}
                   </h1>
-                  <span className="px-2 py-0.5 bg-white/20 hover:bg-white/30 text-white border border-white/40 text-[10px] sm:text-xs font-black rounded-lg uppercase tracking-wider shrink-0 transition-all duration-200 shadow-xs">
+                  <span className="px-2 py-0.5 bg-yellow-500/80 hover:bg-yellow-500 text-slate-950 border border-yellow-600/40 text-[10px] sm:text-xs font-black rounded-lg uppercase tracking-wider shrink-0 transition-all duration-200 shadow-xs">
                     Tier {tenant.type}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-pink-100 font-medium truncate hidden sm:block mt-0.5 tracking-wide">
-                  {tenant.county} County • SHA Portal • eTIMS Live
+                <p className="text-xs sm:text-sm text-slate-900 font-bold truncate hidden sm:block mt-0.5 tracking-wide">
+                  Hospital ERP Management System
                 </p>
               </div>
             </div>
 
-            {/* Mobile Header Quick Actions: Large Grey Icons with No Background */}
+            {/* Mobile Header Quick Actions: Large Icons with No Background */}
             <div className="md:hidden flex items-center gap-2.5 shrink-0">
-              {/* Compact Live Clock with Large Grey Icon */}
-              <div 
-                title="Live Time (EAT)"
-                className="flex items-center gap-1.5 px-1 py-1 text-slate-300 font-mono"
-              >
-                <Clock className="w-5 h-5 text-slate-300 animate-pulse shrink-0" />
-                <span className="text-xs font-black tracking-tight text-slate-200">
-                  {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-
-              {/* Mobile Offline/Online Indicator - Large Grey Icon (No Background) */}
+              {/* Mobile Offline/Online Indicator - Large White Icon (No Background) */}
               <button
                 onClick={toggleOfflineSimulation}
                 title={isSimulatedOffline ? "Offline Mode (Click to connect)" : "Online Mode (Connected)"}
-                className="p-1 text-slate-300 hover:text-white transition-all active:scale-90 cursor-pointer"
+                className="p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer"
               >
-                {isSimulatedOffline ? <WifiOff className="w-5 h-5 text-amber-400" /> : <Wifi className="w-5 h-5 text-slate-300" />}
+                {isSimulatedOffline ? <WifiOff className="w-5 h-5 text-white" /> : <Wifi className="w-5 h-5 text-white" />}
               </button>
 
-              {/* Mobile Profile & System Menu Button - Large Avatar / Icon (No Background) */}
+              {/* Mobile Profile & System Menu Button - Large Avatar / Bright Grey Icon (No Background) */}
               <button
                 onClick={() => setIsMobileMenuOpen(true)}
                 title={activeUser.displayName || activeUser.email}
-                className="p-0.5 text-slate-300 hover:text-white transition-all active:scale-90 cursor-pointer relative group"
+                className="p-0.5 text-slate-200 hover:text-white transition-all active:scale-90 cursor-pointer relative group"
               >
                 {resolvedPhotoURL ? (
                   <img 
                     src={resolvedPhotoURL} 
                     alt={activeUser.displayName || activeUser.email} 
-                    className="w-8 h-8 rounded-xl object-cover border border-slate-400/50 group-hover:border-white transition-colors" 
+                    className="w-8 h-8 rounded-xl object-cover border border-slate-200 group-hover:border-white transition-colors" 
                     referrerPolicy="no-referrer" 
                   />
                 ) : (
-                  <User className="w-6 h-6 text-slate-300 hover:text-white" />
+                  <User className="w-6 h-6 text-slate-200 hover:text-white" />
                 )}
                 {isSimulatedOffline && (
                   <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border border-slate-900 animate-pulse" />
@@ -1251,17 +1257,17 @@ export default function App() {
             </div>
           </div>
 
-          {/* Desktop Top Header Controls - Large Grey Icons without Background Color */}
+          {/* Desktop Top Header Controls - Large White Icons without Background Color */}
           <div className="hidden md:flex flex-wrap items-center gap-3 lg:gap-4 relative z-10">
-            {/* RBAC 11-Role Simulation Switcher - Large Grey Icon (No Background) */}
+            {/* RBAC 11-Role Simulation Switcher - Large White Icon (No Background) */}
             <div 
               title={`Simulate Role: ${currentSystemRole} (Click to switch 11 roles)`} 
-              className="relative flex items-center justify-center p-1.5 text-slate-300 hover:text-white hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
+              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
             >
-              <Shield className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 group-hover:text-white group-hover:rotate-6 transition-all duration-200 shrink-0" />
+              <Shield className="w-6 h-6 lg:w-7 lg:h-7 text-white group-hover:text-white/80 group-hover:rotate-6 transition-all duration-200 shrink-0" />
               
               {/* Subtle Mini Floating Dot / Badge */}
-              <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-slate-700 text-slate-200 text-[8px] font-black uppercase rounded-md tracking-wider border border-slate-500 shadow-xs max-w-[60px] truncate">
+              <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-yellow-500 text-slate-950 text-[8px] font-black uppercase rounded-md tracking-wider border border-yellow-600 shadow-xs max-w-[60px] truncate">
                 {currentSystemRole.split(" ")[0]}
               </span>
 
@@ -1288,38 +1294,38 @@ export default function App() {
               </select>
             </div>
 
-            {/* Offline/Online Status Indicator & Toggle - Large Grey Icon (No Background) */}
+            {/* Offline/Online Status Indicator & Toggle - Large White Icon (No Background) */}
             <button
               onClick={toggleOfflineSimulation}
               title={isSimulatedOffline ? "Offline Mode (Click to reconnect with Cloud Firestore)" : "Online Mode (Connected to Cloud Firestore)"}
-              className="relative flex items-center justify-center p-1.5 text-slate-300 hover:text-white hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
             >
               {isSimulatedOffline ? (
-                <WifiOff className="w-6 h-6 lg:w-7 lg:h-7 text-amber-400 transition-transform duration-200 hover:rotate-12" />
+                <WifiOff className="w-6 h-6 lg:w-7 lg:h-7 text-white transition-transform duration-200 hover:rotate-12" />
               ) : (
-                <Wifi className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 hover:text-white transition-transform duration-200" />
+                <Wifi className="w-6 h-6 lg:w-7 lg:h-7 text-white hover:text-white/80 transition-transform duration-200" />
               )}
               
               {/* Online Pulse Indicator Dot */}
-              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full shrink-0 ${isOnline && !isSimulatedOffline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></span>
+              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full shrink-0 ${isOnline && !isSimulatedOffline ? "bg-emerald-600 animate-pulse" : "bg-amber-600"}`}></span>
 
               {pendingSyncCount > 0 && (
-                <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-slate-700 text-emerald-300 text-[9px] font-mono font-bold rounded-full border border-slate-500 animate-pulse">
+                <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-yellow-500 text-slate-950 text-[9px] font-mono font-bold rounded-full border border-yellow-600 animate-pulse">
                   {pendingSyncCount}
                 </span>
               )}
             </button>
 
-            {/* Admin Specialist / Account Jumper - Large Grey Icon (No Background) */}
+            {/* Admin Specialist / Account Jumper - Large White Icon (No Background) */}
             {isSuperAdmin && (
               <div 
                 title={`Admin Account Jumper: ${activeSpecialistId ? employees.find(e => e.id === activeSpecialistId)?.name : "System Admin"}`} 
-                className="relative flex items-center justify-center p-1.5 text-slate-300 hover:text-white hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
+                className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
               >
-                <UserCog className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 group-hover:text-white group-hover:rotate-12 transition-all duration-200 shrink-0" />
+                <UserCog className="w-6 h-6 lg:w-7 lg:h-7 text-white group-hover:text-white/80 group-hover:rotate-12 transition-all duration-200 shrink-0" />
                 
                 {activeSpecialistId && (
-                  <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-slate-700 text-emerald-300 text-[8px] font-black uppercase rounded-md tracking-wider border border-slate-500 shadow-xs max-w-[60px] truncate">
+                  <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-yellow-500 text-slate-950 text-[8px] font-black uppercase rounded-md tracking-wider border border-yellow-600 shadow-xs max-w-[60px] truncate">
                     Jumped
                   </span>
                 )}
@@ -1341,12 +1347,12 @@ export default function App() {
               </div>
             )}
 
-            {/* Header Color Theme Customizer - Large Grey Icon (No Background) */}
+            {/* Header Color Theme Customizer - Large White Icon (No Background) */}
             <div 
               title="Header Theme Color Palette (Click to Change Color Scheme)"
-              className="relative flex items-center justify-center p-1.5 text-slate-300 hover:text-white hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
+              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
             >
-              <Palette className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 group-hover:text-white group-hover:rotate-45 transition-all duration-300 shrink-0" />
+              <Palette className="w-6 h-6 lg:w-7 lg:h-7 text-white group-hover:text-white/80 group-hover:rotate-45 transition-all duration-300 shrink-0" />
               
               <select
                 id="header-bg-color-select"
@@ -1363,53 +1369,67 @@ export default function App() {
               </select>
             </div>
 
-            {/* Active User Profile & Logout - Large Grey Icons (No Background) */}
+            {/* Active User Profile & Logout - Large Icons (No Background) */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowProfileModal(true)}
                 title={`Profile: ${activeUser.displayName || activeUser.email} (Click to edit credentials & avatar)`}
-                className="flex items-center cursor-pointer focus:outline-hidden hover:scale-110 active:scale-95 transition-transform text-slate-300 hover:text-white"
+                className="flex items-center cursor-pointer focus:outline-hidden hover:scale-110 active:scale-95 transition-transform text-gray-400 hover:text-gray-300"
               >
                 {resolvedPhotoURL ? (
                   <img 
                     src={resolvedPhotoURL} 
                     alt={activeUser.displayName || activeUser.email} 
-                    className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl border border-slate-400/50 hover:border-white object-cover shrink-0 shadow-xs transition-colors" 
+                    className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl border border-gray-400 hover:border-gray-300 object-cover shrink-0 shadow-xs transition-colors grayscale-25" 
                     referrerPolicy="no-referrer" 
                   />
                 ) : (
-                  <User className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 hover:text-white" />
+                  <User className="w-6 h-6 lg:w-7 lg:h-7 text-gray-400 hover:text-gray-300" />
                 )}
               </button>
 
               <button
                 onClick={handleLogout}
                 title="Sign out of hospital terminal"
-                className="p-1.5 text-slate-300 hover:text-rose-300 rounded-xl transition-all duration-200 cursor-pointer shrink-0 hover:scale-110 active:scale-90"
+                className="p-1.5 text-white hover:text-red-500 rounded-xl transition-all duration-200 cursor-pointer shrink-0 hover:scale-110 active:scale-90"
               >
-                <LogOut className="w-6 h-6 lg:w-7 lg:h-7" />
+                <LogOut className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
               </button>
-            </div>
-
-            {/* Timestamp Clock Badge - Large Grey Clock Icon + Minimalist Time (No Background) */}
-            <div 
-              title="Hospital Live Real-Time Clock (EAT)"
-              className="flex items-center gap-1.5 font-mono text-slate-300 px-1 py-1 cursor-default"
-            >
-              <Clock className="w-6 h-6 lg:w-7 lg:h-7 text-slate-300 animate-pulse shrink-0" />
-              <span className="text-base lg:text-lg font-black tracking-wider font-mono text-slate-200">
-                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
             </div>
           </div>
       </header>
 
-      {/* Single Wave Bottom Edge SVG Divider */}
+      {/* Single Wave Bottom Edge SVG Divider with Dynamic Moving Ambient Shadow Effect */}
       <div className="relative w-full overflow-hidden leading-none pointer-events-none -mt-0.5 z-20">
+        {/* Animated Moving Bottom Edge Shadow Beam */}
+        <motion.div
+          className="absolute -bottom-2 h-7 w-72 md:w-96 bg-gradient-to-r from-transparent via-yellow-500/40 md:via-yellow-400/50 to-transparent blur-md rounded-full pointer-events-none"
+          initial={{ left: "-30%" }}
+          animate={{ left: "110%" }}
+          transition={{
+            repeat: Infinity,
+            duration: 4.5,
+            ease: "easeInOut",
+          }}
+        />
+
+        {/* Pulsing Ambient Ambient Edge Shadow Glow */}
+        <motion.div
+          className="absolute -bottom-1 left-0 right-0 h-4 bg-gradient-to-b from-yellow-500/15 via-black/10 to-transparent blur-xs pointer-events-none"
+          animate={{
+            opacity: [0.35, 0.7, 0.35],
+          }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: "easeInOut",
+          }}
+        />
+
         <svg
           viewBox="0 0 1440 50"
           preserveAspectRatio="none"
-          className={`block w-full h-4 md:h-6 ${currentHeaderStyle.fillClass} transition-colors duration-300 drop-shadow-xs`}
+          className={`block w-full h-4 md:h-6 ${currentHeaderStyle.fillClass} transition-colors duration-300 drop-shadow-[0_4px_12px_rgba(234,179,8,0.25)]`}
         >
           <path d="M 0,0 C 360,55 1080,-15 1440,30 L 1440,0 L 0,0 Z" />
         </svg>
@@ -1540,12 +1560,23 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Corporate Clean Mobile Bottom Navigation Bar */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white border-t border-slate-200/80 shadow-[0_-2px_12px_rgba(0,0,0,0.04)] px-3 pb-[max(0.6rem,env(safe-area-inset-bottom))] pt-1.5 flex items-center justify-around">
+        {/* Corporate Clean Mobile Bottom Navigation Bar with Dynamic Shadow Motion Effect */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white border-t border-slate-200/80 shadow-[0_-4px_16px_rgba(234,179,8,0.18)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 flex items-center justify-around overflow-hidden">
+          {/* Animated Moving Top Edge Shadow Beam for Mobile */}
+          <motion.div
+            className="absolute top-0 h-4 w-48 bg-gradient-to-r from-transparent via-yellow-500/35 to-transparent blur-xs pointer-events-none"
+            initial={{ left: "-40%" }}
+            animate={{ left: "120%" }}
+            transition={{
+              repeat: Infinity,
+              duration: 4.5,
+              ease: "easeInOut",
+            }}
+          />
           {/* 1. Dashboard */}
           <button
             onClick={() => setActiveTab("dashboard")}
-            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
               activeTab === "dashboard"
                 ? "text-emerald-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
@@ -1559,7 +1590,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <span className="text-[10px] tracking-tight mt-1">Dashboard</span>
+            <span className="text-[11px] tracking-tight mt-1">Dashboard</span>
             <div className="h-1 flex items-center justify-center mt-0.5">
               {activeTab === "dashboard" && (
                 <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
@@ -1570,7 +1601,7 @@ export default function App() {
           {/* 2. Tickets */}
           <button
             onClick={() => setActiveTab("tickets")}
-            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
               activeTab === "tickets"
                 ? "text-emerald-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
@@ -1584,7 +1615,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <span className="text-[10px] tracking-tight mt-1">Tickets</span>
+            <span className="text-[11px] tracking-tight mt-1">Tickets</span>
             <div className="h-1 flex items-center justify-center mt-0.5">
               {activeTab === "tickets" && (
                 <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
@@ -1595,7 +1626,7 @@ export default function App() {
           {/* 3. Patient Journey / Care Flow */}
           <button
             onClick={() => setActiveTab("journey")}
-            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
               activeTab === "journey"
                 ? "text-emerald-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
@@ -1609,7 +1640,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <span className="text-[10px] tracking-tight mt-1">Journey</span>
+            <span className="text-[11px] tracking-tight mt-1">Journey</span>
             <div className="h-1 flex items-center justify-center mt-0.5">
               {activeTab === "journey" && (
                 <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
@@ -1620,7 +1651,7 @@ export default function App() {
           {/* 4. Doctor Desk / Queue */}
           <button
             onClick={() => setActiveTab(toggles.doctor ? "doctor" : "queue")}
-            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
               activeTab === "doctor" || activeTab === "queue"
                 ? "text-emerald-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
@@ -1634,7 +1665,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <span className="text-[10px] tracking-tight mt-1">Doctor</span>
+            <span className="text-[11px] tracking-tight mt-1">Doctor</span>
             <div className="h-1 flex items-center justify-center mt-0.5">
               {(activeTab === "doctor" || activeTab === "queue") && (
                 <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
@@ -1645,7 +1676,7 @@ export default function App() {
           {/* 5. Modules / All Departments */}
           <button
             onClick={() => setIsMobileMenuOpen(true)}
-            className={`flex-1 flex flex-col items-center justify-center py-1 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
               isMobileMenuOpen || !["dashboard", "tickets", "journey", "doctor", "queue"].includes(activeTab)
                 ? "text-emerald-700 font-bold"
                 : "text-slate-500 hover:text-slate-800 font-medium"
@@ -1661,7 +1692,7 @@ export default function App() {
                 <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
               ) : null}
             </div>
-            <span className="text-[10px] tracking-tight mt-1">Modules</span>
+            <span className="text-[11px] tracking-tight mt-1">Modules</span>
             <div className="h-1 flex items-center justify-center mt-0.5">
               {(!["dashboard", "tickets", "journey", "doctor", "queue"].includes(activeTab) || isMobileMenuOpen) && (
                 <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
@@ -1917,8 +1948,8 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Main Content Area - adjusted padding for bottom mobile nav spacing */}
-        <main className="flex-1 p-3 sm:p-5 md:p-8 pb-28 md:pb-8 overflow-y-auto w-full">
+        {/* Main Content Area - adjusted padding for increased bottom nav spacing */}
+        <main className="flex-1 p-3 sm:p-5 md:p-8 pb-36 md:pb-28 overflow-y-auto w-full">
           {/* Mobile-Only Active Department Banner */}
           <div className="md:hidden flex items-center justify-between bg-white border border-slate-200/90 px-3.5 py-2.5 rounded-2xl shadow-xs mb-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -2275,6 +2306,9 @@ export default function App() {
       isSuperAdmin={isSuperAdmin}
       onUpdateUserProfile={handleUpdateUserProfile}
     />
+
+    {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}
+    <ModernPromptHost />
   </div>
   );
 }

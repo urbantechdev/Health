@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
 import { Medication, QueueTicket, PrescriptionItem, Invoice, MedicalRecord } from "../types";
+import { findUnifiedPatient } from "../lib/patientSyncService";
 import { 
   ShoppingCart, 
   PackageOpen, 
@@ -25,6 +26,7 @@ import PrintDocument from "./PrintDocument";
 import { Html5Qrcode } from "html5-qrcode";
 import PharmacyInventoryModal from "./PharmacyInventoryModal";
 import PharmacyPOSCheckoutModal from "./PharmacyPOSCheckoutModal";
+import { toast, modernAlert } from "../lib/promptService";
 
 interface SmartPharmacyProps {
   toggles: any;
@@ -105,9 +107,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
         lastLoadedRef.current = selectedPrescriptionId;
         const ticket = activePrescriptions.find((p) => p.id === selectedPrescriptionId);
         if (ticket) {
-          const pat = patients.find(
-            (p) => p.patientName.toLowerCase() === ticket.patientName.toLowerCase() || p.nationalId === ticket.nationalId
-          );
+          const pat = findUnifiedPatient(ticket.patientId || ticket.nationalId || ticket.patientName, patients);
           const visit = pat && pat.visits.length > 0 ? pat.visits[pat.visits.length - 1] : null;
           if (visit && visit.prescriptions && visit.prescriptions.length > 0) {
             const newCart: { med: Medication; qty: number }[] = [];
@@ -138,7 +138,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
 
   const addToCart = (med: Medication, quantity: number = 1) => {
     if (med.quantity <= 0) {
-      alert("This medication is completely out of stock!");
+      toast.error("This medication is completely out of stock in dispensary.", "Stock Depleted");
       return;
     }
 
@@ -146,30 +146,36 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
     if (existingIndex > -1) {
       const currentCartQty = cart[existingIndex].qty;
       if (currentCartQty + quantity > med.quantity) {
-        alert(`Cannot add more. Only ${med.quantity} available in stock!`);
+        toast.warning(`Cannot add more. Only ${med.quantity} available in stock!`, "Stock Limit Reached");
         return;
       }
       const updatedCart = [...cart];
       updatedCart[existingIndex].qty += quantity;
       setCart(updatedCart);
+      toast.success(`Updated ${med.name} quantity to ${updatedCart[existingIndex].qty}`, "Item Added");
     } else {
       if (quantity > med.quantity) {
-        alert(`Cannot add. Only ${med.quantity} available in stock!`);
+        toast.warning(`Cannot add. Only ${med.quantity} available in stock!`, "Stock Limit Reached");
         return;
       }
       setCart([...cart, { med, qty: quantity }]);
+      toast.success(`${med.name} added to cart`, "Item Added");
     }
   };
 
   const removeFromCart = (index: number) => {
+    const item = cart[index];
     const updatedCart = [...cart];
     updatedCart.splice(index, 1);
     setCart(updatedCart);
+    if (item) {
+      toast.info(`Removed ${item.med.name} from POS cart`, "Cart Updated");
+    }
   };
 
   const handlePOSCheckout = async () => {
     if (cart.length === 0) {
-      alert("POS cart is empty.");
+      toast.warning("POS dispensing cart is empty. Please select medications.", "Empty Cart");
       return;
     }
 
@@ -257,7 +263,10 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
 
       setCart([]);
       setSelectedPrescriptionId(null);
-      alert(`Medications dispensed & signed with KRA eTIMS (${kraNo})! Invoice routed to central billing.`);
+      toast.success(
+        `Medications dispensed & signed with KRA eTIMS (${kraNo})! Invoice routed to central billing.`,
+        "Dispensing Complete"
+      );
       onDispenseCompleted();
     } catch (e) {
       console.error(e);
@@ -907,7 +916,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                                 updated[idx].qty += 1;
                                 setCart(updated);
                               } else {
-                                alert("Cannot add. Out of stock limits.");
+                                toast.warning(`Only ${item.med.quantity} available in stock limits.`, "Stock Limit");
                               }
                             }}
                             className="px-2 py-0.5 hover:bg-gray-100 font-bold cursor-pointer"

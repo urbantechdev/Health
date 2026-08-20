@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, getDocs, query, where, addDoc } from "firebase/firestore";
 import { QueueTicket, MedicalRecord, ClinicalVisit } from "../types";
+import { findUnifiedPatient, upsertUnifiedPatientRecord } from "../lib/patientSyncService";
 import { FlaskConical, Radio, ClipboardCheck, Send, RefreshCw, Eye, CheckCircle2, FlaskRound } from "lucide-react";
+import { toast } from "../lib/promptService";
 
 interface AncillaryLabsProps {
   toggles: any;
@@ -38,8 +40,8 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
       setPatients(pats);
     });
 
-    // Listen to active Laboratory queue
-    const qLab = query(collection(db, "queue"), where("currentDepartment", "==", "laboratory"), where("status", "==", "serving"));
+    // Listen to active Laboratory queue (both pending and serving)
+    const qLab = query(collection(db, "queue"), where("currentDepartment", "==", "laboratory"), where("status", "in", ["pending", "serving"]));
     const unsubLab = onSnapshot(qLab, (snapshot) => {
       const tickets: QueueTicket[] = [];
       snapshot.forEach((doc) => {
@@ -48,8 +50,8 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
       setLabTickets(tickets);
     });
 
-    // Listen to active Radiology queue
-    const qRad = query(collection(db, "queue"), where("currentDepartment", "==", "radiology"), where("status", "==", "serving"));
+    // Listen to active Radiology queue (both pending and serving)
+    const qRad = query(collection(db, "queue"), where("currentDepartment", "==", "radiology"), where("status", "in", ["pending", "serving"]));
     const unsubRad = onSnapshot(qRad, (snapshot) => {
       const tickets: QueueTicket[] = [];
       snapshot.forEach((doc) => {
@@ -68,45 +70,80 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
   const handleTransmitResults = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket) {
-      alert("Please select a diagnostic queue patient.");
+      toast.warning("Please select a diagnostic queue patient.", "Patient Required");
       return;
     }
 
     setSubmitting(true);
     try {
-      // 1. Locate patient EHR
-      const matchedPatient = patients.find(p => p.patientName.toLowerCase() === selectedTicket.patientName.toLowerCase());
+      // 1. Locate patient EHR using unified matcher
+      const matchedPatient = findUnifiedPatient(selectedTicket.patientId || selectedTicket.nationalId || selectedTicket.patientName, patients);
+      const type = selectedTicket.currentDepartment;
+      const compileResults = type === "laboratory" 
+        ? `HB: ${labValues.hemoglobin} g/dL, WBC: ${labValues.wbc} x10^9/L, Platelets: ${labValues.platelets} x10^9/L, Malaria: ${labValues.malaria}. Remarks: ${testResults}`
+        : `PACS ID: DICOM-RAD-${Date.now().toString().substring(6)} • Description: ${radiologyFinding}. Remarks: ${testResults}`;
+
       if (matchedPatient) {
         const patientRef = doc(db, "patients", matchedPatient.id);
         const updatedVisits = [...matchedPatient.visits];
 
-        // Update the last active referral results inside patient's EHR visits
         if (updatedVisits.length > 0) {
           const lastVisit = updatedVisits[updatedVisits.length - 1];
-          const type = selectedTicket.currentDepartment;
+          const referrals = lastVisit.referrals || [];
+          let foundRef = false;
 
-          if (lastVisit.referrals) {
-            lastVisit.referrals = lastVisit.referrals.map((ref) => {
-              if (ref.department === type) {
-                const compileResults = type === "laboratory" 
-                  ? `HB: ${labValues.hemoglobin} g/dL, WBC: ${labValues.wbc} x10^9/L, Platelets: ${labValues.platelets} x10^9/L, Malaria: ${labValues.malaria}. Remarks: ${testResults}`
-                  : `PACS ID: DICOM-RAD-${Date.now().toString().substring(6)} • Description: ${radiologyFinding}. Remarks: ${testResults}`;
+          const updatedReferrals = referrals.map((ref) => {
+            if (ref.department === type) {
+              foundRef = true;
+              return {
+                ...ref,
+                status: "completed" as const,
+                results: compileResults,
+              };
+            }
+            return ref;
+          });
 
-                return {
-                  ...ref,
-                  status: "completed",
-                  results: compileResults,
-                };
-              }
-              return ref;
+          if (!foundRef) {
+            updatedReferrals.push({
+              id: `ref-${Date.now()}`,
+              department: type,
+              testName: type === "laboratory" ? "Comprehensive Blood Panel & Malaria Smear" : "Radiology Chest / Abdominal X-Ray",
+              notes: testResults || "Diagnostic test completed",
+              status: "completed" as const,
+              results: compileResults,
             });
           }
-          await updateDoc(patientRef, { visits: updatedVisits });
+
+          lastVisit.referrals = updatedReferrals;
+          await updateDoc(patientRef, { visits: updatedVisits, updatedAt: new Date().toISOString() });
+        } else {
+          // Add first visit with referral results
+          await updateDoc(patientRef, {
+            visits: [{
+              id: `vst-${Date.now()}`,
+              date: new Date().toISOString().split("T")[0],
+              vitals: { temp: "37.0", bp: "120/80", pulse: "75", weight: "70" },
+              symptoms: "Diagnostic referral",
+              diagnosis: "Under evaluation",
+              prescriptions: [],
+              referrals: [{
+                id: `ref-${Date.now()}`,
+                department: type,
+                testName: type === "laboratory" ? "Lab Diagnostic Panel" : "Radiology Imaging",
+                notes: testResults,
+                status: "completed" as const,
+                results: compileResults,
+              }]
+            }],
+            updatedAt: new Date().toISOString()
+          });
         }
       }
 
       // 2. Automated routing: Return patient to doctor desk or proceed to billing
-      const newTicketNo = `GEN-${selectedTicket.ticketNo.split("-")[1]}`;
+      const baseNum = selectedTicket.ticketNo.includes("-") ? selectedTicket.ticketNo.split("-")[1] : Math.floor(100 + Math.random() * 900);
+      const newTicketNo = `GEN-${baseNum}`;
       await updateDoc(doc(db, "queue", selectedTicket.id), {
         currentDepartment: "doctor", // route back to Doctor's queue
         ticketNo: newTicketNo,
@@ -116,7 +153,10 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
 
       setSelectedTicket(null);
       setTestResults("");
-      alert("Diagnostic results electronically transmitted! Patient routed back to the Doctor Desk.");
+      toast.success(
+        "Diagnostic results electronically transmitted! Patient routed back to the Doctor Desk.",
+        "Results Dispatched"
+      );
       onActionCompleted();
     } catch (error) {
       console.error(error);

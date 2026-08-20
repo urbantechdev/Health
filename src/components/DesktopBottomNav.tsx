@@ -100,13 +100,38 @@ export default function DesktopBottomNav({
       id="desktop-bottom-nav"
       className="hidden md:flex flex-col fixed bottom-0 left-0 right-0 z-40 select-none pointer-events-none drop-shadow-2xl"
     >
-      {/* Prominent Visible Wave Top Edge Silhouette */}
-      <div className="w-full h-8 overflow-visible leading-none relative -mb-0.5 z-10">
+      {/* Prominent Visible Wave Top Edge Silhouette with Dynamic Shadow Motion Effect */}
+      <div className="w-full h-10 md:h-12 overflow-visible leading-none relative -mb-0.5 z-10">
+        {/* Animated Moving Wave Top Edge Shadow Beam */}
+        <motion.div
+          className="absolute -top-1.5 h-8 w-72 md:w-96 bg-gradient-to-r from-transparent via-yellow-500/40 md:via-yellow-400/50 to-transparent blur-md rounded-full pointer-events-none z-20"
+          initial={{ left: "-30%" }}
+          animate={{ left: "110%" }}
+          transition={{
+            repeat: Infinity,
+            duration: 4.5,
+            ease: "easeInOut",
+          }}
+        />
+
+        {/* Pulsing Ambient Top Edge Shadow Glow */}
+        <motion.div
+          className="absolute -top-1.5 left-0 right-0 h-5 bg-gradient-to-t from-yellow-500/15 via-black/10 to-transparent blur-xs pointer-events-none z-20"
+          animate={{
+            opacity: [0.35, 0.7, 0.35],
+          }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: "easeInOut",
+          }}
+        />
+
         <svg
           viewBox="0 0 1440 60"
           fill="none"
           preserveAspectRatio="none"
-          className="w-full h-full block"
+          className="w-full h-full block drop-shadow-[0_-4px_12px_rgba(234,179,8,0.25)]"
         >
           <defs>
             <linearGradient id="waveGlowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -135,7 +160,7 @@ export default function DesktopBottomNav({
       </div>
 
       {/* Main Bar Container with Generous Height, White Background, and Centered Buttons */}
-      <div className="bg-white border-t border-slate-100/80 shadow-[0_-12px_30px_-5px_rgba(0,0,0,0.12)] px-6 py-4 pointer-events-auto relative overflow-hidden">
+      <div className="bg-white border-t border-slate-100/80 shadow-[0_-12px_30px_-5px_rgba(0,0,0,0.12)] px-8 py-5 md:py-6 pointer-events-auto relative overflow-hidden">
         {/* Continuous Motion Gentle Shimmer Effect */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           {/* Ambient Sweeping Green Ray Beam */}
@@ -204,26 +229,42 @@ export default function DesktopBottomNav({
                   title={isAllowed ? `${item.label} (${item.shortcut})` : perm.reason}
                   className={`group relative px-3.5 lg:px-4 xl:px-4.5 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ease-out flex items-center gap-2.5 shrink-0 cursor-pointer overflow-hidden ${
                     isActive
-                      ? "bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-[0_0_24px_rgba(16,185,129,0.85)] border border-emerald-400 font-bold scale-105"
+                      ? "bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-500 text-white animate-green-shadow-motion border border-emerald-300 font-bold scale-105"
                       : isAllowed
-                      ? "text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/90 hover:border hover:border-emerald-400/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.45)] hover:-translate-y-0.5"
+                      ? "text-slate-700 hover:text-emerald-950 bg-slate-50/80 hover:bg-emerald-50/90 border border-slate-200/90 hover:border-emerald-400 animate-green-subtle-shadow hover:shadow-[0_0_24px_rgba(16,185,129,0.65)] hover:-translate-y-0.5"
                       : "text-slate-400/60 opacity-40 cursor-not-allowed"
                   }`}
                 >
-                  {/* Animated Green Background Light Glow on Hover */}
-                  {isAllowed && !isActive && (
-                    <span className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-400/25 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                  {/* Active Dynamic Green Shadow Motion Ambient Light Halo */}
+                  {isActive && (
+                    <>
+                      {/* Sweeping Green Motion Light Beam */}
+                      <span className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden rounded-xl">
+                        <span className="absolute -inset-full top-0 bottom-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-green-ray-sweep pointer-events-none" />
+                      </span>
+                      {/* Deep Green Inner Glow Halo */}
+                      <span className="absolute -inset-0.5 bg-gradient-to-r from-emerald-400 to-green-400 opacity-40 blur-[4px] rounded-xl pointer-events-none animate-pulse" />
+                    </>
                   )}
+
+                  {/* Animated Green Background Light Glow on Inactive Hover */}
                   {isAllowed && !isActive && (
-                    <span className="absolute -inset-1 bg-emerald-400/20 blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-xl" />
+                    <>
+                      <span className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-400/30 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                      <span className="absolute -inset-1 bg-emerald-400/35 blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-xl" />
+                      {/* Moving light beam on hover */}
+                      <span className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none">
+                        <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent animate-green-ray-sweep" />
+                      </span>
+                    </>
                   )}
 
                   <Icon className={`relative z-10 w-4.5 h-4.5 transition-transform duration-200 group-hover:scale-110 ${
-                    isActive ? "text-white" : isAllowed ? "text-slate-500 group-hover:text-emerald-700" : "text-slate-300"
+                    isActive ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" : isAllowed ? "text-slate-600 group-hover:text-emerald-700" : "text-slate-300"
                   }`} />
                   <span className="relative z-10 whitespace-nowrap">{item.label}</span>
                   {isActive && (
-                    <span className="relative z-10 w-1.5 h-1.5 rounded-full bg-white shadow-xs animate-pulse" />
+                    <span className="relative z-10 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_#ffffff] animate-ping" />
                   )}
                 </button>
               );
@@ -232,11 +273,15 @@ export default function DesktopBottomNav({
             {queueCount > 0 && (
               <button
                 onClick={() => setActiveTab("queue")}
-                className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-3 rounded-xl border border-emerald-300/80 shadow-[0_0_14px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.55)] text-xs font-bold transition-all cursor-pointer shrink-0 ml-1 hover:-translate-y-0.5"
+                className="relative flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-3 rounded-xl border border-emerald-300/80 animate-green-shadow-motion text-xs font-bold transition-all cursor-pointer shrink-0 ml-1 hover:-translate-y-0.5 overflow-hidden group"
                 title="View Live Waiting Queue"
               >
-                <Ticket className="w-4.5 h-4.5 text-emerald-600" />
-                <span className="whitespace-nowrap">{queueCount} Queue</span>
+                {/* Moving Green Light Sweep */}
+                <span className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                  <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent animate-green-ray-sweep" />
+                </span>
+                <Ticket className="relative z-10 w-4.5 h-4.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                <span className="relative z-10 whitespace-nowrap">{queueCount} Queue</span>
               </button>
             )}
           </div>
@@ -247,22 +292,30 @@ export default function DesktopBottomNav({
             <button
               id="desktop-bottom-nav-mpesa"
               onClick={onOpenMpesa}
-              className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white px-4 py-3 rounded-xl text-xs font-bold shadow-[0_0_20px_rgba(16,185,129,0.45)] hover:shadow-[0_0_28px_rgba(16,185,129,0.75)] border border-emerald-400/50 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5"
+              className="relative flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white px-4 py-3 rounded-xl text-xs font-bold animate-green-shadow-motion border border-emerald-300/60 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5 overflow-hidden"
               title="Trigger M-PESA STK Push Prompt"
             >
-              <Smartphone className="w-4.5 h-4.5 text-emerald-100 group-hover:scale-110 transition-transform" />
-              <span>M-PESA Pay</span>
+              {/* Sweeping Green Motion Light Beam */}
+              <span className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-white/35 to-transparent animate-green-ray-sweep" />
+              </span>
+              <Smartphone className="relative z-10 w-4.5 h-4.5 text-emerald-100 group-hover:scale-110 transition-transform drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
+              <span className="relative z-10">M-PESA Pay</span>
             </button>
 
             {/* Quick SHA Portal Launcher */}
             <button
               id="desktop-bottom-nav-sha"
               onClick={onOpenSha}
-              className="flex items-center gap-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white px-4 py-3 rounded-xl text-xs font-bold shadow-[0_0_18px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.7)] border border-emerald-500/40 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5"
+              className="relative flex items-center gap-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white px-4 py-3 rounded-xl text-xs font-bold animate-green-shadow-motion border border-emerald-400/50 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5 overflow-hidden"
               title="Open SHA / Taifa Care Biometric & Pre-Auth Portal"
             >
-              <ShieldCheck className="w-4.5 h-4.5 text-emerald-100 group-hover:scale-110 transition-transform" />
-              <span>SHA Portal</span>
+              {/* Sweeping Green Motion Light Beam */}
+              <span className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-emerald-300/35 to-transparent animate-green-ray-sweep" />
+              </span>
+              <ShieldCheck className="relative z-10 w-4.5 h-4.5 text-emerald-100 group-hover:scale-110 transition-transform drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
+              <span className="relative z-10">SHA Portal</span>
             </button>
           </div>
 

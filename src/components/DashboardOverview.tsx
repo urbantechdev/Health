@@ -134,14 +134,14 @@ export default function DashboardOverview({
   const renderHeroDigitalClock = () => (
     <div 
       title="Hospital Live Real-Time Clock (East Africa Time - EAT)"
-      className="flex items-center gap-2.5 bg-black/40 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 text-white shadow-xl shrink-0"
+      className="flex items-center gap-2.5 bg-yellow-300 px-4 py-2.5 rounded-2xl border border-yellow-500 text-black shadow-sm shrink-0"
     >
-      <Clock className="w-5 h-5 md:w-6 md:h-6 text-emerald-400 animate-pulse shrink-0" />
+      <Clock className="w-5 h-5 md:w-6 md:h-6 text-black animate-pulse shrink-0" />
       <div className="flex flex-col text-right leading-tight">
-        <span className="text-xl md:text-2xl font-black font-mono tracking-wider text-emerald-300 drop-shadow-xs">
+        <span className="text-xl md:text-2xl font-black font-mono tracking-wider text-black">
           {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </span>
-        <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-300 opacity-90">
+        <span className="text-[9px] font-black uppercase tracking-widest text-black">
           Live EAT Time
         </span>
       </div>
@@ -605,20 +605,20 @@ export default function DashboardOverview({
 
     return (
       <div className="space-y-6">
-        <div className="relative rounded-3xl overflow-hidden shadow-xl border border-rose-800/40 bg-gradient-to-r from-slate-950 via-rose-950 to-slate-900 text-white p-6 md:p-8">
+        <div className="relative rounded-3xl overflow-hidden shadow-md border border-yellow-400 bg-yellow-400 text-slate-950 p-6 md:p-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
             <div className="flex items-center gap-4">
-              <div className="p-3.5 bg-rose-900/60 backdrop-blur-md text-rose-300 border border-rose-700/60 rounded-2xl shadow-lg">
-                <Users className="w-8 h-8 text-rose-300" />
+              <div className="p-3.5 bg-yellow-300 text-slate-950 border border-yellow-500 rounded-2xl shadow-sm">
+                <Users className="w-8 h-8 text-slate-950" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold uppercase tracking-tight text-white">{userName}</h1>
-                  <span className="px-2.5 py-0.5 bg-rose-500/20 text-rose-200 border border-rose-500/40 rounded-full text-[9px] font-black uppercase tracking-widest">
+                  <h1 className="text-2xl font-bold uppercase tracking-tight text-slate-950">{userName}</h1>
+                  <span className="px-2.5 py-0.5 bg-yellow-300 text-slate-950 border border-yellow-500 rounded-full text-[9px] font-black uppercase tracking-widest">
                     HR & Talent Management
                   </span>
                 </div>
-                <p className="text-xs text-rose-200/80 font-medium mt-1">
+                <p className="text-xs text-slate-800 font-medium mt-1">
                   Employee Credentialing & Compensation Operations • {tenant.name}
                 </p>
               </div>
@@ -626,10 +626,10 @@ export default function DashboardOverview({
 
             <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
               {renderHeroDigitalClock()}
-              <div className="bg-rose-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-rose-700/50 text-right">
-                <span className="text-[9px] text-rose-300 font-black tracking-widest uppercase block">ACTIVE STAFF</span>
-                <span className="text-3xl font-black text-rose-200 font-mono">{employees.length}</span>
-                <p className="text-[10px] text-rose-300/90 font-semibold">Registered Workers</p>
+              <div className="bg-yellow-300 px-5 py-3 rounded-2xl border border-yellow-500 text-right">
+                <span className="text-[9px] text-slate-900 font-black tracking-widest uppercase block">ACTIVE STAFF</span>
+                <span className="text-3xl font-black text-slate-950 font-mono">{employees.length}</span>
+                <p className="text-[10px] text-slate-800 font-semibold">Registered Workers</p>
               </div>
             </div>
           </div>
@@ -780,35 +780,30 @@ export default function DashboardOverview({
   return (
     <div className="space-y-6">
       {/* Upper Brand Showcase */}
-      <div className="relative rounded-3xl overflow-hidden shadow-xl border border-pink-800/50 bg-gradient-to-r from-pink-950 via-rose-900 to-slate-950">
-        <div className="p-6 pb-12 relative text-white flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"></div>
-          
+      <div className="relative rounded-3xl overflow-hidden shadow-md border border-yellow-400 bg-yellow-400">
+        <div className="p-6 pb-12 relative text-slate-950 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-4 relative z-10">
-            <div className="p-3.5 bg-pink-900/60 backdrop-blur-md text-pink-300 border border-pink-700/60 rounded-2xl shadow-lg">
-              <Building2 className="w-8 h-8 text-pink-300" />
+            <div className="p-3.5 bg-yellow-300 text-slate-950 border border-yellow-500 rounded-2xl shadow-sm">
+              <Building2 className="w-8 h-8 text-slate-950" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold uppercase tracking-tight text-white font-comfortaa">{tenant.name}</h1>
-                <span className="px-2.5 py-0.5 bg-pink-500/20 text-pink-200 border border-pink-500/40 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xs">
+                <h1 className="text-2xl font-bold uppercase tracking-tight text-slate-950 font-comfortaa">{tenant.name}</h1>
+                <span className="px-2.5 py-0.5 bg-yellow-300 text-slate-950 border border-yellow-500 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xs">
                   {currentUserRole}
                 </span>
               </div>
-              <p className="text-xs text-pink-200/80 font-medium">
-                Registered Primary Care Facility • {tenant.county} County • SHA Portal Connected • KRA eTIMS v2.0
-              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 relative z-10 self-start md:self-auto bg-pink-950/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-pink-700/50 shadow-md">
-            <div className="text-right">
-              <span className="block text-[9px] text-pink-300 font-black tracking-widest uppercase">SYSTEM REVENUE</span>
-              <span className="text-3xl font-black text-rose-200 tracking-tight font-mono drop-shadow-sm">
+          <div className="flex flex-wrap items-center gap-3 relative z-10 self-start md:self-auto">
+            {renderHeroDigitalClock()}
+            <div className="bg-yellow-300 px-5 py-3 rounded-2xl border border-yellow-500 shadow-sm text-right">
+              <span className="block text-[9px] text-slate-900 font-black tracking-widest uppercase">SYSTEM REVENUE</span>
+              <span className="text-3xl font-black text-slate-950 tracking-tight font-mono">
                 {formatKES(totalRevenue)}
               </span>
-              <p className="text-[10px] text-pink-300/90 font-semibold">Total Cleared Revenue Today</p>
+              <p className="text-[10px] text-slate-800 font-bold">Total Cleared Revenue Today</p>
             </div>
           </div>
         </div>

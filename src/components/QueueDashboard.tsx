@@ -3,6 +3,7 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, updateDoc, doc, query, orderBy, deleteDoc, writeBatch } from "firebase/firestore";
 import { QueueTicket } from "../types";
 import { Monitor, Volume2, UserCheck, RefreshCw, Layers, ExternalLink, Play, Trash2, Trash } from "lucide-react";
+import { toast } from "../lib/promptService";
 
 interface QueueDashboardProps {
   toggles: any;
@@ -70,13 +71,13 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
   const handleClearCompleted = async () => {
     const targets = tickets.filter(t => t.status === "completed" || t.status === "skipped");
     if (targets.length === 0) {
-      alert("No completed or finished tickets in queue to clear.");
+      toast.info("No completed or finished tickets in queue to clear.", "Queue Clear");
       return;
     }
     const count = targets.length;
     // Optimistic removal
     setTickets(prev => prev.filter(t => t.status === "pending" || t.status === "serving"));
-    showToast(`Cleared ${count} completed tickets from queue.`);
+    toast.success(`Cleared ${count} completed tickets from active queue.`, "Queue Updated");
 
     try {
       const batch = writeBatch(db);

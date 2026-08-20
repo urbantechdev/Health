@@ -78,8 +78,8 @@
 
 /* 
  * Global Block & Card Enhancements
- * Adds a high-contrast dynamic accent edge on the right side of primary cards/blocks (Yellow, Blue, Green mix),
- * coupled with smooth lift animations and deep, strong, multi-layered shadows.
+ * Adds a subtle, faded, silent accent edge on the right side of primary cards/blocks,
+ * coupled with a soft warm yellow background shadow and interactive hover motion animation.
  */
 div[class*="rounded-2xl"]:not([role="tooltip"]):not(.no-orange-edge):not(.no-custom-edge),
 div[class*="rounded-3xl"]:not([role="tooltip"]):not(.no-orange-edge):not(.no-custom-edge),
@@ -88,9 +88,13 @@ div[class*="rounded-xl"].bg-slate-900:not(.no-orange-edge):not(.no-custom-edge),
 div[class*="rounded-xl"].bg-red-950:not(.no-orange-edge):not(.no-custom-edge) {
   position: relative !important;
   overflow: hidden !important;
-  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.18), 
-              0 8px 20px -6px rgba(0, 0, 0, 0.14) !important;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.3s ease !important;
+  box-shadow: 0 10px 25px -5px rgba(234, 179, 8, 0.12),
+              0 8px 16px -6px rgba(0, 0, 0, 0.05),
+              0 0 14px 2px rgba(250, 204, 21, 0.08) !important;
+  will-change: transform, box-shadow;
 }
 
 div[class*="rounded-2xl"]:not([role="tooltip"]):not(.no-orange-edge):not(.no-custom-edge)::after,
@@ -103,24 +107,35 @@ div[class*="rounded-xl"].bg-red-950:not(.no-orange-edge):not(.no-custom-edge)::a
   top: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  width: var(--block-edge-width, 5px) !important;
-  background: var(--block-edge-gradient, linear-gradient(180deg, #eab308 0%, #2563eb 50%, #10b981 100%)) !important;
+  width: var(--block-edge-width, 3px) !important;
+  background: var(--block-edge-gradient, rgba(234, 179, 8, 0.28)) !important;
+  opacity: var(--block-edge-opacity, 0.35) !important;
   pointer-events: none !important;
   z-index: 10 !important;
   border-top-right-radius: inherit !important;
   border-bottom-right-radius: inherit !important;
+  transition: opacity 0.3s ease, width 0.3s ease !important;
 }
 
-/* Hover effects with elegant lift transitions and strong ambient shadows */
+/* Hover effects: dynamic upward spring lift, micro-scale, and enriched yellow ambient shadow glow */
 div[class*="rounded-2xl"]:not([role="tooltip"]):not(.no-orange-edge):not(.no-custom-edge):hover,
 div[class*="rounded-3xl"]:not([role="tooltip"]):not(.no-orange-edge):not(.no-custom-edge):hover,
 div[class*="rounded-xl"].bg-white:not(.no-orange-edge):not(.no-custom-edge):hover,
 div[class*="rounded-xl"].bg-slate-900:not(.no-orange-edge):not(.no-custom-edge):hover,
 div[class*="rounded-xl"].bg-red-950:not(.no-orange-edge):not(.no-custom-edge):hover {
-  transform: translateY(-5px) !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.28), 
-              0 15px 30px -10px rgba(0, 0, 0, 0.2),
-              -2px 0 16px -2px var(--block-edge-glow, rgba(37, 99, 235, 0.35)) !important;
+  transform: translateY(-4px) scale(1.006) !important;
+  box-shadow: 0 20px 38px -8px rgba(234, 179, 8, 0.28),
+              0 12px 24px -6px rgba(0, 0, 0, 0.08),
+              0 0 26px 6px rgba(250, 204, 21, 0.22) !important;
+}
+
+div[class*="rounded-2xl"]:not([role="tooltip"]):not(.no-orange-edge):not(.no-custom-edge):hover::after,
+div[class*="rounded-3xl"]:not([role="tooltip"]):not(.no-orange-edge):not(.no-custom-edge):hover::after,
+div[class*="rounded-xl"].bg-white:not(.no-orange-edge):not(.no-custom-edge):hover::after,
+div[class*="rounded-xl"].bg-slate-900:not(.no-orange-edge):not(.no-custom-edge):hover::after,
+div[class*="rounded-xl"].bg-red-950:not(.no-orange-edge):not(.no-custom-edge):hover::after {
+  opacity: var(--block-edge-hover-opacity, 0.7) !important;
+  width: calc(var(--block-edge-width, 3px) + 1.5px) !important;
 }
 
 /* 
@@ -254,6 +269,56 @@ a[role="button"]:active,
   animation: auraPulse 6s ease-in-out infinite;
 }
 
+/* Green Shadow Motion Light Animation for Bottom Nav Buttons */
+@keyframes greenShadowPulse {
+  0% {
+    box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.4), 0 4px 14px rgba(5, 150, 105, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 28px 8px rgba(16, 185, 129, 0.85), 0 6px 22px rgba(5, 150, 105, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.4), 0 4px 14px rgba(5, 150, 105, 0.2);
+  }
+}
 
+.animate-green-shadow-motion {
+  animation: greenShadowPulse 2.2s ease-in-out infinite;
+}
 
+@keyframes greenSubtlePulse {
+  0% {
+    box-shadow: 0 0 6px 1px rgba(16, 185, 129, 0.15), 0 2px 6px rgba(0, 0, 0, 0.04);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(16, 185, 129, 0.45), 0 4px 12px rgba(16, 185, 129, 0.25);
+  }
+  100% {
+    box-shadow: 0 0 6px 1px rgba(16, 185, 129, 0.15), 0 2px 6px rgba(0, 0, 0, 0.04);
+  }
+}
 
+.animate-green-subtle-shadow {
+  animation: greenSubtlePulse 3s ease-in-out infinite;
+}
+
+@keyframes greenRaySweep {
+  0% {
+    transform: translateX(-120%) skewX(-20deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(240%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+.animate-green-ray-sweep {
+  animation: greenRaySweep 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

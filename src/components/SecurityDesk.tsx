@@ -3,6 +3,7 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, addDoc, updateDoc } from "firebase/firestore";
 import { SecurityLog } from "../types";
 import { createAutoTicket, closeAutoTicket } from "../lib/ticketService";
+import { toast, modernAlert, modernConfirm } from "../lib/promptService";
 import { 
   Shield, 
   UserCheck, 
@@ -65,12 +66,15 @@ export default function SecurityDesk() {
   const handleRegisterEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (lockdown) {
-      alert("ALERT: Facility is currently in LOCKDOWN. All entries are restricted until authorized by administration!");
+      modernAlert("Facility is currently in LOCKDOWN mode. All gate entries are restricted until authorized by senior administration.", {
+        title: "Facility In Lockdown",
+        type: "error",
+      });
       return;
     }
 
     if (!nameOrPlate) {
-      alert("Please fill in the Name or License Plate number.");
+      toast.warning("Please fill in the Name or License Plate number.", "Missing Entry Data");
       return;
     }
 
@@ -81,13 +85,19 @@ export default function SecurityDesk() {
     if (logType === "vehicle" && blacklistPlates.includes(nameOrPlate.toUpperCase())) {
       status = "flagged";
       customNotes = `[FLAGGED SUSPECT] ${notes || "Unscheduled suspect vehicle entry flagged by automated gate sensor"}`;
-      alert(`⚠️ SECURITY ALERT! Vehicle plate "${nameOrPlate.toUpperCase()}" is registered on the SUSPECT WATCHLIST! Notification sent to police.`);
+      modernAlert(`Vehicle plate "${nameOrPlate.toUpperCase()}" is registered on the SUSPECT WATCHLIST! Notification dispatched to internal guard posts & police.`, {
+        title: "Security Threat Alert",
+        type: "error",
+      });
     }
 
     if (logType === "individual" && blacklistIds.includes(idOrPhone)) {
       status = "denied";
       customNotes = `[DENIED GATE PASS] ${notes || "Individual ID matches blacklisted contractor profile"}`;
-      alert(`❌ ENTRY DENIED! National ID "${idOrPhone}" is blacklisted from this facility.`);
+      modernAlert(`National ID / Passport "${idOrPhone}" is blacklisted from this facility. Gate pass rejected.`, {
+        title: "Entry Denied",
+        type: "error",
+      });
     }
 
     try {
@@ -121,9 +131,13 @@ export default function SecurityDesk() {
       setNameOrPlate("");
       setIdOrPhone("");
       setNotes("");
-      alert(`${logType === "vehicle" ? "Vehicle" : "Individual"} Entry logged successfully at ${checkpoint}!`);
+      toast.success(
+        `${logType === "vehicle" ? "Vehicle" : "Individual"} entry registered at ${checkpoint}.`,
+        "Entry Logged"
+      );
     } catch (err) {
       console.error(err);
+      toast.error("Failed to save security gate record.", "Database Error");
     }
   };
 
@@ -159,9 +173,10 @@ export default function SecurityDesk() {
         );
       }
 
-      alert(`Checked out: ${originalLog.nameOrPlate} has successfully exited through ${originalLog.checkpoint}.`);
+      toast.info(`Checked out: ${originalLog.nameOrPlate} has departed via ${originalLog.checkpoint}.`, "Exit Verified");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to log exit timestamp.", "Exit Error");
     }
   };
 
@@ -227,9 +242,27 @@ export default function SecurityDesk() {
             {/* Lockdown Toggle Button */}
             <button
               id="btn-trigger-lockdown"
-              onClick={() => {
-                setLockdown(!lockdown);
-                alert(lockdown ? "Lockdown lifted. Normal gates access resumed." : "EMERGENCY: Facility locked down! All terminal entrance forms disabled.");
+              onClick={async () => {
+                if (!lockdown) {
+                  const confirmed = await modernConfirm(
+                    "Initiate immediate facility lockdown? All security checkpoints will restrict gates and disable routine entrance registration.",
+                    {
+                      title: "CONFIRM FACILITY LOCKDOWN",
+                      type: "error",
+                      destructive: true,
+                      confirmText: "Initiate Lockdown",
+                      cancelText: "Cancel",
+                      badgeText: "EMERGENCY PROTOCOL",
+                    }
+                  );
+                  if (confirmed) {
+                    setLockdown(true);
+                    toast.error("EMERGENCY: Facility locked down! All terminal entrance forms disabled.", "Lockdown Active");
+                  }
+                } else {
+                  setLockdown(false);
+                  toast.success("Lockdown lifted. Normal security gate access resumed.", "All Clear");
+                }
               }}
               className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md ${
                 lockdown 

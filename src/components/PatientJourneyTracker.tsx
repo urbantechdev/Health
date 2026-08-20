@@ -13,6 +13,7 @@ import {
   deleteDoc
 } from "firebase/firestore";
 import { QueueTicket, MedicalRecord, Invoice, Medication, ClinicalVisit } from "../types";
+import { findUnifiedPatient } from "../lib/patientSyncService";
 import {
   Activity,
   User,
@@ -119,11 +120,11 @@ export default function PatientJourneyTracker() {
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId);
   const matchedPatient = selectedTicket
-    ? patients.find((p) => p.patientName.toLowerCase() === selectedTicket.patientName.toLowerCase())
+    ? findUnifiedPatient(selectedTicket.patientId || selectedTicket.nationalId || selectedTicket.patientName, patients)
     : null;
   const matchedInvoice = selectedTicket
-    ? invoices.find((i) => i.patientName.toLowerCase() === selectedTicket.patientName.toLowerCase() && i.paymentStatus !== "paid") ||
-      invoices.filter((i) => i.patientName.toLowerCase() === selectedTicket.patientName.toLowerCase()).sort((a,b) => b.timestamp.localeCompare(a.timestamp))[0]
+    ? invoices.find((i) => (i.nationalId && selectedTicket.nationalId && i.nationalId === selectedTicket.nationalId) || i.patientName.toLowerCase() === selectedTicket.patientName.toLowerCase() && i.paymentStatus !== "paid") ||
+      invoices.filter((i) => (i.nationalId && selectedTicket.nationalId && i.nationalId === selectedTicket.nationalId) || i.patientName.toLowerCase() === selectedTicket.patientName.toLowerCase()).sort((a,b) => b.timestamp.localeCompare(a.timestamp))[0]
     : null;
 
   // Helpers for identifying patient level of service, departments and live icons

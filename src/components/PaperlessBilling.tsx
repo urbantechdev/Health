@@ -5,6 +5,7 @@ import { Invoice, QueueTicket } from "../types";
 import { CreditCard, ShieldCheck, QrCode, Smartphone, Users, FileText, CheckCircle, RefreshCw, Layers, Check, Printer } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { closeAutoTicket } from "../lib/ticketService";
+import { toast } from "../lib/promptService";
 
 interface PaperlessBillingProps {
   toggles: any;
@@ -96,11 +97,13 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
         const applicableSha = Math.min(selectedInvoice.total, 2500);
         setShaCover(applicableSha);
         setPatientOutPocket(Math.max(0, selectedInvoice.total - applicableSha - insuranceCover));
+        toast.success(`SHA Coverage Approved: KES ${applicableSha.toLocaleString()}`, "SHA Capitation Applied");
       } else {
-        alert(data.error || "Patient SHA status is inactive or defaulted.");
+        toast.error(data.error || "Patient SHA status is inactive or defaulted.", "SHA Inactive");
       }
     } catch (e) {
       console.error("SHA check error:", e);
+      toast.error("Failed to verify SHA coverage status.", "Network Error");
     } finally {
       setShaLoading(false);
     }
@@ -109,7 +112,7 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
   // Handle M-PESA STK Push & Polling
   const triggerMpesaStkPush = async () => {
     if (!mpesaPhone || patientOutPocket <= 0) {
-      alert("Please configure a valid phone number and out-of-pocket payment amount.");
+      toast.warning("Please configure a valid phone number and out-of-pocket payment amount.", "Payment Config Error");
       return;
     }
 
@@ -192,7 +195,9 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
       const data = await response.json();
       if (data.success) {
         setInsuranceAuth(data);
-        alert(`Insurance Authorized! Slade Auth Code: ${data.authCode}`);
+        toast.success(`Slade Auth Code: ${data.authCode}`, "Insurance Authorized");
+      } else {
+        toast.error("Insurance pre-authorization failed or was declined.", "Pre-Auth Declined");
       }
     } catch (e) {
       console.error(e);

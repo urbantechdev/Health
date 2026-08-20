@@ -110,19 +110,19 @@ export default function LogoUploadModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-pink-600 via-pink-500 to-rose-600 px-6 py-4 text-white flex items-center justify-between">
+        <div className="bg-yellow-400 px-6 py-4 text-slate-950 flex items-center justify-between border-b border-yellow-500">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md border border-white/30">
-              <ImageIcon className="w-5 h-5 text-white" />
+            <div className="p-2 bg-yellow-300 rounded-xl border border-yellow-500">
+              <ImageIcon className="w-5 h-5 text-slate-950" />
             </div>
             <div>
               <h3 className="text-base font-black tracking-tight uppercase">Upload Hospital Logo</h3>
-              <p className="text-xs text-pink-100 font-medium">Customize the HMIS header & system branding logo</p>
+              <p className="text-xs text-slate-800 font-medium">Customize the HMIS header & system branding logo</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 hover:bg-white/20 text-white rounded-xl transition-colors cursor-pointer"
+            className="p-1.5 hover:bg-yellow-300 text-slate-950 rounded-xl transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

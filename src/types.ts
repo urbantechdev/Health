@@ -68,6 +68,20 @@ export interface MedicalRecord {
   shaEligible: "eligible" | "not_eligible" | "unchecked";
   shaId?: string;
   visits: ClinicalVisit[];
+  latestVitals?: {
+    temp?: string;
+    bp?: string;
+    pulse?: string;
+    weight?: string;
+    recordedAt?: string;
+  };
+  latestDiagnosis?: string;
+  latestSymptoms?: string;
+  currentDepartment?: string;
+  activeTicketNo?: string;
+  allergies?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ClinicalVisit {

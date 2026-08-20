@@ -28,6 +28,7 @@ import {
   Ban
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import { toast, modernConfirm } from "../lib/promptService";
 
 export const DEPARTMENT_SPECIALTIES: Record<string, string[]> = {
   medical: [
@@ -309,13 +310,25 @@ export default function HumanResources() {
   };
 
   const handleTerminateEmployee = async (id: string) => {
-    if (!window.confirm("Are you sure you want to terminate this employee record?")) return;
+    const confirmed = await modernConfirm(
+      "Are you sure you want to terminate this employee record? Their system access and payroll generation will be suspended.",
+      {
+        title: "Terminate Employee Record",
+        type: "error",
+        destructive: true,
+        confirmText: "Terminate Record",
+        cancelText: "Keep Active",
+      }
+    );
+    if (!confirmed) return;
     try {
       await updateDoc(doc(db, "employees", id), {
         status: "terminated"
       });
+      toast.success("Employee status updated to Terminated.", "Record Updated");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to terminate employee record.", "Update Error");
     }
   };
 
@@ -362,12 +375,16 @@ export default function HumanResources() {
 
       if (count > 0) {
         await batch.commit();
-        alert(`Successfully generated ${count} pending payslips for ${payrollMonth}. Check the Payroll Console to release bank payouts.`);
+        toast.success(
+          `Generated ${count} pending payslips for ${payrollMonth}. Ready for bank disbursement.`,
+          "Payroll Generated"
+        );
       } else {
-        alert("Payroll has already been generated for all active employees for this period.");
+        toast.info("Payroll has already been generated for all active employees for this period.", "Up to Date");
       }
     } catch (err) {
       console.error("Payroll run failed:", err);
+      toast.error("Failed to run payroll batch. Please check database connectivity.", "Payroll Error");
     } finally {
       setRunningPayroll(false);
     }
@@ -391,9 +408,13 @@ export default function HumanResources() {
         supplier: "Internal Staff Disbursement"
       });
 
-      alert(`Salary for ${empName} released! Statutory taxes (PAYE, SHIF, Housing Levy) scheduled for transmission to KRA/MoH.`);
+      toast.success(
+        `Salary for ${empName} released! Statutory taxes (PAYE, SHIF, Housing Levy) scheduled for transmission.`,
+        "Salary Disbursed"
+      );
     } catch (err) {
       console.error(err);
+      toast.error(`Failed to process salary disbursement for ${empName}.`, "Transaction Error");
     }
   };
 
@@ -401,11 +422,21 @@ export default function HumanResources() {
   const handlePayAllSalaries = async () => {
     const pendings = payrollRecords.filter(r => r.month === payrollMonth && r.paymentStatus === "pending");
     if (pendings.length === 0) {
-      alert("No pending payrolls for this month.");
+      toast.info("No pending payrolls for this month.", "Payroll Current");
       return;
     }
 
-    if (!window.confirm(`Disburse bank transactions for all ${pendings.length} pending staff members? (KES ${pendings.reduce((sum, r) => sum + r.netPay, 0).toLocaleString()} net total)`)) {
+    const totalNet = pendings.reduce((sum, r) => sum + r.netPay, 0);
+    const confirmed = await modernConfirm(
+      `Disburse bank transactions for all ${pendings.length} pending staff members? Net total payout: KES ${totalNet.toLocaleString()}`,
+      {
+        title: "Disburse Batch Payroll",
+        type: "question",
+        confirmText: `Disburse KES ${totalNet.toLocaleString()}`,
+        cancelText: "Cancel",
+      }
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -413,9 +444,10 @@ export default function HumanResources() {
       for (const r of pendings) {
         await handlePaySalary(r.id, r.employeeName, r.baseSalary + r.allowances);
       }
-      alert("All pending salaries disbursed successfully.");
+      toast.success("All pending salaries disbursed successfully.", "Batch Payout Completed");
     } catch (err) {
       console.error(err);
+      toast.error("An error occurred while disbursing batch salaries.", "Batch Error");
     }
   };
 

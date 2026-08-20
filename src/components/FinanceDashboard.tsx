@@ -5,6 +5,7 @@ import { Invoice, ExpenseItem } from "../types";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Landmark, TrendingUp, TrendingDown, ClipboardList, Wallet, Plus, Trash2, ShieldAlert, Printer } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import { toast, modernConfirm } from "../lib/promptService";
 
 export default function FinanceDashboard() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -64,17 +65,31 @@ export default function FinanceDashboard() {
       setExpenseDesc("");
       setExpenseAmt("");
       setExpenseSupplier("");
-      alert("Operational expense successfully recorded!");
+      toast.success("Operational expense successfully recorded.", "Expense Logged");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to record expense.", "Database Error");
     }
   };
 
   const handleDeleteExpense = async (firestoreId: string) => {
+    const confirmed = await modernConfirm(
+      "Are you sure you want to remove this expense entry from financial records?",
+      {
+        title: "Delete Expense",
+        type: "error",
+        destructive: true,
+        confirmText: "Delete Entry",
+        cancelText: "Cancel",
+      }
+    );
+    if (!confirmed) return;
     try {
       await deleteDoc(doc(db, "expenses", firestoreId));
+      toast.success("Expense record removed.", "Record Deleted");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete expense record.", "Delete Error");
     }
   };
 

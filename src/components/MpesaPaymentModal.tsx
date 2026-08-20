@@ -16,6 +16,7 @@ import {
   Printer
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import { toast } from "../lib/promptService";
 
 interface MpesaPaymentModalProps {
   isOpen: boolean;
@@ -97,7 +98,7 @@ export default function MpesaPaymentModal({
   const handleInitiateSTK = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone || amount <= 0) {
-      alert("Please provide a valid phone number and payment amount.");
+      toast.warning("Please provide a valid phone number and payment amount.", "Invalid Payment Parameters");
       return;
     }
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, getDocs, query, where } from "firebase/firestore";
 import { MedicalRecord, Medication, QueueTicket, PrescriptionItem, ClinicalVisit } from "../types";
+import { upsertUnifiedPatientRecord, findUnifiedPatient } from "../lib/patientSyncService";
 import { 
   Heart, 
   Stethoscope, 
@@ -22,6 +23,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import { toast } from "../lib/promptService";
 
 interface DoctorsDeskProps {
   toggles: any;
@@ -201,8 +203,8 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
     };
   }, [activeSpecialistId]);
 
-  const patsFromDbAndQueue = (name: string) => {
-    return patients.find(p => p.patientName.toLowerCase() === name.toLowerCase());
+  const patsFromDbAndQueue = (nameOrId: string) => {
+    return findUnifiedPatient(nameOrId, patients);
   };
 
   // Accept and call incoming patient from popup prompt
@@ -338,34 +340,36 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
   const handleSaveConsultation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatientId || !selectedPatient) {
-      alert("No patient selected.");
+      toast.warning("Please select a patient from the queue or directory first.", "No Patient Selected");
       return;
     }
 
     setSubmitting(true);
     try {
-      // 1. Compile visit record
-      const newVisit: ClinicalVisit = {
-        id: `vst-${Date.now()}`,
-        date: new Date().toISOString().split("T")[0],
+      // 1. Compile visit record and auto-sync to Firestore master patient record
+      const compiledReferrals = draftReferrals.map((r, idx) => ({
+        id: `ref-${Date.now()}-${idx}`,
+        department: r.department,
+        testName: r.testName,
+        notes: r.notes,
+        status: "pending" as const,
+      }));
+
+      await upsertUnifiedPatientRecord({
+        id: selectedPatientId,
+        patientName: selectedPatient.patientName,
+        nationalId: selectedPatient.nationalId,
+        phone: selectedPatient.phone,
+        age: selectedPatient.age,
+        gender: selectedPatient.gender,
+        bloodType: selectedPatient.bloodType,
         vitals: { temp, bp, pulse, weight },
         symptoms,
         diagnosis,
         prescriptions: draftPrescriptions,
-        referrals: draftReferrals.map((r, idx) => ({
-          id: `ref-${Date.now()}-${idx}`,
-          department: r.department,
-          testName: r.testName,
-          notes: r.notes,
-          status: "pending",
-        })),
-      };
-
-      const updatedVisits = [...selectedPatient.visits, newVisit];
-
-      // 2. Update patient document in Firestore
-      const patientRef = doc(db, "patients", selectedPatientId);
-      await updateDoc(patientRef, { visits: updatedVisits });
+        referrals: compiledReferrals,
+        sourceStation: "Doctor's Desk"
+      });
 
       // 3. Automated Routing logic
       // Find active queue ticket for this patient (serving in doctor)
