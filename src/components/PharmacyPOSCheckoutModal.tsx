@@ -18,6 +18,7 @@ import {
   Check
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import { toast } from "../lib/promptService";
 
 interface PharmacyPOSCheckoutModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export default function PharmacyPOSCheckoutModal({
   // Handle M-Pesa STK Push
   const handleInitiateMpesaSTK = async () => {
     if (!mpesaPhone || mpesaPhone.length < 9) {
-      alert("Please provide a valid Safaricom M-Pesa mobile number.");
+      toast.warning("Please provide a valid Safaricom M-Pesa mobile number.", "Invalid Phone Number");
       return;
     }
 
@@ -127,11 +128,11 @@ export default function PharmacyPOSCheckoutModal({
   const handleFinalizePayment = async () => {
     if (cart.length === 0) return;
     if (paymentMethod === "M-Pesa" && stkStatus !== "confirmed") {
-      alert("Please complete the M-Pesa transaction confirmation first.");
+      toast.warning("Please complete the M-Pesa transaction confirmation on your phone first.", "Payment Confirmation Required");
       return;
     }
     if (paymentMethod === "Cash" && !isCashSufficient) {
-      alert("Tendered cash amount is less than total bill.");
+      toast.warning("Tendered cash amount is less than total bill.", "Insufficient Cash");
       return;
     }
 
@@ -203,7 +204,7 @@ export default function PharmacyPOSCheckoutModal({
       setCompletedInvoice(invoiceData);
     } catch (err) {
       console.error("Payment processing error:", err);
-      alert("An error occurred while finalizing pharmacy POS checkout.");
+      toast.error("An error occurred while finalizing pharmacy POS checkout. Please try again.", "POS Checkout Error");
     } finally {
       setProcessing(false);
     }

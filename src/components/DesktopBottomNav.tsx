@@ -17,7 +17,9 @@ import {
   Sparkles,
   Ticket,
   ChevronUp,
-  CircleDot
+  CircleDot,
+  ArrowRightLeft,
+  MessageSquare
 } from "lucide-react";
 import { SystemRole, getRoleConfig } from "../constants/roles";
 
@@ -29,6 +31,10 @@ interface DesktopBottomNavProps {
   isOffline?: boolean;
   onOpenMpesa: () => void;
   onOpenSha: () => void;
+  onOpenChat?: () => void;
+  unreadChatCount?: number;
+  onOpenTransfer?: () => void;
+  pendingTransfersCount?: number;
   checkTabPermission: (tabId: string) => { allowed: boolean; reason?: string };
 }
 
@@ -40,11 +46,15 @@ export default function DesktopBottomNav({
   isOffline = false,
   onOpenMpesa,
   onOpenSha,
+  onOpenChat,
+  unreadChatCount = 0,
+  onOpenTransfer,
+  pendingTransfersCount = 0,
   checkTabPermission,
 }: DesktopBottomNavProps) {
   const roleConfig = getRoleConfig(currentUserRole);
 
-  const navItems = [
+  const allNavItems = [
     {
       id: "dashboard",
       label: "Overview",
@@ -62,6 +72,12 @@ export default function DesktopBottomNav({
       label: "Doctor Desk",
       icon: Stethoscope,
       shortcut: "Alt+3",
+    },
+    {
+      id: "transfers",
+      label: "Transfers",
+      icon: ArrowRightLeft,
+      shortcut: "Alt+T",
     },
     {
       id: "diagnostics",
@@ -94,6 +110,12 @@ export default function DesktopBottomNav({
       shortcut: "Alt+8",
     },
   ];
+
+  // Strictly filter items: do not render unauthorized modules at all
+  const visibleNavItems = allNavItems.filter((item) => checkTabPermission(item.id).allowed);
+  const canAccessQueue = checkTabPermission("queue").allowed;
+  const canAccessMpesa = roleConfig.canDispenseAndCheckout || roleConfig.allowedModules.includes("billing") || roleConfig.allowedModules.includes("pharmacy") || roleConfig.allowedModules.includes("finance");
+  const canAccessSha = roleConfig.allowedModules.some(m => ["reception", "billing", "doctor", "admin"].includes(m));
 
   return (
     <div
@@ -159,8 +181,8 @@ export default function DesktopBottomNav({
         </svg>
       </div>
 
-      {/* Main Bar Container with Generous Height, White Background, and Centered Buttons */}
-      <div className="bg-white border-t border-slate-100/80 shadow-[0_-12px_30px_-5px_rgba(0,0,0,0.12)] px-8 py-5 md:py-6 pointer-events-auto relative overflow-hidden">
+      {/* Main Bar Container with Balanced Height, White Background, and Centered Buttons */}
+      <div className="bg-white border-t border-slate-100/80 shadow-[0_-12px_30px_-5px_rgba(0,0,0,0.12)] px-3 lg:px-6 xl:px-8 py-3 lg:py-3.5 xl:py-4 pointer-events-auto relative overflow-hidden">
         {/* Continuous Motion Gentle Shimmer Effect */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           {/* Ambient Sweeping Green Ray Beam */}
@@ -206,14 +228,12 @@ export default function DesktopBottomNav({
           />
         </div>
 
-        <div className="w-full flex items-center justify-center gap-3.5 lg:gap-6 relative z-10">
+        <div className="w-full flex items-center justify-between xl:justify-center gap-2 lg:gap-4 xl:gap-6 relative z-10 overflow-x-auto no-scrollbar">
           
           {/* Center-aligned Navigation Module Switcher Tabs positioned closer to action buttons */}
-          <div className="flex items-center justify-center gap-2 xl:gap-3 py-0.5">
-            {navItems.map((item) => {
+          <div className="flex items-center gap-1.5 lg:gap-2 xl:gap-2.5 py-0.5 shrink-0 overflow-x-auto no-scrollbar">
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
-              const perm = checkTabPermission(item.id);
-              const isAllowed = perm.allowed;
               const isActive = activeTab === item.id;
 
               return (
@@ -221,18 +241,13 @@ export default function DesktopBottomNav({
                   key={item.id}
                   id={`desktop-bottom-nav-${item.id}`}
                   onClick={() => {
-                    if (isAllowed) {
-                      setActiveTab(item.id);
-                    }
+                    setActiveTab(item.id);
                   }}
-                  disabled={!isAllowed}
-                  title={isAllowed ? `${item.label} (${item.shortcut})` : perm.reason}
-                  className={`group relative px-3.5 lg:px-4 xl:px-4.5 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ease-out flex items-center gap-2.5 shrink-0 cursor-pointer overflow-hidden ${
+                  title={`${item.label} (${item.shortcut})`}
+                  className={`group relative px-2.5 lg:px-3.5 xl:px-4 py-2 lg:py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ease-out flex items-center gap-1.5 lg:gap-2 shrink-0 cursor-pointer overflow-hidden ${
                     isActive
                       ? "bg-gradient-to-r from-emerald-600 via-emerald-500 to-green-500 text-white animate-green-shadow-motion border border-emerald-300 font-bold scale-105"
-                      : isAllowed
-                      ? "text-slate-700 hover:text-emerald-950 bg-slate-50/80 hover:bg-emerald-50/90 border border-slate-200/90 hover:border-emerald-400 animate-green-subtle-shadow hover:shadow-[0_0_24px_rgba(16,185,129,0.65)] hover:-translate-y-0.5"
-                      : "text-slate-400/60 opacity-40 cursor-not-allowed"
+                      : "text-slate-700 hover:text-emerald-950 bg-slate-50/80 hover:bg-emerald-50/90 border border-slate-200/90 hover:border-emerald-400 animate-green-subtle-shadow hover:shadow-[0_0_24px_rgba(16,185,129,0.65)] hover:-translate-y-0.5"
                   }`}
                 >
                   {/* Active Dynamic Green Shadow Motion Ambient Light Halo */}
@@ -248,7 +263,7 @@ export default function DesktopBottomNav({
                   )}
 
                   {/* Animated Green Background Light Glow on Inactive Hover */}
-                  {isAllowed && !isActive && (
+                  {!isActive && (
                     <>
                       <span className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-400/30 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                       <span className="absolute -inset-1 bg-emerald-400/35 blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-xl" />
@@ -260,7 +275,7 @@ export default function DesktopBottomNav({
                   )}
 
                   <Icon className={`relative z-10 w-4.5 h-4.5 transition-transform duration-200 group-hover:scale-110 ${
-                    isActive ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" : isAllowed ? "text-slate-600 group-hover:text-emerald-700" : "text-slate-300"
+                    isActive ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" : "text-slate-600 group-hover:text-emerald-700"
                   }`} />
                   <span className="relative z-10 whitespace-nowrap">{item.label}</span>
                   {isActive && (
@@ -270,7 +285,7 @@ export default function DesktopBottomNav({
               );
             })}
 
-            {queueCount > 0 && (
+            {canAccessQueue && queueCount > 0 && (
               <button
                 onClick={() => setActiveTab("queue")}
                 className="relative flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3.5 py-3 rounded-xl border border-emerald-300/80 animate-green-shadow-motion text-xs font-bold transition-all cursor-pointer shrink-0 ml-1 hover:-translate-y-0.5 overflow-hidden group"
@@ -286,37 +301,64 @@ export default function DesktopBottomNav({
             )}
           </div>
 
-          {/* Far Right Action Buttons (SHA & M-PESA Trigger Hub) positioned smoothly next to the centered buttons */}
+          {/* Far Right Action Buttons (Chat Inbox, Referrals, SHA & M-PESA Trigger Hub) */}
           <div className="flex items-center gap-2.5 shrink-0 pl-3.5 border-l border-slate-200 ml-2">
+            {/* Quick Internal Chat / Role Inbox Launcher */}
+            {onOpenChat && (
+              <button
+                id="desktop-bottom-nav-chat"
+                onClick={onOpenChat}
+                className="relative flex items-center gap-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white px-3.5 py-3 rounded-xl text-xs font-bold animate-green-shadow-motion border border-purple-400/50 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5 overflow-hidden"
+                title="Open Internal Role Chat & Notification Inbox"
+              >
+                <span className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                  <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-green-ray-sweep" />
+                </span>
+                <div className="relative z-10 flex items-center">
+                  <MessageSquare className="w-4.5 h-4.5 text-purple-200 group-hover:scale-110 transition-transform" />
+                  {unreadChatCount > 0 && (
+                    <span className="absolute -top-1 -right-1.5 px-1.5 py-0.2 bg-rose-500 text-white text-[9px] font-black rounded-full ring-1 ring-white animate-pulse">
+                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                    </span>
+                  )}
+                </div>
+                <span className="relative z-10">Chat Inbox</span>
+              </button>
+            )}
+
             {/* Quick M-Pesa STK Launcher */}
-            <button
-              id="desktop-bottom-nav-mpesa"
-              onClick={onOpenMpesa}
-              className="relative flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white px-4 py-3 rounded-xl text-xs font-bold animate-green-shadow-motion border border-emerald-300/60 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5 overflow-hidden"
-              title="Trigger M-PESA STK Push Prompt"
-            >
-              {/* Sweeping Green Motion Light Beam */}
-              <span className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
-                <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-white/35 to-transparent animate-green-ray-sweep" />
-              </span>
-              <Smartphone className="relative z-10 w-4.5 h-4.5 text-emerald-100 group-hover:scale-110 transition-transform drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
-              <span className="relative z-10">M-PESA Pay</span>
-            </button>
+            {canAccessMpesa && (
+              <button
+                id="desktop-bottom-nav-mpesa"
+                onClick={onOpenMpesa}
+                className="relative flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white px-4 py-3 rounded-xl text-xs font-bold animate-green-shadow-motion border border-emerald-300/60 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5 overflow-hidden"
+                title="Trigger M-PESA STK Push Prompt"
+              >
+                {/* Sweeping Green Motion Light Beam */}
+                <span className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                  <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-white/35 to-transparent animate-green-ray-sweep" />
+                </span>
+                <Smartphone className="relative z-10 w-4.5 h-4.5 text-emerald-100 group-hover:scale-110 transition-transform drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
+                <span className="relative z-10">M-PESA Pay</span>
+              </button>
+            )}
 
             {/* Quick SHA Portal Launcher */}
-            <button
-              id="desktop-bottom-nav-sha"
-              onClick={onOpenSha}
-              className="relative flex items-center gap-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white px-4 py-3 rounded-xl text-xs font-bold animate-green-shadow-motion border border-emerald-400/50 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5 overflow-hidden"
-              title="Open SHA / Taifa Care Biometric & Pre-Auth Portal"
-            >
-              {/* Sweeping Green Motion Light Beam */}
-              <span className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
-                <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-emerald-300/35 to-transparent animate-green-ray-sweep" />
-              </span>
-              <ShieldCheck className="relative z-10 w-4.5 h-4.5 text-emerald-100 group-hover:scale-110 transition-transform drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
-              <span className="relative z-10">SHA Portal</span>
-            </button>
+            {canAccessSha && (
+              <button
+                id="desktop-bottom-nav-sha"
+                onClick={onOpenSha}
+                className="relative flex items-center gap-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white px-4 py-3 rounded-xl text-xs font-bold animate-green-shadow-motion border border-emerald-400/50 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5 overflow-hidden"
+                title="Open SHA / Taifa Care Biometric & Pre-Auth Portal"
+              >
+                {/* Sweeping Green Motion Light Beam */}
+                <span className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                  <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-emerald-300/35 to-transparent animate-green-ray-sweep" />
+                </span>
+                <ShieldCheck className="relative z-10 w-4.5 h-4.5 text-emerald-100 group-hover:scale-110 transition-transform drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]" />
+                <span className="relative z-10">SHA Portal</span>
+              </button>
+            )}
           </div>
 
         </div>

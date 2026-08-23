@@ -25,6 +25,10 @@ import MpesaPaymentModal from "./components/MpesaPaymentModal";
 import ShaVerificationModal from "./components/ShaVerificationModal";
 import LogoUploadModal from "./components/LogoUploadModal";
 import UserProfileModal from "./components/UserProfileModal";
+import InternalChatModal from "./components/InternalChatModal";
+import IncomingMessagePromptListener from "./components/IncomingMessagePromptListener";
+import PatientTransferModal from "./components/PatientTransferModal";
+import TransfersHub from "./components/TransfersHub";
 import { ModernPromptHost } from "./components/ModernPromptHost";
 import { bootstrapCloudFirestore } from "./lib/dbInit";
 
@@ -72,7 +76,10 @@ import {
   DollarSign,
   Menu,
   LayoutGrid,
-  ChevronRight
+  ChevronRight,
+  MessageSquare,
+  ArrowRightLeft,
+  Inbox
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -513,6 +520,43 @@ export default function App() {
     };
   }, []);
 
+  // Auto-fit screen resolution detection: ensures original platform design auto-fits any monitor/laptop screen (unless mobile/tablet)
+  const [isMobileOrTablet, setIsMobileOrTablet] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const isNarrow = window.innerWidth < 1024;
+    const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 1;
+    const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+      navigator.userAgent.toLowerCase()
+    );
+    return isNarrow || (isTouch && isMobileUA && window.innerWidth < 1024);
+  });
+
+  const [screenResolution, setScreenResolution] = useState<{ width: number; height: number }>({
+    width: typeof window !== "undefined" ? window.innerWidth : 1440,
+    height: typeof window !== "undefined" ? window.innerHeight : 900
+  });
+
+  useEffect(() => {
+    const handleScreenResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      setScreenResolution({ width: w, height: h });
+      const isNarrow = w < 1024;
+      const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 1;
+      const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+        navigator.userAgent.toLowerCase()
+      );
+      setIsMobileOrTablet(isNarrow || (isTouch && isMobileUA && w < 1024));
+    };
+
+    window.addEventListener("resize", handleScreenResize);
+    window.addEventListener("orientationchange", handleScreenResize);
+    return () => {
+      window.removeEventListener("resize", handleScreenResize);
+      window.removeEventListener("orientationchange", handleScreenResize);
+    };
+  }, []);
+
   // Auto full screen the platform on launch and user interaction without requiring a manual toggle
   useEffect(() => {
     const triggerFullscreen = () => {
@@ -892,6 +936,63 @@ export default function App() {
   const [queueItems, setQueueItems] = useState<any[]>([]);
   const [systemTicketsList, setSystemTicketsList] = useState<any[]>([]);
 
+  // Internal Chat and Patient Transfer Modal States
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [chatTargetRole, setChatTargetRole] = useState<string | undefined>(undefined);
+  const [chatPatientContext, setChatPatientContext] = useState<any>(null);
+
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferInitialPatient, setTransferInitialPatient] = useState<any>(null);
+  const [transferInitialTicket, setTransferInitialTicket] = useState<any>(null);
+
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
+  const [pendingTransfersCount, setPendingTransfersCount] = useState<number>(0);
+
+  // Real-time listener for internal_messages to calculate unread message count
+  useEffect(() => {
+    const unsubChat = onSnapshot(collection(db, "internal_messages"), (snapshot) => {
+      let unread = 0;
+      const userRole = currentSystemRole.toLowerCase();
+      const userEmail = activeUser?.email?.toLowerCase() || "";
+      const userName = activeUser?.displayName?.toLowerCase() || "";
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const readBy = Array.isArray(data.readBy) ? data.readBy : [];
+        const isRead = readBy.includes(userEmail) || readBy.includes(userName);
+        if (!isRead) {
+          const targetType = data.targetType;
+          const targetRole = (data.targetRole || "").toLowerCase();
+          const targetEmail = (data.targetUserEmail || "").toLowerCase();
+          if (
+            targetType === "all" ||
+            (targetType === "role" && (targetRole === userRole || targetRole === "all" || userRole === "super admin")) ||
+            (targetType === "direct" && (targetEmail === userEmail || data.targetUserName === activeUser?.displayName))
+          ) {
+            unread++;
+          }
+        }
+      });
+      setUnreadMessagesCount(unread);
+    });
+    return () => unsubChat();
+  }, [currentSystemRole, activeUser]);
+
+  // Real-time listener for patient_transfers
+  useEffect(() => {
+    const unsubTransfers = onSnapshot(collection(db, "patient_transfers"), (snapshot) => {
+      let pending = 0;
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.status === "pending" || data.status === "on_hold") {
+          pending++;
+        }
+      });
+      setPendingTransfersCount(pending);
+    });
+    return () => unsubTransfers();
+  }, []);
+
   // Real-time listener for queue collection to power live notification badges
   useEffect(() => {
     const unsubQueue = onSnapshot(collection(db, "queue"), (snapshot) => {
@@ -934,6 +1035,8 @@ export default function App() {
         return pendingQueueCount;
       case "doctor":
         return doctorWaitingCount;
+      case "transfers":
+        return pendingTransfersCount;
       case "diagnostics":
         return diagnosticsWaitingCount;
       case "pharmacy":
@@ -945,13 +1048,13 @@ export default function App() {
       case "security":
         return unverifiedBiometricsCount;
       case "dashboard":
-        return notifications.length > 0 ? notifications.length : (openTicketsCount + pendingQueueCount);
+        return notifications.length > 0 ? notifications.length : (openTicketsCount + pendingQueueCount + pendingTransfersCount);
       default:
         return 0;
     }
   };
 
-  const totalSystemActiveNotifications = openTicketsCount + pendingQueueCount + notifications.length;
+  const totalSystemActiveNotifications = openTicketsCount + pendingQueueCount + pendingTransfersCount + notifications.length;
 
   // Live Firebase/Firestore onSnapshot Listener for Specialist notifications
   useEffect(() => {
@@ -1031,6 +1134,7 @@ export default function App() {
     { id: "journey", label: "Patient Journey", icon: Activity, enabled: true },
     { id: "queue", label: "Live Queue Board", icon: Monitor, enabled: toggles.queue },
     { id: "doctor", label: "Doctor Station", icon: Stethoscope, enabled: toggles.doctor },
+    { id: "transfers", label: "Transfers & Referrals", icon: ArrowRightLeft, enabled: true },
     { id: "diagnostics", label: "Lab / Radiology", icon: FlaskRound, enabled: toggles.laboratory || toggles.radiology },
     { id: "pharmacy", label: "Pharmacy POS", icon: ShoppingCart, enabled: toggles.pharmacy },
     { id: "billing", label: "Split Billing", icon: CreditCard, enabled: toggles.billing },
@@ -1134,10 +1238,10 @@ export default function App() {
   const currentHeaderStyle = HEADER_BG_STYLES[headerBgStyle] || HEADER_BG_STYLES["gold-yellow"] || HEADER_BG_STYLES["solid-pink"];
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gray-100 flex flex-col text-gray-800 font-sans pb-16 md:pb-0">
+    <div className="h-screen h-[100dvh] w-screen w-[100dvw] overflow-hidden bg-gray-100 flex flex-col text-gray-800 font-sans pb-16 md:pb-0 select-none antialiased">
       {/* End-to-End Top Header Bar with Single Wave Curved Bottom Edge */}
       <div className="relative w-full z-30 shrink-0 shadow-xs overflow-hidden">
-        <header className={`relative w-full ${currentHeaderStyle.bgClass} ${currentHeaderStyle.textClass} py-3.5 sm:py-5 md:py-9 min-h-[84px] md:min-h-[150px] px-3.5 sm:px-6 md:px-8 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 md:gap-4 transition-colors duration-300 overflow-hidden`}>
+        <header className={`relative w-full ${currentHeaderStyle.bgClass} ${currentHeaderStyle.textClass} py-3 sm:py-3.5 md:py-4 lg:py-5 min-h-[76px] sm:min-h-[84px] md:min-h-[96px] lg:min-h-[108px] px-3.5 sm:px-6 md:px-8 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 md:gap-4 transition-colors duration-300 overflow-hidden`}>
           
           {/* Continuous Motion Gentle Shimmer Effect (Identical to Bottom Nav) */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
@@ -1224,7 +1328,45 @@ export default function App() {
             </div>
 
             {/* Mobile Header Quick Actions: Large Icons with No Background */}
-            <div className="md:hidden flex items-center gap-2.5 shrink-0">
+            <div className="md:hidden flex items-center gap-2 shrink-0">
+              {/* Mobile Internal Chat Inbox */}
+              <button
+                id="btn-mobile-internal-chat"
+                onClick={() => {
+                  setChatTargetRole(undefined);
+                  setChatPatientContext(null);
+                  setShowChatModal(true);
+                }}
+                title="Internal Role Chat Inbox"
+                className="p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer relative"
+              >
+                <MessageSquare className="w-5 h-5 text-white" />
+                {unreadMessagesCount > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-rose-500 text-white text-[8px] font-black rounded-full border border-white animate-pulse">
+                    {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Mobile Quick Patient Transfer */}
+              <button
+                id="btn-mobile-quick-transfer"
+                onClick={() => {
+                  setTransferInitialPatient(null);
+                  setTransferInitialTicket(null);
+                  setShowTransferModal(true);
+                }}
+                title="Patient Transfer & Referral"
+                className="p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer relative"
+              >
+                <ArrowRightLeft className="w-5 h-5 text-white" />
+                {pendingTransfersCount > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-amber-500 text-slate-950 text-[8px] font-black rounded-full border border-white animate-pulse">
+                    {pendingTransfersCount}
+                  </span>
+                )}
+              </button>
+
               {/* Mobile Offline/Online Indicator - Large White Icon (No Background) */}
               <button
                 onClick={toggleOfflineSimulation}
@@ -1346,6 +1488,44 @@ export default function App() {
                 </select>
               </div>
             )}
+
+            {/* Internal Staff Chat & Role Notification Inbox - Large White Icon (No Background) */}
+            <button
+              id="btn-header-internal-chat"
+              onClick={() => {
+                setChatTargetRole(undefined);
+                setChatPatientContext(null);
+                setShowChatModal(true);
+              }}
+              title={`Internal Role Chat Inbox (${unreadMessagesCount} unread messages)`}
+              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+            >
+              <MessageSquare className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
+              {unreadMessagesCount > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-rose-500 text-white text-[9px] font-black rounded-full border border-white animate-pulse">
+                  {unreadMessagesCount > 99 ? "99+" : unreadMessagesCount}
+                </span>
+              )}
+            </button>
+
+            {/* Quick Patient Transfer & Referral Launcher - Large White Icon (No Background) */}
+            <button
+              id="btn-header-quick-transfer"
+              onClick={() => {
+                setTransferInitialPatient(null);
+                setTransferInitialTicket(null);
+                setShowTransferModal(true);
+              }}
+              title={`Patient Transfer & Referral Hub (${pendingTransfersCount} pending transfers)`}
+              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+            >
+              <ArrowRightLeft className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
+              {pendingTransfersCount > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-amber-500 text-slate-950 text-[9px] font-black rounded-full border border-white animate-pulse">
+                  {pendingTransfersCount}
+                </span>
+              )}
+            </button>
 
             {/* Header Color Theme Customizer - Large White Icon (No Background) */}
             <div 
@@ -1481,14 +1661,13 @@ export default function App() {
               )}
             </div>
  
-            {/* Navigation Menu (Filtered by feature toggles with Framer Motion slide pills) */}
+            {/* Navigation Menu (Strictly Filtered by role permissions: unauthorized features are completely hidden) */}
             <nav className="space-y-1.5 relative">
               {navItems
-                .filter((item) => item.enabled)
+                .filter((item) => item.enabled && checkTabPermission(item.id).allowed)
                 .map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
-                  const isAllowed = checkTabPermission(item.id).allowed;
                   const notifCount = getMenuNotificationCount(item.id);
 
                   return (
@@ -1502,7 +1681,7 @@ export default function App() {
                         isActive
                           ? "text-white font-bold"
                           : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/70"
-                      } ${!isAllowed ? "opacity-70" : ""}`}
+                      }`}
                     >
                       {/* Animated sliding active background pill */}
                       {isActive && (
@@ -1526,7 +1705,7 @@ export default function App() {
                         <div className={`p-1 rounded-lg transition-transform duration-200 shrink-0 ${isActive ? "scale-105" : "group-hover:scale-110 group-hover:rotate-3"}`}>
                           <Icon className={`w-4.5 h-4.5 transition-colors ${isActive ? "text-white" : "text-slate-500 group-hover:text-emerald-700"}`} />
                         </div>
-                        <span className={`truncate ${!isAllowed ? "text-slate-400 group-hover:text-slate-600" : ""}`}>{item.label}</span>
+                        <span className="truncate">{item.label}</span>
                       </div>
 
                       <div className="relative z-10 flex items-center gap-1.5 shrink-0 ml-2">
@@ -1542,9 +1721,6 @@ export default function App() {
                           </span>
                         )}
 
-                        {!isAllowed && (
-                          <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                        )}
                         {isActive && (
                           <motion.span
                             initial={{ scale: 0 }}
@@ -1574,104 +1750,112 @@ export default function App() {
             }}
           />
           {/* 1. Dashboard */}
-          <button
-            onClick={() => setActiveTab("dashboard")}
-            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
-              activeTab === "dashboard"
-                ? "text-emerald-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
-            }`}
-          >
-            <div className="relative">
-              <LayoutDashboard className={`w-5 h-5 transition-colors ${activeTab === "dashboard" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
-              {getMenuNotificationCount("dashboard") > 0 && (
-                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
-                  {getMenuNotificationCount("dashboard") > 99 ? "99+" : getMenuNotificationCount("dashboard")}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px] tracking-tight mt-1">Dashboard</span>
-            <div className="h-1 flex items-center justify-center mt-0.5">
-              {activeTab === "dashboard" && (
-                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
-              )}
-            </div>
-          </button>
+          {checkTabPermission("dashboard").allowed && (
+            <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+                activeTab === "dashboard"
+                  ? "text-emerald-700 font-bold"
+                  : "text-slate-500 hover:text-slate-800 font-medium"
+              }`}
+            >
+              <div className="relative">
+                <LayoutDashboard className={`w-5 h-5 transition-colors ${activeTab === "dashboard" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+                {getMenuNotificationCount("dashboard") > 0 && (
+                  <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                    {getMenuNotificationCount("dashboard") > 99 ? "99+" : getMenuNotificationCount("dashboard")}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] tracking-tight mt-1">Dashboard</span>
+              <div className="h-1 flex items-center justify-center mt-0.5">
+                {activeTab === "dashboard" && (
+                  <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+                )}
+              </div>
+            </button>
+          )}
 
           {/* 2. Tickets */}
-          <button
-            onClick={() => setActiveTab("tickets")}
-            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
-              activeTab === "tickets"
-                ? "text-emerald-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
-            }`}
-          >
-            <div className="relative">
-              <Ticket className={`w-5 h-5 transition-colors ${activeTab === "tickets" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
-              {openTicketsCount > 0 && (
-                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
-                  {openTicketsCount > 99 ? "99+" : openTicketsCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px] tracking-tight mt-1">Tickets</span>
-            <div className="h-1 flex items-center justify-center mt-0.5">
-              {activeTab === "tickets" && (
-                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
-              )}
-            </div>
-          </button>
+          {checkTabPermission("tickets").allowed && (
+            <button
+              onClick={() => setActiveTab("tickets")}
+              className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+                activeTab === "tickets"
+                  ? "text-emerald-700 font-bold"
+                  : "text-slate-500 hover:text-slate-800 font-medium"
+              }`}
+            >
+              <div className="relative">
+                <Ticket className={`w-5 h-5 transition-colors ${activeTab === "tickets" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+                {openTicketsCount > 0 && (
+                  <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                    {openTicketsCount > 99 ? "99+" : openTicketsCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] tracking-tight mt-1">Tickets</span>
+              <div className="h-1 flex items-center justify-center mt-0.5">
+                {activeTab === "tickets" && (
+                  <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+                )}
+              </div>
+            </button>
+          )}
 
           {/* 3. Patient Journey / Care Flow */}
-          <button
-            onClick={() => setActiveTab("journey")}
-            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
-              activeTab === "journey"
-                ? "text-emerald-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
-            }`}
-          >
-            <div className="relative">
-              <Activity className={`w-5 h-5 transition-colors ${activeTab === "journey" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
-              {activeJourneysCount > 0 && (
-                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
-                  {activeJourneysCount > 99 ? "99+" : activeJourneysCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px] tracking-tight mt-1">Journey</span>
-            <div className="h-1 flex items-center justify-center mt-0.5">
-              {activeTab === "journey" && (
-                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
-              )}
-            </div>
-          </button>
+          {checkTabPermission("journey").allowed && (
+            <button
+              onClick={() => setActiveTab("journey")}
+              className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+                activeTab === "journey"
+                  ? "text-emerald-700 font-bold"
+                  : "text-slate-500 hover:text-slate-800 font-medium"
+              }`}
+            >
+              <div className="relative">
+                <Activity className={`w-5 h-5 transition-colors ${activeTab === "journey" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+                {activeJourneysCount > 0 && (
+                  <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                    {activeJourneysCount > 99 ? "99+" : activeJourneysCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] tracking-tight mt-1">Journey</span>
+              <div className="h-1 flex items-center justify-center mt-0.5">
+                {activeTab === "journey" && (
+                  <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+                )}
+              </div>
+            </button>
+          )}
 
           {/* 4. Doctor Desk / Queue */}
-          <button
-            onClick={() => setActiveTab(toggles.doctor ? "doctor" : "queue")}
-            className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
-              activeTab === "doctor" || activeTab === "queue"
-                ? "text-emerald-700 font-bold"
-                : "text-slate-500 hover:text-slate-800 font-medium"
-            }`}
-          >
-            <div className="relative">
-              <Stethoscope className={`w-5 h-5 transition-colors ${activeTab === "doctor" || activeTab === "queue" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
-              {(doctorWaitingCount > 0 || pendingQueueCount > 0) && (
-                <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
-                  {(toggles.doctor ? doctorWaitingCount : pendingQueueCount) > 99 ? "99+" : (toggles.doctor ? doctorWaitingCount : pendingQueueCount)}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px] tracking-tight mt-1">Doctor</span>
-            <div className="h-1 flex items-center justify-center mt-0.5">
-              {(activeTab === "doctor" || activeTab === "queue") && (
-                <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
-              )}
-            </div>
-          </button>
+          {(checkTabPermission("doctor").allowed || checkTabPermission("queue").allowed) && (
+            <button
+              onClick={() => setActiveTab(checkTabPermission("doctor").allowed && toggles.doctor ? "doctor" : "queue")}
+              className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all active:scale-95 cursor-pointer relative ${
+                activeTab === "doctor" || activeTab === "queue"
+                  ? "text-emerald-700 font-bold"
+                  : "text-slate-500 hover:text-slate-800 font-medium"
+              }`}
+            >
+              <div className="relative">
+                <Stethoscope className={`w-5 h-5 transition-colors ${activeTab === "doctor" || activeTab === "queue" ? "text-emerald-700 stroke-[2.2]" : "text-slate-500"}`} />
+                {(doctorWaitingCount > 0 || pendingQueueCount > 0) && (
+                  <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
+                    {(toggles.doctor ? doctorWaitingCount : pendingQueueCount) > 99 ? "99+" : (toggles.doctor ? doctorWaitingCount : pendingQueueCount)}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] tracking-tight mt-1">Doctor</span>
+              <div className="h-1 flex items-center justify-center mt-0.5">
+                {(activeTab === "doctor" || activeTab === "queue") && (
+                  <span className="w-4 h-0.5 rounded-full bg-emerald-600" />
+                )}
+              </div>
+            </button>
+          )}
 
           {/* 5. Modules / All Departments */}
           <button
@@ -1748,18 +1932,17 @@ export default function App() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                      All Hospital Departments ({navItems.filter(n => n.enabled).length})
+                      Permitted Hospital Departments ({navItems.filter(n => n.enabled && checkTabPermission(n.id).allowed).length})
                     </h4>
                     <span className="text-[10px] text-emerald-400 font-bold">Tap to launch</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
                     {navItems
-                      .filter((item) => item.enabled)
+                      .filter((item) => item.enabled && checkTabPermission(item.id).allowed)
                       .map((item) => {
                         const Icon = item.icon;
                         const isActive = activeTab === item.id;
-                        const isAllowed = checkTabPermission(item.id).allowed;
                         const notifCount = getMenuNotificationCount(item.id);
 
                         return (
@@ -1773,7 +1956,7 @@ export default function App() {
                               isActive
                                 ? "bg-emerald-600/20 border-emerald-400/80 text-white shadow-md shadow-emerald-950/50"
                                 : "bg-slate-950/70 border-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
-                            } ${!isAllowed ? "opacity-60" : ""}`}
+                            }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
                               <div className={`p-2 rounded-xl shrink-0 ${
@@ -1798,9 +1981,7 @@ export default function App() {
                                   {notifCount > 99 ? "99+" : notifCount}
                                 </span>
                               )}
-                              {!isAllowed ? (
-                                <Lock className="w-3.5 h-3.5 text-amber-500" />
-                              ) : isActive ? (
+                              {isActive ? (
                                 <Check className="w-4 h-4 text-emerald-400" />
                               ) : (
                                 <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
@@ -1948,8 +2129,8 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Main Content Area - adjusted padding for increased bottom nav spacing */}
-        <main className="flex-1 p-3 sm:p-5 md:p-8 pb-36 md:pb-28 overflow-y-auto w-full">
+        {/* Main Content Area - adjusted padding for auto-fit bottom nav spacing and responsive scaling */}
+        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 pb-32 md:pb-28 lg:pb-32 overflow-y-auto w-full min-w-0">
           {/* Mobile-Only Active Department Banner */}
           <div className="md:hidden flex items-center justify-between bg-white border border-slate-200/90 px-3.5 py-2.5 rounded-2xl shadow-xs mb-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -1972,8 +2153,8 @@ export default function App() {
             </button>
           </div>
 
-          {/* Active Workspace renderer with animated entrance/exit transitions */}
-          <div className="max-w-7xl mx-auto space-y-5 md:space-y-6">
+          {/* Active Workspace renderer with animated entrance/exit transitions & auto-fit resolution scaling */}
+          <div className="w-full max-w-[1840px] 2xl:max-w-[2400px] mx-auto space-y-5 md:space-y-6">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -2039,17 +2220,19 @@ export default function App() {
 
                       <div className="pt-4 flex flex-wrap gap-3 justify-center">
                         <button
-                          onClick={() => setActiveTab("journey")}
-                          className="px-5 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg hover:-translate-y-0.5"
+                          onClick={() => setActiveTab("dashboard")}
+                          className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg hover:-translate-y-0.5"
                         >
-                          View Patient Journey
+                          Return to Dashboard
                         </button>
-                        <button
-                          onClick={() => setActiveTab("queue")}
-                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-emerald-950/40 hover:-translate-y-0.5"
-                        >
-                          View Live Queue Board
-                        </button>
+                        {activeRoleConfig.allowedModules.length > 0 && activeRoleConfig.allowedModules[0] !== "dashboard" && (
+                          <button
+                            onClick={() => setActiveTab(activeRoleConfig.allowedModules[0])}
+                            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-emerald-950/40 hover:-translate-y-0.5 uppercase tracking-wide"
+                          >
+                            Open {activeRoleConfig.allowedModules[0]}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2093,7 +2276,41 @@ export default function App() {
                     )}
 
                     {activeTab === "doctor" && toggles.doctor && (
-                      <DoctorsDesk toggles={toggles} onRefreshQueue={() => setActiveTab("queue")} activeSpecialistId={activeSpecialistId} />
+                      <DoctorsDesk
+                        toggles={toggles}
+                        onRefreshQueue={() => setActiveTab("queue")}
+                        activeSpecialistId={activeSpecialistId}
+                        onOpenTransferModal={(pat) => {
+                          setTransferInitialPatient(pat || null);
+                          setTransferInitialTicket(null);
+                          setShowTransferModal(true);
+                        }}
+                        onOpenChatModal={(role, pat) => {
+                          setChatTargetRole(role);
+                          setChatPatientContext(pat || null);
+                          setShowChatModal(true);
+                        }}
+                      />
+                    )}
+
+                    {activeTab === "transfers" && (
+                      <TransfersHub
+                        currentUser={{
+                          name: activeUser?.displayName || "Staff Member",
+                          email: activeUser?.email || "",
+                          role: currentSystemRole,
+                          department: loggedInEmployee?.department || "medical"
+                        }}
+                        activeSpecialistId={activeSpecialistId}
+                        onOpenTransferModal={() => {
+                          setTransferInitialPatient(null);
+                          setTransferInitialTicket(null);
+                          setShowTransferModal(true);
+                        }}
+                        onViewPatientJourney={() => {
+                          setActiveTab("journey");
+                        }}
+                      />
                     )}
 
                     {activeTab === "diagnostics" && (toggles.laboratory || toggles.radiology) && (
@@ -2254,6 +2471,71 @@ export default function App() {
         setShowShaModal(true);
       }}
       checkTabPermission={checkTabPermission}
+      onOpenChat={() => {
+        setChatTargetRole(undefined);
+        setChatPatientContext(null);
+        setShowChatModal(true);
+      }}
+      unreadChatCount={unreadMessagesCount}
+      onOpenTransfer={() => {
+        setTransferInitialPatient(null);
+        setTransferInitialTicket(null);
+        setShowTransferModal(true);
+      }}
+      pendingTransfersCount={pendingTransfersCount}
+    />
+
+    {/* Internal Staff Role Chat & Inbox Modal */}
+    <InternalChatModal
+      isOpen={showChatModal}
+      onClose={() => setShowChatModal(false)}
+      currentUser={{
+        name: activeUser?.displayName || "Dr. Sarah Naisiae",
+        email: activeUser?.email || "naisiaetext@gmail.com",
+        role: currentSystemRole,
+        photoURL: resolvedPhotoURL
+      }}
+      initialTargetRole={chatTargetRole}
+      initialPatientContext={chatPatientContext}
+      onOpenTransferModal={(pat) => {
+        setTransferInitialPatient(pat || null);
+        setTransferInitialTicket(null);
+        setShowTransferModal(true);
+      }}
+    />
+
+    {/* Real-time Incoming Message Popup Notification Alert */}
+    <IncomingMessagePromptListener
+      currentUser={{
+        name: activeUser?.displayName || "Staff Member",
+        email: activeUser?.email || "",
+        role: currentSystemRole
+      }}
+      onOpenChat={(senderRole, patientContext) => {
+        setChatTargetRole(senderRole);
+        if (patientContext) {
+          setChatPatientContext(patientContext);
+        }
+        setShowChatModal(true);
+      }}
+    />
+
+    {/* Patient Transfer & Departmental Referral Modal */}
+    <PatientTransferModal
+      isOpen={showTransferModal}
+      onClose={() => setShowTransferModal(false)}
+      currentUser={{
+        name: activeUser?.displayName || "Dr. Sarah Naisiae",
+        email: activeUser?.email || "naisiaetext@gmail.com",
+        role: currentSystemRole,
+        department: loggedInEmployee?.department || "medical"
+      }}
+      initialPatient={transferInitialPatient}
+      initialTicket={transferInitialTicket}
+      onTransferSuccess={(_transferId) => {
+        // Automatically route to transfers hub to view status
+        setActiveTab("transfers");
+      }}
     />
 
     {/* Safaricom M-Pesa Express Modal */}

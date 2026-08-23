@@ -324,4 +324,126 @@ export interface GoodsReceivedNote {
   inventoryUpdated: boolean;
 }
 
+export interface ChatTicketItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  department?: string;
+}
+
+export interface ChatTicketAttachment {
+  ticketId: string;
+  ticketNo: string; // e.g. "INV-4821", "QUO-9201", "TRF-3810", "ORD-1029"
+  type: "invoice" | "pre_quote" | "patient_transfer" | "service_order" | "clinical_handover";
+  title: string;
+  patientName?: string;
+  patientId?: string;
+  nationalId?: string;
+  patientAge?: number | string;
+  patientGender?: string;
+  fromDepartment?: string;
+  fromRole?: string;
+  fromUserName?: string;
+  toDepartment?: string;
+  toRole?: string;
+  toSpecialistName?: string;
+  toUserName?: string;
+  // Invoice / Pre-Quote Financial details
+  items?: ChatTicketItem[];
+  subtotal?: number;
+  taxOrDiscount?: number;
+  totalAmount?: number;
+  currency?: string; // "KES"
+  paymentMethod?: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split";
+  paymentStatus?: "unpaid" | "pending_mpesa" | "paid";
+  mpesaPhone?: string;
+  validUntil?: string; // e.g. "14 Days" for pre-quotes
+  depositRequired?: number;
+  // Clinical / Transfer details
+  symptoms?: string;
+  provisionalDiagnosis?: string;
+  clinicalNotes?: string;
+  vitals?: {
+    temp?: string;
+    bp?: string;
+    pulse?: string;
+    weight?: string;
+  };
+  urgency?: "Routine" | "Urgent" | "STAT Emergency";
+  status: "pending" | "accepted" | "invoiced" | "paid" | "completed" | "declined" | "on_hold";
+  statusUpdatedBy?: string;
+  statusUpdatedAt?: string;
+  actionNotes?: string;
+  linkedTransferDocId?: string;
+  linkedInvoiceId?: string;
+  createdAt?: string;
+  createdBy?: string;
+  createdRole?: string;
+}
+
+export interface InternalMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole: SystemRole | string;
+  senderAvatar?: string;
+  targetType: "role" | "department" | "all" | "direct";
+  targetRole?: SystemRole | string;
+  targetDepartment?: string;
+  targetUserId?: string;
+  targetUserName?: string;
+  channelId?: string; // e.g. "general", "doctors", "pharmacy", "lab", "nursing", "emergency"
+  subject: string;
+  message: string;
+  priority: "normal" | "urgent" | "stat_emergency";
+  category: "clinical_handover" | "general" | "stat_alert" | "pharmacy_query" | "lab_result" | "security" | "referral_notice" | "invoice_ticket" | "pre_quote_estimate" | "patient_transfer" | "service_order";
+  relatedPatientId?: string;
+  relatedPatientName?: string;
+  relatedTicketNo?: string;
+  ticketAttachment?: ChatTicketAttachment;
+  readBy: string[]; // IDs or emails or roles that have read it
+  timestamp: string; // ISO 8601
+}
+
+export interface PatientTransfer {
+  id: string;
+  ticketId: string;
+  ticketNo: string;
+  patientId?: string;
+  patientName: string;
+  nationalId: string;
+  age?: number;
+  phone?: string;
+  gender?: string;
+  fromDepartment: string;
+  fromUnitName: string;
+  referredByDoctorName: string;
+  referredByEmail?: string;
+  toDepartment: string; // e.g. "doctor", "cardiology", "surgery", "laboratory", "radiology", "gyna", "labour_room", "pharmacy", "inpatient", "icu", "emergency"
+  toSpecialistId?: string;
+  toSpecialistName?: string;
+  toSpecialistTitle?: string;
+  reasonForTransfer: string;
+  clinicalSummary: string;
+  priority: "Routine" | "Urgent" | "STAT Emergency";
+  vitalsSummary?: {
+    temp?: string;
+    bp?: string;
+    pulse?: string;
+    weight?: string;
+  };
+  status: "pending" | "accepted" | "declined" | "on_hold";
+  actionBy?: string;
+  actionByRole?: string;
+  actionTimestamp?: string;
+  actionNotes?: string;
+  holdReason?: string;
+  declineReason?: string;
+  assignedRoomOrBed?: string;
+  timestamp: string;
+}
+
+
 

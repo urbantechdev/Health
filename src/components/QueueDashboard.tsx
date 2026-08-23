@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, updateDoc, doc, query, orderBy, deleteDoc, writeBatch } from "firebase/firestore";
 import { QueueTicket } from "../types";
-import { Monitor, Volume2, UserCheck, RefreshCw, Layers, ExternalLink, Play, Trash2, Trash } from "lucide-react";
+import { Monitor, Volume2, UserCheck, RefreshCw, Layers, ExternalLink, Play, Trash2, Trash, Megaphone } from "lucide-react";
 import { toast } from "../lib/promptService";
+import { voiceAnnouncer, ActiveAnnouncement } from "../lib/voiceAnnouncementService";
 
 interface QueueDashboardProps {
   toggles: any;
@@ -13,8 +14,16 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
   const [tickets, setTickets] = useState<QueueTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSignageView, setIsSignageView] = useState(false);
-  const [announcingTicket, setAnnouncingTicket] = useState<string | null>(null);
+  const [activeAnnouncement, setActiveAnnouncement] = useState<ActiveAnnouncement | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Subscribe to Voice Announcer events
+  useEffect(() => {
+    const unsub = voiceAnnouncer.subscribe((active) => {
+      setActiveAnnouncement(active);
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     // Read queue tickets ordered by timestamp
@@ -36,20 +45,26 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const announceTicket = (ticketNo: string, room: string) => {
-    setAnnouncingTicket(ticketNo);
-    // Simulate vocal announcment via web synthesis
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const text = `Ticket number, ${ticketNo.split("").join(" ")}, proceed to ${room}`;
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      utterance.pitch = 1.05;
-      window.speechSynthesis.speak(utterance);
-    }
-    setTimeout(() => {
-      setAnnouncingTicket(null);
-    }, 4000);
+  const resolveRoomName = (ticket: QueueTicket) => {
+    if (ticket.consultationRoom) return ticket.consultationRoom;
+    if (ticket.currentDepartment === "laboratory") return "Lab Window A";
+    if (ticket.currentDepartment === "radiology") return "X-Ray Room 1";
+    if (ticket.currentDepartment === "pharmacy") return "Pharmacy Dispenser B";
+    if (ticket.currentDepartment === "labour_room") return "Maternity Labour Room";
+    if (ticket.currentDepartment === "gyna") return "Obstetrics & Gyna Clinic";
+    return "Room 5, Doctor";
+  };
+
+  const announceTicket = async (ticket: QueueTicket, customRoom?: string) => {
+    const room = customRoom || resolveRoomName(ticket);
+    const deptRole = ticket.specialistTitle || ticket.assignedSpecialistName || (ticket.currentDepartment === "doctor" ? "Doctor" : ticket.currentDepartment);
+
+    await voiceAnnouncer.announceTurnArrived({
+      ticketNo: ticket.ticketNo,
+      patientName: ticket.patientName,
+      roomOrDesk: room,
+      departmentOrRole: deptRole,
+    });
   };
 
   // Instant delete single unwanted queue ticket
@@ -127,16 +142,16 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
 
   if (isSignageView) {
     return (
-      <div id="full-signage" className="fixed inset-0 bg-slate-950 text-white z-50 flex flex-col p-8 font-sans">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-6 mb-8">
+      <div id="full-signage" className="fixed inset-0 bg-white text-slate-900 z-50 flex flex-col p-8 font-sans overflow-y-auto">
+        <div className="flex justify-between items-center border-b border-slate-200 pb-6 mb-8">
           <div className="flex items-center gap-3">
-            <span className="w-4 h-4 bg-red-500 rounded-full animate-ping" />
-            <h1 className="text-3xl font-extrabold tracking-tight">NATIONAL CLINIC PUBLIC SIGNAGE</h1>
+            <span className="w-3.5 h-3.5 bg-emerald-500 rounded-full animate-ping" />
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">HMIS TICKETING SYSTEM</h1>
           </div>
           <button
             id="btn-close-signage"
             onClick={() => setIsSignageView(false)}
-            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-sm font-semibold rounded-xl border border-slate-700 transition-colors cursor-pointer"
+            className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold rounded-xl border border-slate-300 shadow-xs transition-colors cursor-pointer"
           >
             Exit Public View
           </button>
@@ -146,37 +161,37 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
           {/* Active Serving Area */}
           <div className="lg:col-span-2 space-y-6">
-            <h2 className="text-xl font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Volume2 className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-xl font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+              <Volume2 className="w-5 h-5 text-emerald-600" />
               <span>NOW SERVING / SASA HIVI</span>
             </h2>
 
             {filteredServing.length === 0 ? (
-              <div className="h-[350px] border border-slate-800 rounded-3xl bg-slate-900/50 flex flex-col items-center justify-center text-slate-500 text-center p-6">
-                <Monitor className="w-16 h-16 mb-4 opacity-30" />
-                <p className="text-lg font-semibold">No active calls being processed</p>
-                <p className="text-xs">Doctors or technicians will announce ticket numbers shortly.</p>
+              <div className="h-[350px] border border-slate-200 rounded-3xl bg-slate-50 flex flex-col items-center justify-center text-slate-500 text-center p-6">
+                <Monitor className="w-16 h-16 mb-4 text-slate-300" />
+                <p className="text-lg font-semibold text-slate-700">No active calls being processed</p>
+                <p className="text-xs text-slate-500 mt-1">Doctors or technicians will announce ticket numbers shortly.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {filteredServing.map((t) => {
                   let deptName = "Consultation Desk 1";
-                  let bg = "bg-emerald-950/40 border-emerald-800/80 text-emerald-300";
+                  let bg = "bg-emerald-50/90 border-emerald-300 text-emerald-950 shadow-sm";
                   if (t.currentDepartment === "laboratory") {
                     deptName = "Lab Window A";
-                    bg = "bg-blue-950/40 border-blue-800/80 text-blue-300";
+                    bg = "bg-blue-50/90 border-blue-300 text-blue-950 shadow-sm";
                   } else if (t.currentDepartment === "radiology") {
                     deptName = "X-Ray Counter 1";
-                    bg = "bg-purple-950/40 border-purple-800/80 text-purple-300";
+                    bg = "bg-purple-50/90 border-purple-300 text-purple-950 shadow-sm";
                   } else if (t.currentDepartment === "pharmacy") {
                     deptName = "POS Dispenser B";
-                    bg = "bg-amber-950/40 border-amber-800/80 text-amber-300";
+                    bg = "bg-amber-50/90 border-amber-300 text-amber-950 shadow-sm";
                   } else if (t.currentDepartment === "labour_room") {
                     deptName = "Maternity Labour Room";
-                    bg = "bg-rose-950/40 border-rose-800/80 text-rose-300";
+                    bg = "bg-rose-50/90 border-rose-300 text-rose-950 shadow-sm";
                   } else if (t.currentDepartment === "gyna") {
                     deptName = "Obstetrics & Gyna Clinic";
-                    bg = "bg-pink-950/40 border-pink-800/80 text-pink-300";
+                    bg = "bg-pink-50/90 border-pink-300 text-pink-950 shadow-sm";
                   }
 
                   const isAnnouncing = announcingTicket === t.ticketNo;
@@ -185,18 +200,18 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
                     <div
                       key={t.id}
                       className={`border-2 p-8 rounded-3xl flex flex-col items-center justify-center text-center transition-all duration-500 ${bg} ${
-                        isAnnouncing ? "ring-4 ring-emerald-400 scale-105 bg-emerald-900/80" : ""
+                        isAnnouncing ? "ring-4 ring-emerald-500 scale-105 bg-emerald-100 shadow-xl" : ""
                       }`}
                     >
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 block mb-2">
+                      <span className="text-[11px] uppercase font-bold tracking-widest text-slate-600 block mb-2">
                         {t.currentDepartment === "doctor" ? "General Medical" : t.currentDepartment}
                       </span>
-                      <h3 className="text-6xl font-extrabold tracking-wider font-mono my-2">
+                      <h3 className="text-6xl font-extrabold tracking-wider font-mono my-2 text-slate-950">
                         {t.ticketNo}
                       </h3>
-                      <div className="h-1 w-12 bg-current opacity-40 rounded-full my-3" />
-                      <p className="text-xl font-bold">{deptName}</p>
-                      <p className="text-xs text-slate-400 truncate w-full mt-2">
+                      <div className="h-1 w-12 bg-slate-300 rounded-full my-3" />
+                      <p className="text-xl font-bold text-slate-900">{deptName}</p>
+                      <p className="text-xs text-slate-600 font-medium truncate w-full mt-2">
                         Patient: {t.patientName}
                       </p>
                     </div>
@@ -207,26 +222,26 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
           </div>
 
           {/* Pending queue list */}
-          <div className="border border-slate-800 rounded-3xl bg-slate-900/40 p-6 flex flex-col">
-            <h2 className="text-lg font-bold text-slate-400 uppercase tracking-wider mb-4 pb-2 border-b border-slate-800">
+          <div className="border border-slate-200 rounded-3xl bg-slate-50 p-6 flex flex-col">
+            <h2 className="text-lg font-bold text-slate-800 uppercase tracking-wider mb-4 pb-2 border-b border-slate-200">
               Queue Intake List
             </h2>
-            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 max-h-[600px]">
               {filteredPending.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-600 text-sm">
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm py-12">
                   Intake queue empty
                 </div>
               ) : (
                 filteredPending.map((t) => (
-                  <div key={t.id} className="flex justify-between items-center p-3 bg-slate-900 border border-slate-800 rounded-xl">
+                  <div key={t.id} className="flex justify-between items-center p-3.5 bg-white border border-slate-200 rounded-xl shadow-xs">
                     <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold font-mono text-emerald-400">{t.ticketNo}</span>
+                      <span className="text-lg font-bold font-mono text-emerald-700">{t.ticketNo}</span>
                       <div className="text-xs">
-                        <p className="font-semibold text-slate-300">{t.patientName}</p>
+                        <p className="font-semibold text-slate-900">{t.patientName}</p>
                         <p className="text-[10px] text-slate-500 capitalize">{t.currentDepartment} visit</p>
                       </div>
                     </div>
-                    <span className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded-md">
+                    <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 font-semibold px-2.5 py-0.5 rounded-md">
                       Waiting
                     </span>
                   </div>
@@ -255,8 +270,8 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
             <Monitor className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Intelligent Ticket Router</h2>
-            <p className="text-xs text-gray-500">Real-time Patient Queue & Digital Signage Controller</p>
+            <h2 className="text-lg font-semibold text-gray-900">HMIS Intelligent Ticket Router</h2>
+            <p className="text-xs text-gray-500">Real-time Patient Queue & HMIS Ticketing System Controller</p>
           </div>
         </div>
         
@@ -278,7 +293,7 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            Launch Digital Signage Screen
+            Launch HMIS Ticketing Display
           </button>
         </div>
       </div>

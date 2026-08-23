@@ -20,7 +20,9 @@ import {
   X, 
   ArrowRight, 
   UserCheck,
-  CheckCircle2
+  CheckCircle2,
+  ArrowRightLeft,
+  MessageSquare
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { toast } from "../lib/promptService";
@@ -29,6 +31,8 @@ interface DoctorsDeskProps {
   toggles: any;
   onRefreshQueue: () => void;
   activeSpecialistId?: string;
+  onOpenTransferModal?: (patient?: any) => void;
+  onOpenChatModal?: (targetRole?: string, patientInfo?: any) => void;
 }
 
 export interface RoutingCueInfo {
@@ -42,7 +46,13 @@ export interface RoutingCueInfo {
   details: string;
 }
 
-export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistId }: DoctorsDeskProps) {
+export default function DoctorsDesk({
+  toggles,
+  onRefreshQueue,
+  activeSpecialistId,
+  onOpenTransferModal,
+  onOpenChatModal
+}: DoctorsDeskProps) {
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
   const [medications, setMedications] = useState<Medication[]>([]);
   const [queueTickets, setQueueTickets] = useState<QueueTicket[]>([]);
@@ -630,6 +640,44 @@ export default function DoctorsDesk({ toggles, onRefreshQueue, activeSpecialistI
                   <p>Gender: <span className="font-semibold">{selectedPatient.gender}</span></p>
                   <p>Blood Type: <span className="font-semibold">{selectedPatient.bloodType}</span></p>
                   <p>SHA Code: <span className="font-mono font-bold text-[10px]">{selectedPatient.shaId || "N/A"}</span></p>
+                </div>
+
+                {/* Quick Referral & Inter-departmental Transfer Hub Actions */}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                  {onOpenTransferModal && (
+                    <button
+                      id="btn-quick-patient-transfer"
+                      type="button"
+                      onClick={() => onOpenTransferModal({
+                        patientName: selectedPatient.patientName,
+                        nationalId: selectedPatient.nationalId || "",
+                        age: selectedPatient.age,
+                        gender: selectedPatient.gender,
+                        symptoms: symptoms,
+                        diagnosis: diagnosis,
+                        vitals: { temp, bp, pulse, weight }
+                      })}
+                      className="flex-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-blue-200 transition-colors cursor-pointer"
+                    >
+                      <ArrowRightLeft className="w-3.5 h-3.5" />
+                      <span>Transfer / Refer Patient</span>
+                    </button>
+                  )}
+                  {onOpenChatModal && (
+                    <button
+                      id="btn-quick-patient-chat"
+                      type="button"
+                      onClick={() => onOpenChatModal("all", {
+                        patientName: selectedPatient.patientName,
+                        nationalId: selectedPatient.nationalId || "",
+                        diagnosis: diagnosis || symptoms
+                      })}
+                      className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Staff Chat</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

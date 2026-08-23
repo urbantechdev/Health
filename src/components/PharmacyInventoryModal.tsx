@@ -18,6 +18,7 @@ import {
   DollarSign,
   ShieldAlert
 } from "lucide-react";
+import { toast, modernConfirm } from "../lib/promptService";
 
 interface PharmacyInventoryModalProps {
   isOpen: boolean;
@@ -102,7 +103,7 @@ export default function PharmacyInventoryModal({
   const handleSaveDrug = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      alert("Please specify the medication name.");
+      toast.warning("Please specify the medication name.", "Name Required");
       return;
     }
 
@@ -119,6 +120,7 @@ export default function PharmacyInventoryModal({
           batchNo: batchNo.trim(),
           expiryDate,
         });
+        toast.success(`Updated ${name.trim()} in pharmacy formulary.`, "Formulary Updated");
       } else {
         // Create new drug in Firestore
         await addDoc(collection(db, "medications"), {
@@ -130,12 +132,13 @@ export default function PharmacyInventoryModal({
           batchNo: batchNo.trim(),
           expiryDate,
         });
+        toast.success(`Registered ${name.trim()} to inventory database.`, "Medication Registered");
       }
       setActiveTab("list");
       setEditingMedId(null);
     } catch (err) {
       console.error("Error saving medication to inventory:", err);
-      alert("Failed to save medication to inventory.");
+      toast.error("Failed to save medication to inventory formulary.", "Save Error");
     } finally {
       setSaving(false);
     }
@@ -147,19 +150,37 @@ export default function PharmacyInventoryModal({
       await updateDoc(doc(db, "medications", medId), {
         quantity: newQty,
       });
+      if (addQty > 0) {
+        toast.success(`Added +${addQty} units to stock. (New balance: ${newQty})`, "Stock Replenished");
+      } else {
+        toast.info(`Adjusted stock by ${addQty}. (New balance: ${newQty})`, "Stock Adjusted");
+      }
     } catch (err) {
       console.error("Error updating stock:", err);
+      toast.error("Failed to update stock quantity.", "Update Error");
     }
   };
 
   const handleDeleteMed = async (medId: string, medName: string) => {
-    if (!window.confirm(`Are you sure you want to remove "${medName}" from the pharmacy inventory?`)) {
+    const confirmed = await modernConfirm(
+      `Are you sure you want to remove "${medName}" from the pharmacy inventory database? This will permanently delete its batch records and formulary pricing.`,
+      {
+        title: "Remove Medication Formulary",
+        type: "error",
+        destructive: true,
+        confirmText: "Delete Medication",
+        cancelText: "Keep In Stock",
+      }
+    );
+    if (!confirmed) {
       return;
     }
     try {
       await deleteDoc(doc(db, "medications", medId));
+      toast.success(`Removed "${medName}" from pharmacy inventory.`, "Medication Deleted");
     } catch (err) {
       console.error("Error deleting medication:", err);
+      toast.error("Failed to remove medication from database.", "Delete Error");
     }
   };
 

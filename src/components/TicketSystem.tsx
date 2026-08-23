@@ -6,6 +6,11 @@ import { closeAutoTicketById, deleteTicketById, deleteMultipleTicketsById } from
 import { upsertUnifiedPatientRecord } from "../lib/patientSyncService";
 import { toast, modernConfirm } from "../lib/promptService";
 import { 
+  voiceAnnouncer, 
+  VoiceAnnouncementConfig, 
+  ActiveAnnouncement 
+} from "../lib/voiceAnnouncementService";
+import { 
   Ticket, 
   CheckCircle2, 
   Clock, 
@@ -35,7 +40,16 @@ import {
   Copy,
   Trash2,
   Trash,
-  AlertTriangle
+  AlertTriangle,
+  Volume2,
+  VolumeX,
+  Radio,
+  Megaphone,
+  Settings2,
+  Sliders,
+  Play,
+  RotateCcw,
+  Sparkle
 } from "lucide-react";
 
 export default function TicketSystem() {
@@ -44,6 +58,16 @@ export default function TicketSystem() {
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "in_progress" | "closed">("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "auto" | "manual">("all");
+
+  // Voice Announcement System State
+  const [voiceConfig, setVoiceConfig] = useState<VoiceAnnouncementConfig>(() => voiceAnnouncer.getConfig());
+  const [activeAnnouncement, setActiveAnnouncement] = useState<ActiveAnnouncement | null>(null);
+  const [showVoiceSettingsModal, setShowVoiceSettingsModal] = useState(false);
+  const [callingTicketModal, setCallingTicketModal] = useState<{
+    ticket: SystemTicket;
+    selectedRoom: string;
+  } | null>(null);
+  const [isCallingVoice, setIsCallingVoice] = useState(false);
 
   // New Ticket Modal State
   const [showModal, setShowModal] = useState(false);
@@ -124,6 +148,65 @@ export default function TicketSystem() {
 
     return () => unsub();
   }, []);
+
+  // Subscribe to Voice Announcer State
+  useEffect(() => {
+    const unsub = voiceAnnouncer.subscribe((active) => {
+      setActiveAnnouncement(active);
+    });
+    return () => unsub();
+  }, []);
+
+  const updateVoiceSettings = (updates: Partial<VoiceAnnouncementConfig>) => {
+    voiceAnnouncer.saveConfig(updates);
+    setVoiceConfig(voiceAnnouncer.getConfig());
+  };
+
+  const handleTestVoiceCall = async () => {
+    voiceAnnouncer.resumeAudioContext();
+    toast.info("Testing Voice Queue Announcement: Ticket 52TC ➔ Room 5, Doctor", "Voice PA System");
+    await voiceAnnouncer.announceTurnArrived({
+      ticketNo: "52TC",
+      patientName: "Mwangi Karanja",
+      roomOrDesk: voiceConfig.defaultRoom || "Room 5",
+      departmentOrRole: "Doctor",
+      repeatCount: 1
+    });
+  };
+
+  const handleVoiceCallTicket = async (ticket: SystemTicket, destinationRoom?: string) => {
+    setIsCallingVoice(true);
+    voiceAnnouncer.resumeAudioContext();
+
+    const room = destinationRoom || ticket.consultationRoom || voiceConfig.defaultRoom || "Room 5, Doctor";
+    const deptRole = ticket.specialistTitle || ticket.assignedSpecialistName || (ticket.department === "reception" ? "Triage Desk" : `${ticket.department} Counter`);
+
+    try {
+      // 1. Trigger Voice Announcement with Banking Chime
+      await voiceAnnouncer.announceTurnArrived({
+        ticketNo: ticket.ticketNumber,
+        patientName: ticket.patientName,
+        roomOrDesk: room,
+        departmentOrRole: deptRole,
+        repeatCount: voiceConfig.repeatCount
+      });
+
+      // 2. Mark ticket as in_progress and record room
+      if (ticket.status === "open") {
+        await updateDoc(doc(db, "system_tickets", ticket.id), {
+          status: "in_progress",
+          consultationRoom: room
+        });
+      }
+
+      toast.success(`Called Ticket ${ticket.ticketNumber} to ${room}`, "Voice Broadcast Sent");
+    } catch (err) {
+      console.error("Error calling ticket with voice:", err);
+    } finally {
+      setIsCallingVoice(false);
+      setCallingTicketModal(null);
+    }
+  };
 
   // Helper to find existing active ticket for given National ID
   const findActiveDuplicate = (idToCheck: string, excludeTicketId?: string) => {
@@ -220,6 +303,16 @@ export default function TicketSystem() {
 
       // Immediately hide the create modal window as requested
       setShowModal(false);
+
+      // Trigger PA Vocal Announcement for new raised ticket (Banking / Hospital Kiosk style)
+      if (voiceConfig.enabled && voiceConfig.announceOnNewTicket) {
+        voiceAnnouncer.announceNewTicket({
+          ticketNo: tckNo,
+          patientName: cleanName,
+          department: department.toUpperCase(),
+          assignedRoom: "Waiting Area"
+        }).catch((e) => console.warn("Voice announce on new ticket failed:", e));
+      }
 
       // Display the success prompt popup
       setSuccessPrompt({
@@ -583,14 +676,128 @@ export default function TicketSystem() {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-200 shadow-lg shadow-emerald-950/40 flex items-center gap-2 cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Manual Patient Ticket</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setShowVoiceSettingsModal(true)}
+            className="px-3.5 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-200 border border-slate-600/60 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Configure PA Voice & Banking Chime System"
+          >
+            <Settings2 className="w-4 h-4 text-emerald-400" />
+            <span>Voice PA Settings</span>
+          </button>
+
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-200 shadow-lg shadow-emerald-950/40 flex items-center gap-2 cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Manual Patient Ticket</span>
+          </button>
+        </div>
       </div>
+
+      {/* Voice Announcement Live Status & Quick Actions Bar */}
+      <div className="bg-slate-900 border-2 border-indigo-900/60 p-4 rounded-2xl shadow-lg flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-white">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => updateVoiceSettings({ enabled: !voiceConfig.enabled })}
+            className={`p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+              voiceConfig.enabled
+                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/50 shadow-md"
+                : "bg-rose-500/20 text-rose-400 border-rose-500/40"
+            }`}
+            title={voiceConfig.enabled ? "Mute Voice System" : "Unmute Voice System"}
+          >
+            {voiceConfig.enabled ? <Volume2 className="w-5 h-5 animate-pulse" /> : <VolumeX className="w-5 h-5" />}
+          </button>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${voiceConfig.enabled ? "bg-emerald-400 animate-ping" : "bg-rose-500"}`} />
+              <h3 className="font-extrabold text-xs tracking-wider uppercase">
+                {voiceConfig.enabled ? "Voice Queue PA System Active" : "Voice PA Muted"}
+              </h3>
+              <span className="px-2 py-0.5 bg-indigo-950 border border-indigo-700/60 rounded-full text-[9px] font-black text-indigo-300 font-mono">
+                {voiceConfig.chimeType === "banking_ding_dong" ? "🔔 Banking Ding-Dong" : voiceConfig.chimeType === "hospital_3tone" ? "🎶 Hospital 3-Tone" : "🔔 Bell"}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300 mt-0.5">
+              Live automated broadcast for ticket creation & queue turn call-outs (e.g. <span className="font-mono text-emerald-300 font-bold">"Ticket No 52TC, please go to Room 5, Doctor"</span>)
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Voice Mode Toggles */}
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-700 cursor-pointer hover:bg-slate-800">
+            <input
+              type="checkbox"
+              checked={voiceConfig.announceOnNewTicket}
+              onChange={(e) => updateVoiceSettings({ announceOnNewTicket: e.target.checked })}
+              className="rounded text-emerald-500 focus:ring-emerald-400 w-3.5 h-3.5"
+            />
+            <span>Announce New Intake</span>
+          </label>
+
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-700 cursor-pointer hover:bg-slate-800">
+            <input
+              type="checkbox"
+              checked={voiceConfig.announceOnTurnArrived}
+              onChange={(e) => updateVoiceSettings({ announceOnTurnArrived: e.target.checked })}
+              className="rounded text-emerald-500 focus:ring-emerald-400 w-3.5 h-3.5"
+            />
+            <span>Announce Turn Arrived</span>
+          </label>
+
+          {/* Test Chime & Voice Call Button */}
+          <button
+            onClick={handleTestVoiceCall}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+          >
+            <Megaphone className="w-3.5 h-3.5 text-indigo-200" />
+            <span>Test Voice Announcement</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Live Voice Broadcast Marquee (Appears when active announcement is speaking) */}
+      {activeAnnouncement && (
+        <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-indigo-950 border-2 border-emerald-500/80 p-4 rounded-2xl text-white shadow-2xl animate-fade-in flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-emerald-500 text-slate-950 rounded-2xl animate-bounce shadow-lg shadow-emerald-500/50">
+              <Megaphone className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-emerald-500 text-slate-950 font-black text-[10px] uppercase rounded-md tracking-widest animate-pulse">
+                  ON AIR • NOW ANNOUNCING
+                </span>
+                <span className="text-xs text-slate-300 font-mono">
+                  {new Date(activeAnnouncement.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+              <h2 className="text-lg md:text-xl font-black text-emerald-300 font-mono tracking-wide mt-1">
+                📢 {activeAnnouncement.formattedText}
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-end gap-1 h-6">
+              <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.4s_ease-in-out_infinite] h-3" />
+              <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.6s_ease-in-out_infinite] h-6" />
+              <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.3s_ease-in-out_infinite] h-4" />
+              <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.5s_ease-in-out_infinite] h-5" />
+            </div>
+            <button
+              onClick={() => voiceAnnouncer.stop()}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer border border-slate-700"
+            >
+              Skip Voice
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -838,6 +1045,24 @@ export default function TicketSystem() {
 
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Voice Call / PA Announce Button */}
+                        {ticket.status !== "closed" && (
+                          <button
+                            onClick={() => {
+                              const defaultR = ticket.consultationRoom || (ticket.department === "reception" ? "Room 5, Doctor" : `${ticket.department.toUpperCase()} Counter`);
+                              setCallingTicketModal({
+                                ticket,
+                                selectedRoom: defaultR
+                              });
+                            }}
+                            title="Call Patient Turn via PA Voice Broadcast (e.g. Ticket No 52TC, please go to Room 5, Doctor)"
+                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-1 shadow-xs animate-pulse"
+                          >
+                            <Volume2 className="w-3 h-3 text-indigo-200" />
+                            <span>Call Turn</span>
+                          </button>
+                        )}
+
                         {/* Option to Edit Ticket */}
                         <button
                           onClick={() => handleOpenEditModal(ticket)}
@@ -1468,6 +1693,306 @@ export default function TicketSystem() {
                       <span>Confirm Batch Delete</span>
                     </>
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CALLING TICKET DESTINATION ROOM MODAL */}
+      {callingTicketModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-60 animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border-2 border-indigo-200 overflow-hidden animate-scale-up">
+            <div className="p-4.5 bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-400/30">
+                  <Megaphone className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm uppercase tracking-wide">PA Voice Call Patient Turn</h3>
+                  <p className="text-[11px] text-indigo-200 font-medium font-mono">
+                    Ticket: {callingTicketModal.ticket.ticketNumber} • {callingTicketModal.ticket.patientName}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setCallingTicketModal(null)}
+                className="p-1 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              {/* Preview Announcement Text */}
+              <div className="p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-2xl">
+                <p className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-1">
+                  Vocal Broadcast Preview:
+                </p>
+                <p className="text-sm font-black text-indigo-950 font-mono">
+                  "Ticket No {callingTicketModal.ticket.ticketNumber}, please go to {callingTicketModal.selectedRoom || "Room 5, Doctor"}"
+                </p>
+              </div>
+
+              {/* Destination Room Presets */}
+              <div className="space-y-2">
+                <label className="block font-bold text-slate-700">Select Destination Room / Station *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    "Room 5, Doctor",
+                    "Room 1, Consultation",
+                    "Room 2, Pediatrician",
+                    "Room 3, Specialist Clinic",
+                    "Room 4, Gynaecology",
+                    "Triage & Vitals Station",
+                    "Laboratory Window A",
+                    "Pharmacy Dispensing B",
+                    "X-Ray Radiology Room",
+                    "Cashier & Billing Desk"
+                  ].map((room) => (
+                    <button
+                      key={room}
+                      type="button"
+                      onClick={() => setCallingTicketModal({ ...callingTicketModal, selectedRoom: room })}
+                      className={`p-2.5 rounded-xl border text-left font-bold text-[11px] transition-all cursor-pointer ${
+                        callingTicketModal.selectedRoom === room
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {room}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-slate-100">
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Custom Destination Text:</label>
+                  <input
+                    type="text"
+                    value={callingTicketModal.selectedRoom}
+                    onChange={(e) => setCallingTicketModal({ ...callingTicketModal, selectedRoom: e.target.value })}
+                    placeholder="e.g. Room 5, Doctor"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-indigo-600"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCallingTicketModal(null)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleVoiceCallTicket(callingTicketModal.ticket, callingTicketModal.selectedRoom)}
+                  disabled={isCallingVoice}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs uppercase cursor-pointer shadow-md disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Volume2 className="w-4 h-4 text-indigo-200" />
+                  <span>{isCallingVoice ? "Broadcasting Voice..." : "Broadcast Voice Call"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VOICE PA & CHIME SETTINGS MODAL */}
+      {showVoiceSettingsModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-60 animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border-2 border-slate-200 overflow-hidden animate-scale-up">
+            <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
+                  <Settings2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm uppercase tracking-wide">Intelligent Voice PA & Chime Settings</h3>
+                  <p className="text-xs text-slate-400">Configure acoustic chime, TTS voice engine, and event triggers</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowVoiceSettingsModal(false)}
+                className="p-1 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 text-xs">
+              {/* Master Enabled Switch */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Master Voice Announcement System</h4>
+                  <p className="text-slate-500 text-[11px] mt-0.5">Enable or mute all automatic PA speech & acoustic chimes</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateVoiceSettings({ enabled: !voiceConfig.enabled })}
+                  className={`px-4 py-2 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors cursor-pointer ${
+                    voiceConfig.enabled
+                      ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs"
+                      : "bg-slate-200 text-slate-700"
+                  }`}
+                >
+                  {voiceConfig.enabled ? "Active / ON" : "Muted / OFF"}
+                </button>
+              </div>
+
+              {/* Chime Melody Selector */}
+              <div className="space-y-2">
+                <label className="block font-bold text-slate-800">Acoustic Audio Chime Tone *</label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { id: "banking_ding_dong", title: "Banking 2-Tone Ding-Dong", desc: "Classic crisp D5-A4 chime" },
+                    { id: "hospital_3tone", title: "Hospital 3-Tone Chord", desc: "Medical F4-A4-C5 chime" },
+                    { id: "subtle_bell", title: "Subtle Bell Chime", desc: "Gentle 880Hz crystal bell" },
+                    { id: "none", title: "No Chime (Speech Only)", desc: "Direct voice broadcast" }
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        updateVoiceSettings({ chimeType: item.id as any });
+                        voiceAnnouncer.playChime(item.id as any);
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                        voiceConfig.chimeType === item.id
+                          ? "bg-indigo-50/90 border-indigo-600 text-indigo-950 ring-2 ring-indigo-500/20"
+                          : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
+                      }`}
+                    >
+                      <div className="font-bold text-xs">{item.title}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">{item.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Event Triggers */}
+              <div className="space-y-2">
+                <label className="block font-bold text-slate-800">Automated Vocal Triggers</label>
+                <div className="space-y-2">
+                  <label className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70">
+                    <div>
+                      <span className="font-bold text-slate-800 block">Announce New Raised Patient Tickets</span>
+                      <span className="text-[10px] text-slate-500">Vocalizes when a ticket is issued at Reception Kiosk or Ticket Board</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={voiceConfig.announceOnNewTicket}
+                      onChange={(e) => updateVoiceSettings({ announceOnNewTicket: e.target.checked })}
+                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70">
+                    <div>
+                      <span className="font-bold text-slate-800 block">Announce Queue Calls & Turn Arrival</span>
+                      <span className="text-[10px] text-slate-500">Vocalizes: "Ticket No 52TC, please go to Room 5, Doctor"</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={voiceConfig.announceOnTurnArrived}
+                      onChange={(e) => updateVoiceSettings({ announceOnTurnArrived: e.target.checked })}
+                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Volume & Speed Sliders */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <div className="flex justify-between font-bold text-slate-700">
+                    <span>Volume:</span>
+                    <span>{Math.round(voiceConfig.volume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="1.0"
+                    step="0.1"
+                    value={voiceConfig.volume}
+                    onChange={(e) => updateVoiceSettings({ volume: parseFloat(e.target.value) })}
+                    className="w-full accent-indigo-600 cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between font-bold text-slate-700">
+                    <span>Speech Speed:</span>
+                    <span>{voiceConfig.rate}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.2"
+                    step="0.05"
+                    value={voiceConfig.rate}
+                    onChange={(e) => updateVoiceSettings({ rate: parseFloat(e.target.value) })}
+                    className="w-full accent-indigo-600 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Repeat Count */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-800">Announcement Repeat Count</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateVoiceSettings({ repeatCount: 1 })}
+                    className={`py-2 px-3 rounded-xl border text-center font-bold text-xs transition-colors cursor-pointer ${
+                      voiceConfig.repeatCount === 1 ? "bg-indigo-600 text-white border-indigo-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                    }`}
+                  >
+                    1 Time (Standard)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateVoiceSettings({ repeatCount: 2 })}
+                    className={`py-2 px-3 rounded-xl border text-center font-bold text-xs transition-colors cursor-pointer ${
+                      voiceConfig.repeatCount === 2 ? "bg-indigo-600 text-white border-indigo-600" : "bg-slate-50 text-slate-700 border-slate-200"
+                    }`}
+                  >
+                    2 Times (Repeat Call)
+                  </button>
+                </div>
+              </div>
+
+              {/* Default Call Destination */}
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-800">Default Consultation Room Name</label>
+                <input
+                  type="text"
+                  value={voiceConfig.defaultRoom}
+                  onChange={(e) => updateVoiceSettings({ defaultRoom: e.target.value })}
+                  placeholder="e.g. Room 5, Doctor"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-indigo-600"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleTestVoiceCall}
+                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-indigo-200"
+                >
+                  <Megaphone className="w-3.5 h-3.5" />
+                  <span>Test Sample Voice Call</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowVoiceSettingsModal(false)}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs uppercase cursor-pointer transition-colors shadow-xs"
+                >
+                  Done / Close
                 </button>
               </div>
             </div>
