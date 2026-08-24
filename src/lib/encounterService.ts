@@ -1,0 +1,792 @@
+import { db } from "./firebase";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  addDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  runTransaction,
+  serverTimestamp,
+  Unsubscribe
+} from "firebase/firestore";
+import {
+  Encounter,
+  EncounterVital,
+  EncounterPrescription,
+  EncounterLabRequest,
+  EncounterBillItem,
+  EncounterNursingNote,
+  HospitalWard,
+  WardBed,
+  AdmissionType,
+  EncounterStatus,
+  MedicalRecord
+} from "../types";
+
+/**
+ * DEFAULT KENYAN HOSPITAL WARDS & BEDS DATA INITIALIZER
+ */
+export const DEFAULT_HOSPITAL_WARDS: HospitalWard[] = [
+  { id: "ward-general-male", name: "Male Medical & Surgical Ward", code: "MMSW", floor: "Ground Floor - Wing A", category: "General", totalBeds: 6, dailyBaseRate: 1500 },
+  { id: "ward-general-female", name: "Female Medical & Surgical Ward", code: "FMSW", floor: "Ground Floor - Wing B", category: "General", totalBeds: 6, dailyBaseRate: 1500 },
+  { id: "ward-maternity", name: "Maternity & Postnatal Ward", code: "MATW", floor: "1st Floor - Wing A", category: "Maternity", totalBeds: 4, dailyBaseRate: 2500 },
+  { id: "ward-pediatric", name: "Pediatric Ward (Children)", code: "PEDW", floor: "1st Floor - Wing B", category: "General", totalBeds: 4, dailyBaseRate: 1800 },
+  { id: "ward-private", name: "Executive Private Wing", code: "EXPW", floor: "2nd Floor - Wing A", category: "Private", totalBeds: 3, dailyBaseRate: 6000 },
+  { id: "ward-icu", name: "Intensive Care Unit (ICU / HDU)", code: "ICUW", floor: "2nd Floor - Wing B", category: "ICU", totalBeds: 3, dailyBaseRate: 12000 }
+];
+
+export const initDefaultHospitalWardsAndBeds = async (): Promise<void> => {
+  try {
+    const wardsSnap = await getDocs(collection(db, "wards"));
+    if (wardsSnap.empty) {
+      console.log("[EncounterService] Initializing default hospital wards and beds...");
+      for (const ward of DEFAULT_HOSPITAL_WARDS) {
+        await setDoc(doc(db, "wards", ward.id), ward);
+
+        // Populate beds for this ward
+        for (let i = 1; i <= ward.totalBeds; i++) {
+          const bedId = `${ward.id}-bed-${i}`;
+          const bedDoc: WardBed = {
+            id: bedId,
+            bedNumber: `Bed ${i}`,
+            wardId: ward.id,
+            wardName: ward.name,
+            category: ward.category as any,
+            status: "AVAILABLE",
+            dailyRate: ward.dailyBaseRate,
+            currentPatientId: null,
+            currentPatientName: null,
+            currentEncounterId: null,
+            occupiedSince: null
+          };
+          await setDoc(doc(db, "beds", bedId), bedDoc);
+        }
+      }
+      console.log("[EncounterService] Successfully initialized hospital wards and beds.");
+    }
+  } catch (err) {
+    console.error("[EncounterService] Error initializing wards and beds:", err);
+  }
+};
+
+/**
+ * 1. CREATE MASTER ENCOUNTER DOCUMENT (/encounters/{encounterId})
+ */
+export interface CreateEncounterParams {
+  patientId: string;
+  patientName: string;
+  nationalId: string;
+  phone?: string;
+  age?: number;
+  gender?: string;
+  bloodType?: string;
+  admissionType: AdmissionType;
+  assignedWardId?: string;
+  assignedWardName?: string;
+  assignedBedId?: string;
+  assignedBedNumber?: string;
+  initialSymptoms?: string;
+  initialDiagnosis?: string;
+  attendingDoctorName?: string;
+  attendingDoctorId?: string;
+  activeQueueTicketId?: string;
+  initialVitals?: {
+    temp?: string;
+    bp?: string;
+    pulse?: string;
+    weight?: string;
+    spo2?: string;
+    respiratoryRate?: string;
+  };
+  recordedBy?: string;
+}
+
+export const createHospitalEncounter = async (
+  params: CreateEncounterParams
+): Promise<string> => {
+  const nowIso = new Date().toISOString();
+  const encounterId = `ENC-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+
+  const isAdmitted = params.admissionType === "INPATIENT" || params.admissionType === "EMERGENCY" || params.admissionType === "MATERNITY";
+  const status: EncounterStatus = isAdmitted ? "ADMITTED" : "TRIAGE";
+
+  // Initial bill item calculation if bed is assigned
+  let initialBilled = 0;
+  if (params.assignedBedId && isAdmitted) {
+    // Initial Admission & Ward File Opening Charge
+    initialBilled = 2000;
+  } else {
+    // Standard Consultation Intake fee
+    initialBilled = 1000;
+  }
+
+  const encounterDoc: Encounter = {
+    id: encounterId,
+    patientId: params.patientId,
+    patientName: params.patientName,
+    nationalId: params.nationalId,
+    phone: params.phone || "",
+    age: params.age || 30,
+    gender: params.gender || "Male",
+    bloodType: params.bloodType || "O+",
+    status,
+    admissionType: params.admissionType,
+    assignedWard: params.assignedWardName || undefined,
+    assignedWardId: params.assignedWardId || undefined,
+    assignedBed: params.assignedBedNumber || undefined,
+    assignedBedId: params.assignedBedId || undefined,
+    admittedAt: isAdmitted ? nowIso : undefined,
+    dischargedAt: null,
+    doctorDischargeApproved: false,
+    billingCleared: false,
+    totalBilled: initialBilled,
+    totalPaid: 0,
+    pendingLabOrders: 0,
+    pendingPrescriptions: 0,
+    latestDiagnosis: params.initialDiagnosis || "Initial medical intake",
+    latestSymptoms: params.initialSymptoms || "Registration & triage assessment",
+    attendingDoctorName: params.attendingDoctorName || "Duty Medical Officer",
+    attendingDoctorId: params.attendingDoctorId || "",
+    activeQueueTicketId: params.activeQueueTicketId || "",
+    createdAt: nowIso,
+    updatedAt: nowIso
+  };
+
+  // 1. Save Encounter Parent Document
+  await setDoc(doc(db, "encounters", encounterId), encounterDoc);
+
+  // 2. Initial Vitals in Subcollection (/encounters/{encounterId}/vitals)
+  if (params.initialVitals) {
+    const vitalDoc: EncounterVital = {
+      id: `vit-${Date.now()}`,
+      temp: params.initialVitals.temp || "36.8",
+      bp: params.initialVitals.bp || "120/80",
+      pulse: params.initialVitals.pulse || "72",
+      weight: params.initialVitals.weight || "68",
+      spo2: params.initialVitals.spo2 || "98",
+      respiratoryRate: params.initialVitals.respiratoryRate || "16",
+      recordedBy: params.recordedBy || "Triage Nurse",
+      recordedAt: nowIso
+    };
+    await setDoc(doc(db, "encounters", encounterId, "vitals", vitalDoc.id), vitalDoc);
+  }
+
+  // 3. Initial Consultation / Admission Bill Item in Subcollection (/encounters/{encounterId}/billItems)
+  const initialBillDoc: EncounterBillItem = {
+    id: `bill-${Date.now()}-01`,
+    description: isAdmitted ? "Inpatient Admission & Medical File Fee" : "Outpatient Clinical Consultation",
+    category: isAdmitted ? "ward_bed" : "consultation",
+    unitPrice: initialBilled,
+    quantity: 1,
+    total: initialBilled,
+    isPaid: false,
+    timestamp: nowIso
+  };
+  await setDoc(doc(db, "encounters", encounterId, "billItems", initialBillDoc.id), initialBillDoc);
+
+  // 4. Initial Nursing Note in Subcollection
+  const noteDoc: EncounterNursingNote = {
+    id: `note-${Date.now()}`,
+    note: `Patient admitted to ${params.assignedWardName || "Outpatient Care"} via ${params.admissionType} pathway. Intake vitals recorded.`,
+    shift: "Morning",
+    nurseName: params.recordedBy || "Intake Nurse",
+    timestamp: nowIso
+  };
+  await setDoc(doc(db, "encounters", encounterId, "nursingNotes", noteDoc.id), noteDoc);
+
+  // 5. Update Master Patient record with activeEncounterId
+  if (params.patientId) {
+    const patRef = doc(db, "patients", params.patientId);
+    await updateDoc(patRef, {
+      activeEncounterId: encounterId,
+      status: isAdmitted ? "INPATIENT" : "OUTPATIENT",
+      currentDepartment: isAdmitted ? "inpatient_ward" : "doctor",
+      updatedAt: nowIso
+    }).catch(async () => {
+      // In case patient doc doesn't exist, create it
+      await setDoc(patRef, {
+        id: params.patientId,
+        patientName: params.patientName,
+        nationalId: params.nationalId,
+        phone: params.phone || "",
+        age: params.age || 30,
+        gender: params.gender || "Male",
+        bloodType: params.bloodType || "O+",
+        activeEncounterId: encounterId,
+        status: isAdmitted ? "INPATIENT" : "OUTPATIENT",
+        createdAt: nowIso,
+        updatedAt: nowIso
+      });
+    });
+  }
+
+  // 6. Lock the Ward Bed if assigned
+  if (params.assignedBedId) {
+    const bedRef = doc(db, "beds", params.assignedBedId);
+    await updateDoc(bedRef, {
+      status: "OCCUPIED",
+      currentPatientId: params.patientId,
+      currentPatientName: params.patientName,
+      currentEncounterId: encounterId,
+      occupiedSince: nowIso
+    }).catch(err => console.error("Error updating bed status:", err));
+  }
+
+  return encounterId;
+};
+
+/**
+ * 2. SUBCOLLECTION OPERATIONS
+ */
+
+// Add Vital to /encounters/{encounterId}/vitals
+export const addEncounterVital = async (
+  encounterId: string,
+  vital: Omit<EncounterVital, "id" | "recordedAt">
+): Promise<string> => {
+  const nowIso = new Date().toISOString();
+  const vitalId = `vit-${Date.now()}`;
+  const vitalDoc: EncounterVital = {
+    ...vital,
+    id: vitalId,
+    recordedAt: nowIso
+  };
+
+  await setDoc(doc(db, "encounters", encounterId, "vitals", vitalId), vitalDoc);
+
+  // Update encounter document
+  await updateDoc(doc(db, "encounters", encounterId), {
+    updatedAt: nowIso
+  });
+
+  return vitalId;
+};
+
+// Add Prescription to /encounters/{encounterId}/prescriptions + /encounters/{encounterId}/billItems
+export const addEncounterPrescription = async (
+  encounterId: string,
+  item: {
+    drugName: string;
+    quantity: number;
+    dosage: string;
+    instructions: string;
+    unitPrice: number;
+    prescribedBy: string;
+  }
+): Promise<string> => {
+  const nowIso = new Date().toISOString();
+  const rxId = `rx-${Date.now()}`;
+  const totalPrice = item.unitPrice * item.quantity;
+
+  const rxDoc: EncounterPrescription = {
+    id: rxId,
+    drugName: item.drugName,
+    quantity: item.quantity,
+    dosage: item.dosage,
+    instructions: item.instructions,
+    unitPrice: item.unitPrice,
+    totalPrice,
+    status: "pending",
+    prescribedBy: item.prescribedBy,
+    createdAt: nowIso
+  };
+
+  // 1. Add prescription
+  await setDoc(doc(db, "encounters", encounterId, "prescriptions", rxId), rxDoc);
+
+  // 2. Add matching bill item
+  const billId = `bill-rx-${Date.now()}`;
+  const billDoc: EncounterBillItem = {
+    id: billId,
+    description: `Pharmacy: ${item.drugName} (${item.quantity}x - ${item.dosage})`,
+    category: "pharmacy",
+    unitPrice: item.unitPrice,
+    quantity: item.quantity,
+    total: totalPrice,
+    isPaid: false,
+    timestamp: nowIso
+  };
+  await setDoc(doc(db, "encounters", encounterId, "billItems", billId), billDoc);
+
+  // 3. Increment rollups on encounter document
+  const encSnap = await getDoc(doc(db, "encounters", encounterId));
+  if (encSnap.exists()) {
+    const data = encSnap.data() as Encounter;
+    const newTotalBilled = (data.totalBilled || 0) + totalPrice;
+    const newPendingPrescriptions = (data.pendingPrescriptions || 0) + 1;
+    const billingCleared = (data.totalPaid || 0) >= newTotalBilled;
+
+    await updateDoc(doc(db, "encounters", encounterId), {
+      totalBilled: newTotalBilled,
+      pendingPrescriptions: newPendingPrescriptions,
+      billingCleared,
+      updatedAt: nowIso
+    });
+  }
+
+  return rxId;
+};
+
+// Add Lab Request to /encounters/{encounterId}/labRequests + /encounters/{encounterId}/billItems
+export const addEncounterLabRequest = async (
+  encounterId: string,
+  lab: {
+    testName: string;
+    department: string;
+    sampleType?: string;
+    notes?: string;
+    unitPrice: number;
+    orderedBy: string;
+  }
+): Promise<string> => {
+  const nowIso = new Date().toISOString();
+  const labId = `lab-${Date.now()}`;
+
+  const labDoc: EncounterLabRequest = {
+    id: labId,
+    testName: lab.testName,
+    department: lab.department,
+    sampleType: lab.sampleType || "Blood / Serum",
+    notes: lab.notes || "",
+    unitPrice: lab.unitPrice,
+    status: "pending",
+    orderedBy: lab.orderedBy,
+    createdAt: nowIso
+  };
+
+  // 1. Add lab request
+  await setDoc(doc(db, "encounters", encounterId, "labRequests", labId), labDoc);
+
+  // 2. Add bill item
+  const billId = `bill-lab-${Date.now()}`;
+  const billDoc: EncounterBillItem = {
+    id: billId,
+    description: `Diagnostic: ${lab.testName} (${lab.department.toUpperCase()})`,
+    category: "laboratory",
+    unitPrice: lab.unitPrice,
+    quantity: 1,
+    total: lab.unitPrice,
+    isPaid: false,
+    timestamp: nowIso
+  };
+  await setDoc(doc(db, "encounters", encounterId, "billItems", billId), billDoc);
+
+  // 3. Increment rollups
+  const encSnap = await getDoc(doc(db, "encounters", encounterId));
+  if (encSnap.exists()) {
+    const data = encSnap.data() as Encounter;
+    const newTotalBilled = (data.totalBilled || 0) + lab.unitPrice;
+    const newPendingLabOrders = (data.pendingLabOrders || 0) + 1;
+    const billingCleared = (data.totalPaid || 0) >= newTotalBilled;
+
+    await updateDoc(doc(db, "encounters", encounterId), {
+      totalBilled: newTotalBilled,
+      pendingLabOrders: newPendingLabOrders,
+      billingCleared,
+      updatedAt: nowIso
+    });
+  }
+
+  return labId;
+};
+
+// Complete Lab Request & decrement pendingLabOrders
+export const completeEncounterLabRequest = async (
+  encounterId: string,
+  labId: string,
+  results: string,
+  abnormalFlags: string,
+  performedBy: string
+): Promise<void> => {
+  const nowIso = new Date().toISOString();
+
+  // 1. Update lab doc
+  const labRef = doc(db, "encounters", encounterId, "labRequests", labId);
+  await updateDoc(labRef, {
+    status: "completed",
+    results,
+    abnormalFlags,
+    performedBy,
+    completedAt: nowIso
+  });
+
+  // 2. Recalculate pending lab orders rollup
+  const labsSnap = await getDocs(collection(db, "encounters", encounterId, "labRequests"));
+  let pendingCount = 0;
+  labsSnap.forEach(d => {
+    const data = d.data() as EncounterLabRequest;
+    if (data.status === "pending" || data.status === "processing" || data.status === "sample_collected") {
+      pendingCount++;
+    }
+  });
+
+  await updateDoc(doc(db, "encounters", encounterId), {
+    pendingLabOrders: pendingCount,
+    updatedAt: nowIso
+  });
+};
+
+// Dispense Prescription & decrement pendingPrescriptions
+export const dispenseEncounterPrescription = async (
+  encounterId: string,
+  rxId: string,
+  dispensedBy: string
+): Promise<void> => {
+  const nowIso = new Date().toISOString();
+
+  // 1. Update prescription doc
+  const rxRef = doc(db, "encounters", encounterId, "prescriptions", rxId);
+  await updateDoc(rxRef, {
+    status: "dispensed",
+    dispensedBy,
+    dispensedAt: nowIso
+  });
+
+  // 2. Recalculate pending prescriptions rollup
+  const rxSnap = await getDocs(collection(db, "encounters", encounterId, "prescriptions"));
+  let pendingCount = 0;
+  rxSnap.forEach(d => {
+    const data = d.data() as EncounterPrescription;
+    if (data.status === "pending") {
+      pendingCount++;
+    }
+  });
+
+  await updateDoc(doc(db, "encounters", encounterId), {
+    pendingPrescriptions: pendingCount,
+    updatedAt: nowIso
+  });
+};
+
+// Add Nursing Note
+export const addEncounterNursingNote = async (
+  encounterId: string,
+  note: {
+    note: string;
+    shift: "Morning" | "Afternoon" | "Night";
+    nurseName: string;
+  }
+): Promise<string> => {
+  const nowIso = new Date().toISOString();
+  const noteId = `note-${Date.now()}`;
+  const noteDoc: EncounterNursingNote = {
+    ...note,
+    id: noteId,
+    timestamp: nowIso
+  };
+
+  await setDoc(doc(db, "encounters", encounterId, "nursingNotes", noteId), noteDoc);
+  return noteId;
+};
+
+// Add Custom Bill Item to /encounters/{encounterId}/billItems
+export const addEncounterBillItem = async (
+  encounterId: string,
+  item: Omit<EncounterBillItem, "id" | "timestamp" | "isPaid">
+): Promise<string> => {
+  const nowIso = new Date().toISOString();
+  const billId = `bill-${Date.now()}`;
+  const billDoc: EncounterBillItem = {
+    ...item,
+    id: billId,
+    isPaid: false,
+    timestamp: nowIso
+  };
+
+  await setDoc(doc(db, "encounters", encounterId, "billItems", billId), billDoc);
+
+  const encSnap = await getDoc(doc(db, "encounters", encounterId));
+  if (encSnap.exists()) {
+    const data = encSnap.data() as Encounter;
+    const newTotalBilled = (data.totalBilled || 0) + item.total;
+    const billingCleared = (data.totalPaid || 0) >= newTotalBilled;
+
+    await updateDoc(doc(db, "encounters", encounterId), {
+      totalBilled: newTotalBilled,
+      billingCleared,
+      updatedAt: nowIso
+    });
+  }
+
+  return billId;
+};
+
+// Settle / Pay Encounter Bill
+export const payEncounterBill = async (
+  encounterId: string,
+  paymentAmount: number,
+  paymentMethod: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split",
+  referenceNotes?: string
+): Promise<{ success: boolean; newTotalPaid: number; billingCleared: boolean }> => {
+  const nowIso = new Date().toISOString();
+  const encRef = doc(db, "encounters", encounterId);
+  const encSnap = await getDoc(encRef);
+
+  if (!encSnap.exists()) {
+    throw new Error("Encounter document not found.");
+  }
+
+  const encounter = encSnap.data() as Encounter;
+  const newTotalPaid = (encounter.totalPaid || 0) + paymentAmount;
+  const isCleared = newTotalPaid >= (encounter.totalBilled || 0);
+
+  // Mark all un-paid bill items in subcollection as paid
+  const billSnap = await getDocs(collection(db, "encounters", encounterId, "billItems"));
+  const batchUpdates: Promise<void>[] = [];
+  billSnap.forEach((bDoc) => {
+    const bData = bDoc.data() as EncounterBillItem;
+    if (!bData.isPaid) {
+      batchUpdates.push(
+        updateDoc(doc(db, "encounters", encounterId, "billItems", bDoc.id), {
+          isPaid: true,
+          paidAt: nowIso,
+          paymentMethod
+        })
+      );
+    }
+  });
+  await Promise.all(batchUpdates);
+
+  // Update master encounter document
+  await updateDoc(encRef, {
+    totalPaid: newTotalPaid,
+    billingCleared: isCleared,
+    updatedAt: nowIso
+  });
+
+  // Also create a master invoice document for accounting records
+  const invoiceId = `INV-${Date.now().toString().slice(-6)}`;
+  await setDoc(doc(db, "invoices", invoiceId), {
+    id: invoiceId,
+    patientId: encounter.patientId,
+    patientName: encounter.patientName,
+    nationalId: encounter.nationalId,
+    total: paymentAmount,
+    split: {
+      sha: paymentMethod === "SHA/NHIF" ? paymentAmount : 0,
+      insurance: paymentMethod === "Insurance" ? paymentAmount : 0,
+      outOfPocket: ["Cash", "M-PESA"].includes(paymentMethod) ? paymentAmount : 0
+    },
+    paymentMethod,
+    paymentStatus: "paid",
+    kraCompliantInvoiceNo: `KRA-ETIMS-${Date.now().toString().slice(-8)}`,
+    timestamp: nowIso,
+    encounterId
+  });
+
+  return { success: true, newTotalPaid, billingCleared: isCleared };
+};
+
+// Doctor Clinical Discharge Signoff
+export const signDoctorClinicalDischarge = async (
+  encounterId: string,
+  doctorName: string,
+  dischargeSummary: string
+): Promise<void> => {
+  const nowIso = new Date().toISOString();
+  const encRef = doc(db, "encounters", encounterId);
+
+  await updateDoc(encRef, {
+    doctorDischargeApproved: true,
+    doctorDischargeApprovedBy: doctorName,
+    doctorDischargeApprovedAt: nowIso,
+    dischargeNotes: dischargeSummary,
+    status: "DISCHARGING",
+    updatedAt: nowIso
+  });
+};
+
+/**
+ * 3. ATOMIC DISCHARGE TRANSACTION ENGINE
+ * Enforces all 3 clearance gates (Doctor signoff, Zero pending labs, Zero billing balance)
+ * Releases the bed to AVAILABLE and clears activeEncounterId from patient record simultaneously!
+ */
+export interface AtomicDischargeOptions {
+  dischargedBy: string;
+  dischargeReason?: string;
+  takeHomeNotes?: string;
+}
+
+export const executeAtomicDischarge = async (
+  encounterId: string,
+  options: AtomicDischargeOptions
+): Promise<{ success: boolean; message: string }> => {
+  const encRef = doc(db, "encounters", encounterId);
+
+  return await runTransaction(db, async (transaction) => {
+    const encSnap = await transaction.get(encRef);
+    if (!encSnap.exists()) {
+      throw new Error("Encounter not found.");
+    }
+
+    const encounter = encSnap.data() as Encounter;
+
+    // Gate 1: Doctor Clinical Signoff
+    if (!encounter.doctorDischargeApproved) {
+      throw new Error("Cannot execute discharge: Attending Doctor clinical discharge sign-off is pending.");
+    }
+
+    // Gate 2: Zero Pending Laboratory Orders
+    if ((encounter.pendingLabOrders || 0) > 0) {
+      throw new Error(`Cannot execute discharge: ${encounter.pendingLabOrders} laboratory investigation(s) still in progress.`);
+    }
+
+    // Gate 3: Financial Clearance Check
+    const outstandingBalance = (encounter.totalBilled || 0) - (encounter.totalPaid || 0);
+    if (outstandingBalance > 0 && !encounter.billingCleared) {
+      throw new Error(`Cannot execute discharge: Outstanding hospital bill balance of KES ${outstandingBalance.toLocaleString()} must be cleared first.`);
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // 1. Update Encounter Document to DISCHARGED
+    transaction.update(encRef, {
+      status: "DISCHARGED",
+      dischargedAt: nowIso,
+      dischargedBy: options.dischargedBy,
+      dischargeReason: options.dischargeReason || "Normal Clinical Recovery",
+      dischargeNotes: options.takeHomeNotes || encounter.dischargeNotes || "Patient discharged in stable condition.",
+      updatedAt: nowIso
+    });
+
+    // 2. Free up Patient Record active encounter
+    if (encounter.patientId) {
+      const patRef = doc(db, "patients", encounter.patientId);
+      transaction.update(patRef, {
+        activeEncounterId: null,
+        status: "DISCHARGED",
+        currentDepartment: "discharged",
+        updatedAt: nowIso
+      });
+    }
+
+    // 3. Release Assigned Ward Bed to AVAILABLE
+    if (encounter.assignedBedId) {
+      const bedRef = doc(db, "beds", encounter.assignedBedId);
+      transaction.update(bedRef, {
+        status: "AVAILABLE",
+        currentPatientId: null,
+        currentPatientName: null,
+        currentEncounterId: null,
+        occupiedSince: null
+      });
+    }
+
+    // 4. Close any linked Queue Ticket
+    if (encounter.activeQueueTicketId) {
+      const queueRef = doc(db, "queue", encounter.activeQueueTicketId);
+      transaction.update(queueRef, {
+        status: "completed"
+      });
+    }
+
+    return {
+      success: true,
+      message: `Encounter ${encounterId} successfully discharged. Patient discharged, bed released, and final clearance certificate generated.`
+    };
+  });
+};
+
+/**
+ * 4. REAL-TIME SUBSCRIPTION HELPERS
+ */
+
+export const subscribeEncounters = (
+  callback: (encounters: Encounter[]) => void
+): Unsubscribe => {
+  const q = query(collection(db, "encounters"), orderBy("createdAt", "desc"));
+  return onSnapshot(q, (snap) => {
+    const list: Encounter[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...d.data() } as Encounter);
+    });
+    callback(list);
+  });
+};
+
+export const subscribeHospitalBeds = (
+  callback: (beds: WardBed[]) => void
+): Unsubscribe => {
+  return onSnapshot(collection(db, "beds"), (snap) => {
+    const list: WardBed[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...d.data() } as WardBed);
+    });
+    callback(list);
+  });
+};
+
+export const subscribeEncounterSubcollections = (
+  encounterId: string,
+  callback: (data: {
+    vitals: EncounterVital[];
+    prescriptions: EncounterPrescription[];
+    labRequests: EncounterLabRequest[];
+    billItems: EncounterBillItem[];
+    nursingNotes: EncounterNursingNote[];
+  }) => void
+): (() => void) => {
+  if (!encounterId) return () => {};
+
+  let currentData = {
+    vitals: [] as EncounterVital[],
+    prescriptions: [] as EncounterPrescription[],
+    labRequests: [] as EncounterLabRequest[],
+    billItems: [] as EncounterBillItem[],
+    nursingNotes: [] as EncounterNursingNote[]
+  };
+
+  const unsubVitals = onSnapshot(collection(db, "encounters", encounterId, "vitals"), (s) => {
+    const list: EncounterVital[] = [];
+    s.forEach(d => list.push({ id: d.id, ...d.data() } as EncounterVital));
+    list.sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+    currentData.vitals = list;
+    callback({ ...currentData });
+  });
+
+  const unsubRx = onSnapshot(collection(db, "encounters", encounterId, "prescriptions"), (s) => {
+    const list: EncounterPrescription[] = [];
+    s.forEach(d => list.push({ id: d.id, ...d.data() } as EncounterPrescription));
+    list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    currentData.prescriptions = list;
+    callback({ ...currentData });
+  });
+
+  const unsubLabs = onSnapshot(collection(db, "encounters", encounterId, "labRequests"), (s) => {
+    const list: EncounterLabRequest[] = [];
+    s.forEach(d => list.push({ id: d.id, ...d.data() } as EncounterLabRequest));
+    list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    currentData.labRequests = list;
+    callback({ ...currentData });
+  });
+
+  const unsubBills = onSnapshot(collection(db, "encounters", encounterId, "billItems"), (s) => {
+    const list: EncounterBillItem[] = [];
+    s.forEach(d => list.push({ id: d.id, ...d.data() } as EncounterBillItem));
+    list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    currentData.billItems = list;
+    callback({ ...currentData });
+  });
+
+  const unsubNotes = onSnapshot(collection(db, "encounters", encounterId, "nursingNotes"), (s) => {
+    const list: EncounterNursingNote[] = [];
+    s.forEach(d => list.push({ id: d.id, ...d.data() } as EncounterNursingNote));
+    list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    currentData.nursingNotes = list;
+    callback({ ...currentData });
+  });
+
+  return () => {
+    unsubVitals();
+    unsubRx();
+    unsubLabs();
+    unsubBills();
+    unsubNotes();
+  };
+};

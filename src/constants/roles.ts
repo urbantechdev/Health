@@ -34,6 +34,7 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
     allowedTabs: [
       "dashboard",
       "admin",
+      "admissions",
       "reception",
       "queue",
       "doctor",
@@ -52,6 +53,7 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
     allowedModules: [
       "dashboard",
       "admin",
+      "admissions",
       "reception",
       "queue",
       "doctor",
@@ -90,6 +92,7 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
     allowedTabs: [
       "dashboard",
       "admin",
+      "admissions",
       "reception",
       "queue",
       "doctor",
@@ -108,6 +111,7 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
     allowedModules: [
       "dashboard",
       "admin",
+      "admissions",
       "reception",
       "queue",
       "doctor",
@@ -143,8 +147,8 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
     title: "Reception (Front Desk & Patient Registration)",
     category: "Administrative",
     description: "Registers incoming patients, verifies SHA/NHIF eligibility, issues digital queue tickets, and assigns patients to specialist clinics.",
-    allowedTabs: ["reception", "queue", "journey", "tickets", "transfers", "dashboard"],
-    allowedModules: ["reception", "queue", "journey", "tickets", "transfers", "dashboard"],
+    allowedTabs: ["reception", "admissions", "queue", "journey", "tickets", "transfers", "dashboard"],
+    allowedModules: ["reception", "admissions", "queue", "journey", "tickets", "transfers", "dashboard"],
     department: "reception",
     colorClass: {
       bg: "bg-emerald-50",
@@ -165,8 +169,8 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
     title: "Doctor (Clinical Consultation)",
     category: "Clinical",
     description: "Conducts outpatient and inpatient clinical consultations, captures vital signs, creates digital prescriptions, and triggers automated triage routing.",
-    allowedTabs: ["doctor", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
-    allowedModules: ["doctor", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
+    allowedTabs: ["doctor", "admissions", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
+    allowedModules: ["doctor", "admissions", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
     department: "medical",
     colorClass: {
       bg: "bg-cyan-50",

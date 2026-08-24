@@ -125,11 +125,13 @@ export default function Procurement() {
         notes: reqNotes
       });
 
+      toast.success(`Purchase Requisition ${reqNo} submitted successfully for approval.`, "Requisition Created");
       setShowReqModal(false);
       setReqItems([{ itemName: "Amoxicillin 500mg Caps", category: "Pharmaceuticals", quantity: 500, estimatedCost: 15 }]);
       setReqNotes("");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creating requisition:", err);
+      toast.error(err?.message || "Failed to submit purchase requisition.", "Requisition Error");
     }
   };
 
@@ -193,7 +195,9 @@ export default function Procurement() {
     e.preventDefault();
     setSupDupError(null);
     if (!supName.trim() || !supKraPin.trim()) {
-      setSupDupError("Please provide both supplier business name and KRA PIN.");
+      const msg = "Please provide both supplier business name and KRA PIN.";
+      setSupDupError(msg);
+      toast.warning(msg, "Missing Information");
       return;
     }
 
@@ -201,7 +205,9 @@ export default function Procurement() {
       // 1. Strict Duplicate Supplier Check
       const dupCheck = await checkDuplicateSupplier(supKraPin.trim(), supName.trim(), supEmail.trim());
       if (dupCheck.isDuplicate) {
-        setSupDupError(`[DUPLICATE REJECTED] ${dupCheck.reason}`);
+        const dupMsg = `[DUPLICATE REJECTED] ${dupCheck.reason}`;
+        setSupDupError(dupMsg);
+        toast.warning(dupMsg, "Duplicate Supplier Blocked");
         return;
       }
 
@@ -217,6 +223,7 @@ export default function Procurement() {
         rating: 5
       });
 
+      toast.success(`Supplier ${supName.trim()} (${supKraPin.trim().toUpperCase()}) registered successfully.`, "Supplier Registered");
       setShowSupplierModal(false);
       setSupName("");
       setSupKraPin("");
@@ -225,9 +232,11 @@ export default function Procurement() {
       setSupEmail("");
       setSupAddress("");
       setSupDupError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creating supplier:", err);
-      setSupDupError("Failed to save supplier. Please check connection.");
+      const errMsg = "Failed to save supplier: " + (err?.message || "Please check connection.");
+      setSupDupError(errMsg);
+      toast.error(errMsg, "Supplier Registration Error");
     }
   };
 

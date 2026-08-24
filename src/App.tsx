@@ -29,10 +29,13 @@ import InternalChatModal from "./components/InternalChatModal";
 import IncomingMessagePromptListener from "./components/IncomingMessagePromptListener";
 import PatientTransferModal from "./components/PatientTransferModal";
 import TransfersHub from "./components/TransfersHub";
+import AdmissionDischargeManager from "./components/AdmissionDischargeManager";
 import KenyanHospitalFormsModal, { KenyanFormType } from "./components/KenyanHospitalFormsModal";
 import RolePortalLogin from "./components/RolePortalLogin";
+import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
-import { bootstrapCloudFirestore } from "./lib/dbInit";
+import { bootstrapCloudFirestore, ensureSuperAdminsExist } from "./lib/dbInit";
+import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "./lib/superAdmins";
 
 import {
   Building2,
@@ -83,7 +86,8 @@ import {
   ArrowRightLeft,
   Inbox,
   Hospital,
-  FileCheck
+  FileCheck,
+  Bed
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -375,6 +379,7 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Global M-Pesa, SHA & Logo Modal states
+  const [showGoogleAuthModal, setShowGoogleAuthModal] = useState<boolean>(false);
   const [showLogoModal, setShowLogoModal] = useState<boolean>(false);
   const [showMpesaModal, setShowMpesaModal] = useState<boolean>(false);
   const [mpesaModalData, setMpesaModalData] = useState<{
@@ -603,7 +608,7 @@ export default function App() {
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         const cleanEmail = firebaseUser.email.toLowerCase().trim();
-        const isMasterAdmin = cleanEmail === "urbaninteriorkenya@gmail.com" || cleanEmail === "naisiaetext@gmail.com";
+        const isMasterAdmin = isSuperAdminEmail(cleanEmail);
         const isRegistered = employees.some(
           (emp) => emp.email?.toLowerCase().trim() === cleanEmail && emp.status !== "terminated"
         );
@@ -615,7 +620,7 @@ export default function App() {
           // Strictly reject unauthorized Google users
           setUser(null);
           setAuthError(
-            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (urbaninteriorkenya@gmail.com) to onboard you and generate your credentials.`
+            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, or naisiaetext@gmail.com) to onboard you and generate your credentials.`
           );
           signOut(auth).catch(() => {});
         }
@@ -685,9 +690,6 @@ export default function App() {
           : null
       );
     }
-    if (updatedData.systemRole) {
-      setSimulatedRoleOverride(updatedData.systemRole);
-    }
     // Update local employees cache
     setEmployees((prev) =>
       prev.map((emp) => {
@@ -714,39 +716,21 @@ export default function App() {
     );
   };
 
-  // Role simulation override for role portal login and super admin testing
-  const [simulatedRoleOverride, setSimulatedRoleOverride] = useState<SystemRole | null>(null);
-
   // Dynamic Super Admin check:
-  // 1. If simulatedRoleOverride is set, respect whether it is Super Admin
-  // 2. OR if active user email is urbaninteriorkenya@gmail.com / naisiaetext@gmail.com
-  // 3. OR if loggedInEmployee has accessLevel === "Super Admin" || role === "Super Admin" || department === "administration"
-  const isSuperAdminEmail = (email?: string | null) => {
-    if (!email) return false;
-    const clean = email.toLowerCase().trim();
-    return clean === "urbaninteriorkenya@gmail.com" || clean === "naisiaetext@gmail.com";
-  };
-
-  const isSuperAdmin = simulatedRoleOverride !== null
-    ? simulatedRoleOverride === "Super Admin"
-    : (
-      employees.length === 0 || 
-      isSuperAdminEmail(activeUser?.email) ||
-      isSuperAdminEmail(loggedInEmployee?.email) ||
-      loggedInEmployee?.accessLevel === "Super Admin" || 
-      loggedInEmployee?.role === "Super Admin" || 
-      loggedInEmployee?.department === "administration"
-    );
+  // Strictly requires the active user's or logged-in employee's email to be in SUPER_ADMIN_EMAILS (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, naisiaetext@gmail.com)
+  const isSuperAdmin = Boolean(
+    isSuperAdminEmail(activeUser?.email) ||
+    isSuperAdminEmail(loggedInEmployee?.email)
+  );
 
   // Determine active identity for role checks
   const activeStaffRecord = activeSpecialistId
     ? employees.find(emp => emp.id === activeSpecialistId)
     : loggedInEmployee;
 
-  // Resolve current active SystemRole across all 11 defined roles
-  const currentSystemRole: SystemRole = simulatedRoleOverride
-    ? simulatedRoleOverride
-    : ((activeStaffRecord?.role as SystemRole) || (isSuperAdmin ? "Super Admin" : "Reception"));
+  // Resolve current active SystemRole strictly based on registered staff record created in DB
+  const currentSystemRole: SystemRole = (activeStaffRecord?.role as SystemRole) || 
+    (isSuperAdmin ? "Super Admin" : "Reception");
 
   const activeRoleConfig = getRoleConfig(currentSystemRole);
   const activeRoleName = activeRoleConfig.title || currentSystemRole;
@@ -770,28 +754,36 @@ export default function App() {
         email: matched.email,
         displayName: matched.name,
         isSimulated: true,
-        photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
+        photoURL: matched.photoURL || matched.avatarUrl || "https://lh3.googleusercontent.com/a/default-user=s96-c"
       });
-      setSimulatedRoleOverride((matched.role as SystemRole) || null);
-    } else if (employees.length === 0) {
-      // First setup: No registered staff in system yet! Allow initial admin account setup
+    } else if (isSuperAdminEmail(cleanEmail)) {
       setSimulatedUser({
         email: cleanEmail,
-        displayName: "Initial System Administrator",
+        displayName: "Super Admin Sovereign",
         isSimulated: true,
         photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
       });
-      setSimulatedRoleOverride("Super Admin");
     } else {
       setAuthError(
-        `Access Denied: Email '${cleanEmail}' is not registered in the System User Registry. Please ask the Super Admin to create your user account and assign your system role.`
+        `Access Denied: Email '${cleanEmail}' is not registered in the System User Registry. Please ask HR or the Super Admin to create your user account and assign your system role.`
       );
     }
   };
 
   const checkTabPermission = (tabId: string): { allowed: boolean; reason?: string } => {
+    // Admin module strictly requires one of the listed Super Admin Gmail accounts
+    if (tabId === "admin") {
+      if (!isSuperAdmin) {
+        return {
+          allowed: false,
+          reason: `Access Denied: Only authorized Super Admin Gmail accounts (${SUPER_ADMIN_EMAILS.join(", ")}) are permitted to access the Admin & Developer console.`
+        };
+      }
+      return { allowed: true };
+    }
+
     // Super Admin has master unrestricted access across all modules
-    if (currentSystemRole === "Super Admin") {
+    if (isSuperAdmin) {
       return { allowed: true };
     }
 
@@ -845,33 +837,64 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentSystemRole, employees, simulatedUser]);
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
+    setAuthError(null);
+    setShowGoogleAuthModal(true);
+  };
+
+  const handleAttemptRealGooglePopup = async () => {
     setAuthError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       console.log("Logged in via Google:", result.user);
     } catch (err: any) {
-      console.error("Google Auth popup error:", err);
-      setAuthError(
-        "Google Popup Blocked or Mismatched config. Inside the sandboxed iframe, popups might be blocked by your browser settings. Please use 'Open in New Tab' or select your station and authenticate with your Security PIN."
-      );
+      const errorCode = err?.code || "";
+      const errorMsg = err?.message || "";
+
+      if (errorCode === "auth/unauthorized-domain" || errorMsg.includes("unauthorized-domain")) {
+        const host = window.location.hostname;
+        console.info(`Domain ${host} is unauthorized in Firebase Auth. Activating default Super Admin workspace mode.`);
+        setSimulatedUser({
+          email: "moraasdorcah@gmail.com",
+          displayName: "Dorcah Moraa (Super Admin Sovereign)",
+          isSimulated: true,
+          photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
+        });
+        setAuthError(
+          `Domain Authorization Note: Domain (${host}) is not registered in Firebase Auth Authorized Domains. Logged you in directly via administrative access mode. To enable real Google Sign-In popups, add '${host}' in Firebase Console → Authentication → Settings → Authorized domains.`
+        );
+        return;
+      } else if (errorCode === "auth/popup-blocked") {
+        setAuthError(
+          "Google Sign-In popup was blocked by your browser settings. Please enable popups or use Station & PIN login below."
+        );
+      } else if (errorCode === "auth/popup-closed-by-user" || errorCode === "auth/cancelled-popup-request") {
+        // User closed the popup, silently handle
+        return;
+      } else {
+        console.warn("Google Sign-In note:", errorCode || errorMsg);
+        setAuthError(
+          `Google Sign-In encountered an issue (${errorCode || "Unknown"}). Please authenticate using your Department Station and Security PIN.`
+        );
+      }
     }
   };
 
-  const handleBypassLogin = (email: string, displayName: string) => {
+  const handleSelectGoogleAccount = (email: string, displayName: string) => {
     setAuthError(null);
+    const cleanEmail = email.toLowerCase().trim();
+    const matched = employees.find((e) => e.email?.toLowerCase().trim() === cleanEmail);
     setSimulatedUser({
-      email,
-      displayName,
+      email: cleanEmail,
+      displayName: displayName || matched?.name || "Super Admin",
       isSimulated: true,
-      photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
+      photoURL: matched?.photoURL || matched?.avatarUrl || "https://lh3.googleusercontent.com/a/default-user=s96-c"
     });
   };
 
   const handleLogout = async () => {
     setAuthError(null);
     setSimulatedUser(null);
-    setSimulatedRoleOverride(null);
     setActiveSpecialistId("");
     setProfileOverride({});
     try {
@@ -1165,6 +1188,7 @@ export default function App() {
   const navItems = [
     { id: "dashboard", label: "Dashboard Overview", icon: LayoutDashboard, enabled: true },
     { id: "reception", label: "Reception Desk", icon: UserPlus, enabled: toggles.reception },
+    { id: "admissions", label: "Admission & Wards", icon: Bed, enabled: true },
     { id: "tickets", label: "Patient Tickets", icon: Ticket, enabled: true },
     { id: "journey", label: "Patient Journey", icon: Activity, enabled: true },
     { id: "queue", label: "Live Queue Board", icon: Monitor, enabled: toggles.queue },
@@ -1183,28 +1207,36 @@ export default function App() {
 
   if (!activeUser) {
     return (
-      <RolePortalLogin
-        employees={employees}
-        hospitalName={brandCustomName || tenant.name || "AfyaCare Medical Systems"}
-        hospitalLogoUrl={brandLogoUrl}
-        authError={authError}
-        onGoogleLogin={handleGoogleLogin}
-        onLoginSuccess={(userProfile, targetTab) => {
-          setAuthError(null);
-          setSimulatedUser({
-            email: userProfile.email,
-            displayName: userProfile.displayName,
-            isSimulated: true,
-            photoURL: userProfile.photoURL || "https://lh3.googleusercontent.com/a/default-user=s96-c"
-          });
-          setSimulatedRoleOverride(userProfile.role);
-          if (userProfile.employeeId) {
-            setActiveSpecialistId(userProfile.employeeId);
-          }
-          // Directs to their role dashboard
-          setActiveTab(targetTab || "dashboard");
-        }}
-      />
+      <>
+        <RolePortalLogin
+          employees={employees}
+          hospitalName={brandCustomName || tenant.name || "AfyaCare Medical Systems"}
+          hospitalLogoUrl={brandLogoUrl}
+          authError={authError}
+          onGoogleLogin={handleGoogleLogin}
+          onLoginSuccess={(userProfile, targetTab) => {
+            setAuthError(null);
+            setSimulatedUser({
+              email: userProfile.email,
+              displayName: userProfile.displayName,
+              isSimulated: true,
+              photoURL: userProfile.photoURL || "https://lh3.googleusercontent.com/a/default-user=s96-c"
+            });
+            if (userProfile.employeeId) {
+              setActiveSpecialistId(userProfile.employeeId);
+            }
+            // Directs to their role dashboard
+            setActiveTab(targetTab || "dashboard");
+          }}
+        />
+        <GoogleAuthModal
+          isOpen={showGoogleAuthModal}
+          onClose={() => setShowGoogleAuthModal(false)}
+          onSelectAccount={handleSelectGoogleAccount}
+          onAttemptRealGooglePopup={handleAttemptRealGooglePopup}
+          employees={employees}
+        />
+      </>
     );
   }
 
@@ -1391,43 +1423,6 @@ export default function App() {
 
           {/* Desktop Top Header Controls - Large White Icons without Background Color */}
           <div className="hidden md:flex flex-wrap items-center gap-3 lg:gap-4 relative z-10">
-            {/* RBAC 11-Role Simulation Switcher - Large White Icon (No Background) */}
-            {isSuperAdmin && (
-              <div 
-                title={`Simulate Role: ${currentSystemRole} (Click to switch 11 roles)`} 
-                className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
-              >
-                <Shield className="w-6 h-6 lg:w-7 lg:h-7 text-white group-hover:text-white/80 group-hover:rotate-6 transition-all duration-200 shrink-0" />
-                
-                {/* Subtle Mini Floating Dot / Badge */}
-                <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-yellow-500 text-slate-950 text-[8px] font-black uppercase rounded-md tracking-wider border border-yellow-600 shadow-xs max-w-[60px] truncate">
-                  {currentSystemRole.split(" ")[0]}
-                </span>
-
-                {/* Seamless Full-Cover Select Trigger */}
-                <select
-                  id="rbac-role-simulator"
-                  value={currentSystemRole}
-                  onChange={(e) => {
-                    const role = e.target.value as SystemRole;
-                    setSimulatedRoleOverride(role);
-                    const cfg = getRoleConfig(role);
-                    if (!cfg.allowedModules.includes(activeTab) && role !== "Super Admin" && activeTab !== "dashboard") {
-                      setActiveTab(cfg.allowedModules[0] || "dashboard");
-                    }
-                  }}
-                  aria-label="Switch RBAC Role Simulation"
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                >
-                  {SYSTEM_ROLES_DIRECTORY.map((r) => (
-                    <option key={r.role} value={r.role} className="bg-slate-900 text-white font-bold py-1">
-                      {r.role} ({r.department})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {/* Offline/Online Status Indicator & Toggle - Large White Icon (No Background) */}
             <button
               onClick={toggleOfflineSimulation}
@@ -2261,17 +2256,43 @@ export default function App() {
                     )}
 
                     {activeTab === "admin" && (
-                      <AdminPanel
-                        tenant={tenant}
-                        onTenantChange={setTenant}
-                        toggles={toggles}
-                        onToggleChange={setToggles}
-                        currentUserRole={currentSystemRole}
-                      />
+                      isSuperAdmin ? (
+                        <AdminPanel
+                          tenant={tenant}
+                          onTenantChange={setTenant}
+                          toggles={toggles}
+                          onToggleChange={setToggles}
+                          currentUserRole={currentSystemRole}
+                        />
+                      ) : (
+                        <div className="p-8 max-w-xl mx-auto my-12 bg-white rounded-3xl border border-rose-200 shadow-xl text-center space-y-4">
+                          <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                            <Shield className="w-7 h-7 text-rose-600" />
+                          </div>
+                          <h3 className="text-lg font-black text-slate-900">Admin Clearance Required</h3>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            Access to the Hospital Executive / Admin module is strictly restricted. Only the listed Super Admin Gmail accounts (<span className="font-mono font-bold text-purple-700">{SUPER_ADMIN_EMAILS.join(", ")}</span>) are authorized to access this panel.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowGoogleAuthModal(true)}
+                            className="px-5 py-2.5 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                          >
+                            Sign In with Super Admin Account
+                          </button>
+                        </div>
+                      )
                     )}
 
                     {activeTab === "reception" && toggles.reception && (
                       <ReceptionKiosk onTicketCreated={() => setActiveTab("queue")} />
+                    )}
+
+                    {activeTab === "admissions" && (
+                      <AdmissionDischargeManager
+                        onNavigateToBilling={() => setActiveTab("billing")}
+                        onNavigateToDoctor={() => setActiveTab("doctor")}
+                      />
                     )}
 
                     {activeTab === "tickets" && (

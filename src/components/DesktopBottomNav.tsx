@@ -19,7 +19,8 @@ import {
   ChevronUp,
   CircleDot,
   ArrowRightLeft,
-  MessageSquare
+  MessageSquare,
+  Bed
 } from "lucide-react";
 import { SystemRole, getRoleConfig } from "../constants/roles";
 
@@ -66,6 +67,12 @@ export default function DesktopBottomNav({
       label: "Reception",
       icon: UserPlus,
       shortcut: "Alt+2",
+    },
+    {
+      id: "admissions",
+      label: "Admissions",
+      icon: Bed,
+      shortcut: "Alt+A",
     },
     {
       id: "doctor",

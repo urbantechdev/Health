@@ -112,6 +112,153 @@ export interface SplitBilling {
   outOfPocket: number;
 }
 
+// -------------------------------------------------------------
+// ADMISSION-TO-DISCHARGE PARENT & SUBCOLLECTION ENCOUNTER TYPES
+// -------------------------------------------------------------
+
+export type EncounterStatus =
+  | "REGISTERED"
+  | "TRIAGE"
+  | "DOCTOR_CONSULT"
+  | "ADMITTED"
+  | "DISCHARGING"
+  | "DISCHARGED";
+
+export type AdmissionType =
+  | "OUTPATIENT"
+  | "INPATIENT"
+  | "EMERGENCY"
+  | "DAY_SURGERY"
+  | "MATERNITY";
+
+export interface Encounter {
+  id: string; // e.g. "ENC-2026-001" or Firestore ID
+  patientId: string;
+  patientName: string;
+  nationalId: string;
+  phone?: string;
+  age?: number;
+  gender?: string;
+  bloodType?: string;
+  status: EncounterStatus;
+  admissionType: AdmissionType;
+  assignedWard?: string;
+  assignedWardId?: string;
+  assignedBed?: string;
+  assignedBedId?: string;
+  admittedAt?: string;
+  dischargedAt?: string | null;
+  dischargedBy?: string;
+  dischargeReason?: string;
+  dischargeNotes?: string;
+  doctorDischargeApproved?: boolean;
+  doctorDischargeApprovedBy?: string;
+  doctorDischargeApprovedAt?: string;
+  billingCleared: boolean;
+  totalBilled: number;
+  totalPaid: number;
+  pendingLabOrders: number;
+  pendingPrescriptions: number;
+  latestDiagnosis?: string;
+  latestSymptoms?: string;
+  attendingDoctorName?: string;
+  attendingDoctorId?: string;
+  activeQueueTicketId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EncounterVital {
+  id: string;
+  temp: string; // °C
+  bp: string; // e.g. 120/80
+  pulse: string; // bpm
+  weight: string; // kg
+  spo2?: string; // %
+  respiratoryRate?: string; // /min
+  notes?: string;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export interface EncounterPrescription {
+  id: string;
+  drugName: string;
+  quantity: number;
+  dosage: string;
+  instructions: string;
+  unitPrice: number;
+  totalPrice: number;
+  status: "pending" | "dispensed" | "cancelled";
+  prescribedBy: string;
+  dispensedBy?: string;
+  dispensedAt?: string;
+  createdAt: string;
+}
+
+export interface EncounterLabRequest {
+  id: string;
+  testName: string;
+  department: "laboratory" | "radiology" | "labour_room" | "gyna" | string;
+  sampleType?: string;
+  notes?: string;
+  unitPrice: number;
+  status: "pending" | "sample_collected" | "processing" | "completed" | "cancelled";
+  results?: string;
+  abnormalFlags?: string;
+  orderedBy: string;
+  performedBy?: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface EncounterBillItem {
+  id: string;
+  description: string;
+  category: "consultation" | "pharmacy" | "laboratory" | "radiology" | "ward_bed" | "nursing" | "procedure" | "other";
+  unitPrice: number;
+  quantity: number;
+  total: number;
+  isPaid: boolean;
+  paidAt?: string;
+  paymentMethod?: string;
+  invoiceId?: string;
+  timestamp: string;
+}
+
+export interface EncounterNursingNote {
+  id: string;
+  note: string;
+  shift: "Morning" | "Afternoon" | "Night";
+  nurseName: string;
+  nurseId?: string;
+  timestamp: string;
+}
+
+export interface WardBed {
+  id: string;
+  bedNumber: string; // e.g. "Bed-1", "Bed-2"
+  wardId: string;
+  wardName: string; // e.g. "Male Medical Ward", "Female Surgical Ward", "Maternity & Labour Ward", "Pediatric Ward", "ICU / HDU"
+  category: "General" | "Semi-Private" | "Private" | "ICU" | "Maternity";
+  status: "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "CLEANING";
+  dailyRate: number; // KES e.g. 1500, 3500, 8000
+  currentPatientId?: string | null;
+  currentPatientName?: string | null;
+  currentEncounterId?: string | null;
+  occupiedSince?: string | null;
+}
+
+export interface HospitalWard {
+  id: string;
+  name: string;
+  code: string;
+  floor: string;
+  category: string;
+  totalBeds: number;
+  dailyBaseRate: number;
+}
+
 export interface Invoice {
   id: string;
   patientId: string;

@@ -229,6 +229,10 @@ export default function TicketSystem() {
     // 1. Anti-Duplication Check: Reject if patient already holds an active ticket
     const existingActiveTicket = findActiveDuplicate(trimmedId);
     if (existingActiveTicket) {
+      toast.warning(
+        `[DUPLICATE BLOCKED] Patient ${patientName.trim()} already has active ticket #${existingActiveTicket.ticketNumber} in ${existingActiveTicket.department.toUpperCase()}.`,
+        "Duplicate Ticket Rejected"
+      );
       setDuplicateRejection({
         show: true,
         nationalId: trimmedId,
@@ -326,6 +330,11 @@ export default function TicketSystem() {
         type: "create"
       });
 
+      toast.success(
+        `Ticket #${tckNo} created for ${cleanName} in ${department.toUpperCase()} department.`,
+        "Ticket Created Successfully"
+      );
+
       // Clear create form fields
       setPatientName("");
       setNationalId("");
@@ -333,8 +342,9 @@ export default function TicketSystem() {
       setVisitReason("Outpatient Clinical Consultation");
       setPriority("Normal");
       setDepartment("reception");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creating ticket:", err);
+      toast.error(err?.message || "Failed to create ticket in database.", "Ticket Creation Error");
     } finally {
       setIsSubmittingNew(false);
     }

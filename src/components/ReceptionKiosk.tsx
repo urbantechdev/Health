@@ -227,6 +227,12 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       // Reject if patient already has an active hospital encounter in queue or open system tickets
       const dupCheck = await checkActivePatientEncounter(cleanId);
       if (dupCheck.isDuplicate) {
+        const dupTicket = dupCheck.activeTicket?.ticketNumber || dupCheck.activeQueue?.ticketNo || "Active Ticket";
+        const dupDept = dupCheck.activeTicket?.department || dupCheck.activeQueue?.currentDepartment || "Outpatient";
+        toast.warning(
+          dupCheck.reason || `[DUPLICATE BLOCKED] Patient ${cleanName} already has an active encounter (${dupTicket}) in ${dupDept}.`,
+          "Duplicate Patient Encounter Rejected"
+        );
         setDuplicateRejectionModal({
           show: true,
           checkResult: dupCheck,
@@ -389,6 +395,11 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         assignedRoom: consultationRoom || "Waiting Area"
       }).catch(e => console.warn("Kiosk voice announcement error:", e));
 
+      toast.success(
+        `Patient ${cleanName} onboarded successfully! Queue Ticket #${ticketNo} created for ${specialistTitle || service}.`,
+        "Patient Onboarding Successful"
+      );
+
       // Reset form fields
       setPatientName("");
       setNationalId("");
@@ -403,8 +414,9 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       setExistingPatientProfile(null);
       setActiveDuplicateEncounter(null);
       onTicketCreated();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to register patient/ticket:", err);
+      toast.error(err?.message || "Failed to register patient and issue ticket.", "Onboarding Error");
     } finally {
       setSubmitting(false);
     }

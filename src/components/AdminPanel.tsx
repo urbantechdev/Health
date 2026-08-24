@@ -7,6 +7,7 @@ import StaffOnboardingModal from "./StaffOnboardingModal";
 import { runFullDatabaseDeduplication, checkDuplicateEmployee, DeduplicationReport } from "../lib/deduplicationService";
 import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "../constants/roles";
 import { bootstrapCloudFirestore, cleanSystemAndPurgeTestData, CleanSystemReport, CollectionCounts } from "../lib/dbInit";
+import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "../lib/superAdmins";
 import { toast, modernConfirm } from "../lib/promptService";
 import { 
   ToggleLeft, 
@@ -232,7 +233,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
   const handlePurgeAndCleanSystem = async () => {
     const confirmWipe = await modernConfirm(
-      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nOnly the Master Super Admin (urbaninteriorkenya@gmail.com) will be retained to allow fresh onboarding of real hospital users.",
+      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nThe 3 Sovereign Super Admins (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, naisiaetext@gmail.com) will be preserved to allow fresh onboarding of real hospital staff.",
       {
         title: "PURGE ALL TEST DATA",
         type: "error",
@@ -250,9 +251,9 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       const report = await cleanSystemAndPurgeTestData();
       setPurgeReport(report);
       setDbSyncMessage(
-        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. Only Master Super Admin (urbaninteriorkenya@gmail.com) is active for fresh staff onboarding.`
+        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. The 3 Master Super Admins are preserved and active for fresh staff onboarding.`
       );
-      toast.success(`Purged ${report.totalDeleted} test records across 7 collections.`, "System Cleaned");
+      toast.success(`Purged ${report.totalDeleted} test records across collections.`, "System Cleaned");
     } catch (err) {
       console.error("Error wiping system:", err);
       setDbSyncMessage("Failed to complete system purge. Please check Firestore connection.");
@@ -314,7 +315,9 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
     e.preventDefault();
     setUserCreationError("");
     if (!userName.trim() || !userEmail.trim()) {
-      setUserCreationError("Please provide both name and corporate email address.");
+      const msg = "Please provide both name and corporate email address.";
+      setUserCreationError(msg);
+      toast.warning(msg, "Missing User Information");
       return;
     }
 
@@ -326,7 +329,9 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       // 1. Strict Duplicate Check: Always reject if user with same email or exact name already exists
       const duplicateCheck = await checkDuplicateEmployee("", cleanEmail);
       if (duplicateCheck.isDuplicate) {
-        setUserCreationError(`[DUPLICATE REJECTED] ${duplicateCheck.reason}`);
+        const dupMsg = `[DUPLICATE REJECTED] ${duplicateCheck.reason}`;
+        setUserCreationError(dupMsg);
+        toast.warning(dupMsg, "Duplicate Staff Account Rejected");
         setUserSubmitting(false);
         return;
       }
@@ -334,7 +339,9 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       // Also check local system users for exact email match
       const existingUser = systemUsers.find(u => u.email?.toLowerCase() === cleanEmail);
       if (existingUser) {
-        setUserCreationError(`[DUPLICATE REJECTED] An account with email '${cleanEmail}' already exists for ${existingUser.name}. Duplicate creation is strictly blocked.`);
+        const dupMsg = `[DUPLICATE REJECTED] An account with email '${cleanEmail}' already exists for ${existingUser.name}. Duplicate creation is strictly blocked.`;
+        setUserCreationError(dupMsg);
+        toast.warning(dupMsg, "Duplicate Email Blocked");
         setUserSubmitting(false);
         return;
       }
@@ -353,13 +360,21 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
         nationalId: "SYS-" + Math.floor(100000 + Math.random() * 900000),
         hireDate: new Date().toISOString().split("T")[0]
       });
+      
+      toast.success(
+        `Staff account for ${cleanName} (${cleanEmail}) created with role [${selectedSystemRole}].`,
+        "Staff User Account Created"
+      );
+
       setUserName("");
       setUserEmail("");
       setUserCreationError("");
       setShowAddUserModal(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creating user:", err);
-      setUserCreationError("Failed to create user. Please check Firestore connection.");
+      const errMsg = "Failed to create user: " + (err?.message || "Please check database connection.");
+      setUserCreationError(errMsg);
+      toast.error(errMsg, "User Creation Error");
     } finally {
       setUserSubmitting(false);
     }
@@ -950,7 +965,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                     const activeRoleName = (u.role as SystemRole) || matchedRole.role;
                     const roleCfg = getRoleConfig(activeRoleName);
                     const staffPin = u.pin || "2026";
-                    const isMasterAdmin = u.email?.toLowerCase().trim() === "urbaninteriorkenya@gmail.com";
+                    const isMasterAdmin = isSuperAdminEmail(u.email) || u.accessLevel === "Super Admin";
 
                     return (
                       <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">

@@ -110,7 +110,9 @@ export default function StaffOnboardingModal({
     const cleanPin = pin.trim() || Math.floor(1000 + Math.random() * 9000).toString();
 
     if (!cleanName || !cleanEmail || !cleanNationalId) {
-      setErrorMessage("Please complete all required fields (Name, National ID, Email).");
+      const msg = "Please complete all required fields (Name, National ID, Email).";
+      setErrorMessage(msg);
+      toast.warning(msg, "Missing Information");
       return;
     }
 
@@ -119,7 +121,9 @@ export default function StaffOnboardingModal({
       // 1. Strict Duplicate Check
       const dup = await checkDuplicateEmployee(cleanNationalId, cleanEmail);
       if (dup.isDuplicate) {
-        setErrorMessage(`[DUPLICATE REJECTED] ${dup.reason}`);
+        const dupMsg = `[DUPLICATE REJECTED] ${dup.reason}`;
+        setErrorMessage(dupMsg);
+        toast.warning(dupMsg, "Duplicate Staff Member");
         setSubmitting(false);
         return;
       }
@@ -154,14 +158,23 @@ export default function StaffOnboardingModal({
         ...newEmployeeData
       };
 
-      setCreatedStaffResult(fullEmployee);
       if (onStaffCreated) {
         onStaffCreated(fullEmployee);
       }
-      toast.success(`Staff member ${cleanName} successfully onboarded with PIN ${cleanPin}.`, "Staff Onboarded");
+      toast.success(
+        `Staff member ${cleanName} (${selectedRole}) successfully onboarded with PIN ${cleanPin}.`, 
+        "Staff Created Successfully"
+      );
+
+      // Automatically close modal window as requested
+      setTimeout(() => {
+        onClose();
+      }, 600);
     } catch (err: any) {
       console.error("Error onboarding staff:", err);
-      setErrorMessage("Failed to save staff record to database: " + (err?.message || "Unknown error"));
+      const errMsg = "Failed to save staff record: " + (err?.message || "Unknown error");
+      setErrorMessage(errMsg);
+      toast.error(errMsg, "Staff Onboarding Error");
     } finally {
       setSubmitting(false);
     }

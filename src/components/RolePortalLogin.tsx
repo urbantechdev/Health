@@ -30,9 +30,12 @@ import {
   BadgeAlert,
   HelpCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Copy,
+  Check
 } from "lucide-react";
 import { Employee, SystemRole } from "../types";
+import { SUPER_ADMIN_EMAILS, isSuperAdminEmail, MASTER_SUPER_ADMIN_SEEDS } from "../lib/superAdmins";
 
 export interface RolePortalLoginProps {
   employees: Employee[];
@@ -102,6 +105,15 @@ export default function RolePortalLogin({
   const [loginMode, setLoginMode] = useState<"registered" | "email">("registered");
   const [localError, setLocalError] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
+
+  const copyCurrentHost = () => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.hostname);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2500);
+    }
+  };
 
   // 4 Primary Boxes definition (Clean White Background theme)
   const primaryBoxes: RoleCardItem[] = [
@@ -275,14 +287,8 @@ export default function RolePortalLogin({
         const targetDept = activeModalRole.department.toLowerCase().trim();
         const targetRole = activeModalRole.role.toLowerCase().trim();
 
-        if (targetRole === "super admin" || targetDept === "admin") {
-          return (
-            emp.email?.toLowerCase().trim() === "urbaninteriorkenya@gmail.com" ||
-            emp.email?.toLowerCase().trim() === "naisiaetext@gmail.com" ||
-            emp.accessLevel === "Super Admin" ||
-            r === "super admin" ||
-            r === "admin"
-          );
+        if (targetRole === "super admin" || targetDept === "admin" || targetDept === "administration") {
+          return isSuperAdminEmail(emp.email);
         }
 
         return (
@@ -316,12 +322,8 @@ export default function RolePortalLogin({
         targetTab: box.targetTab,
         icon: box.icon
       });
-      // Preselect if only one staff member exists
-      if (box.id === "admin") {
-        setEmailInput("urbaninteriorkenya@gmail.com");
-      } else {
-        setEmailInput("");
-      }
+      // Clear email input for explicit entry
+      setEmailInput("");
     }
   };
 
@@ -406,13 +408,16 @@ export default function RolePortalLogin({
       return;
     }
 
-    // A. Check for Master Super Admin (urbaninteriorkenya@gmail.com or naisiaetext@gmail.com)
-    const isMasterSuperAdminEmail = cleanEmail === "urbaninteriorkenya@gmail.com" || cleanEmail === "naisiaetext@gmail.com";
-    if (isMasterSuperAdminEmail) {
+    // A. Check for Master Super Admin (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, naisiaetext@gmail.com)
+    const isMasterSuperAdmin = isSuperAdminEmail(cleanEmail);
+    if (isMasterSuperAdmin) {
       const superAdminRecord = employees.find(
         (e) => e.email?.toLowerCase().trim() === cleanEmail
       );
-      const expectedPin = superAdminRecord?.pin || "2026";
+      const seedProfile = MASTER_SUPER_ADMIN_SEEDS.find(
+        (s) => s.email.toLowerCase().trim() === cleanEmail
+      );
+      const expectedPin = superAdminRecord?.pin || seedProfile?.pin || "2026";
 
       if (cleanPin !== expectedPin && cleanPin !== "2026") {
         setLocalError("Invalid Super Admin Security PIN. (Default initialization PIN is 2026)");
@@ -422,11 +427,11 @@ export default function RolePortalLogin({
       onLoginSuccess(
         {
           email: cleanEmail,
-          displayName: superAdminRecord?.name || "Super Admin (Urban Interior Kenya)",
+          displayName: superAdminRecord?.name || seedProfile?.name || "Super Admin Sovereign",
           role: "Super Admin",
           department: "administration",
           photoURL: superAdminRecord?.photoURL || superAdminRecord?.avatarUrl,
-          employeeId: superAdminRecord?.id || "super-admin-root",
+          employeeId: superAdminRecord?.id || `super-admin-${cleanEmail.split("@")[0]}`,
           accessLevel: "Super Admin"
         },
         activeModalRole.targetTab
@@ -441,7 +446,7 @@ export default function RolePortalLogin({
 
     if (!matchedEmployee) {
       setLocalError(
-        `Access Denied: Email '${cleanEmail}' is not registered in the hospital staff database. Please ask the Super Admin (urbaninteriorkenya@gmail.com) to onboard you and generate your credentials.`
+        `Access Denied: Email '${cleanEmail}' is not registered in the hospital staff database. Please ask a Super Admin (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, or naisiaetext@gmail.com) to onboard you and generate your credentials.`
       );
       return;
     }
@@ -461,15 +466,9 @@ export default function RolePortalLogin({
 
     // E. Role / Department Station Validation
     if (isAdminStation) {
-      const hasAdminClearance =
-        matchedEmployee.accessLevel === "Super Admin" ||
-        matchedEmployee.role === "Super Admin" ||
-        matchedEmployee.role === "Admin" ||
-        matchedEmployee.department === "administration";
-
-      if (!hasAdminClearance) {
+      if (!isMasterSuperAdmin) {
         setLocalError(
-          `Access Denied: Staff member '${matchedEmployee.name}' is registered as [${matchedEmployee.role}] and does not have administrative privileges. Only Super Admin (urbaninteriorkenya@gmail.com) and authorized administrators can access this terminal.`
+          `Access Denied: Only the listed Super Admin Gmail accounts (${SUPER_ADMIN_EMAILS.join(", ")}) are authorized to access the Hospital Executive / Admin Terminal.`
         );
         return;
       }
@@ -524,7 +523,7 @@ export default function RolePortalLogin({
           <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 bg-slate-50 text-slate-700 text-xs font-bold rounded-full border border-slate-200">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Super Admin: <strong className="text-purple-700 font-mono">urbaninteriorkenya@gmail.com</strong></span>
+              <span>Super Admin Whitelist: <strong className="text-purple-700 font-mono">3 Sovereign Admins</strong></span>
             </div>
 
             {onGoogleLogin && (
@@ -576,11 +575,46 @@ export default function RolePortalLogin({
         </div>
 
         {authError && (
-          <div className="max-w-xl mx-auto mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-xs font-bold text-rose-800 animate-shake">
-            <BadgeAlert className="w-5 h-5 text-rose-600 shrink-0" />
-            <div className="space-y-0.5">
-              <p className="font-extrabold">{authError}</p>
-              <p className="text-[11px] text-rose-600 font-normal">Contact Super Admin at urbaninteriorkenya@gmail.com for staff onboarding.</p>
+          <div className="max-w-2xl mx-auto mb-8 p-4 sm:p-5 bg-amber-50/90 border-2 border-amber-300 rounded-3xl text-xs text-amber-900 shadow-sm animate-shake space-y-3">
+            <div className="flex items-start gap-3">
+              <BadgeAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <p className="font-black text-amber-950 text-xs sm:text-sm">
+                  {authError.includes("Domain Authorization Required") ? "Firebase Domain Notice" : "Authentication Notice"}
+                </p>
+                <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                  {authError}
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Actions & Guidance */}
+            <div className="pt-2 border-t border-amber-200/80 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-amber-800">Current Host:</span>
+                <code className="px-2 py-1 bg-white border border-amber-300 rounded-lg text-[11px] font-mono text-amber-950 font-bold">
+                  {typeof window !== "undefined" ? window.location.hostname : "localhost"}
+                </code>
+                <button
+                  type="button"
+                  onClick={copyCurrentHost}
+                  className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedDomain ? "Copied" : "Copy"}</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleBoxClick(primaryBoxes[1]); // Admin box
+                }}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-black flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-purple-400" />
+                <span>Quick Super Admin Login (PIN 2026)</span>
+              </button>
             </div>
           </div>
         )}
@@ -717,7 +751,7 @@ export default function RolePortalLogin({
       <footer className="w-full border-t border-slate-100 py-4 px-6 text-center text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto">
         <p>© {new Date().getFullYear()} {hospitalName} • Electronic Medical Records & Enterprise HMS</p>
         <p className="text-[11px] font-semibold text-slate-500 mt-1 sm:mt-0">
-          Super Admin Sovereign: <span className="font-mono text-purple-700">urbaninteriorkenya@gmail.com</span>
+          Super Admin Sovereigns: <span className="font-mono text-purple-700 font-bold">moraasdorcah@gmail.com</span> • <span className="font-mono text-purple-700 font-bold">urbaninteriorkenya@gmail.com</span> • <span className="font-mono text-purple-700 font-bold">naisiaetext@gmail.com</span>
         </p>
       </footer>
 
@@ -824,7 +858,7 @@ export default function RolePortalLogin({
                           <span>No Staff Onboarded for This Station</span>
                         </div>
                         <p className="text-[11px] leading-relaxed text-amber-700">
-                          The Super Admin (<strong>urbaninteriorkenya@gmail.com</strong>) has not onboarded personnel for this department yet. Please switch to "Email & PIN Entry" or contact Super Admin to create your account.
+                          Hospital HR / Super Admin has not onboarded personnel for this department station yet. Please ask HR or a Super Admin to create your account in the HR / Admin module, or switch to corporate email login.
                         </p>
                       </div>
                     )}

@@ -3,30 +3,17 @@ import {
   collection, 
   getDocs, 
   writeBatch, 
-  doc, 
-  deleteDoc
+  doc
 } from "firebase/firestore";
 import { Employee } from "../types";
+import { 
+  SUPER_ADMIN_EMAILS, 
+  isSuperAdminEmail, 
+  MASTER_SUPER_ADMIN_SEEDS, 
+  PRIMARY_SUPER_ADMIN_SEED 
+} from "./superAdmins";
 
-/**
- * Super Admin Master Seed Account
- * Sole account retained to allow the Super Admin to onboard and create other hospital users.
- */
-export const MASTER_SUPER_ADMIN_SEED: Omit<Employee, "id"> = {
-  name: "Super Admin (Urban Interior Kenya)",
-  nationalId: "24189342",
-  role: "Super Admin",
-  department: "administration",
-  specialty: "Hospital Director & Super Admin",
-  salary: 450000,
-  phone: "+254 712 345 678",
-  email: "urbaninteriorkenya@gmail.com",
-  pin: "2026",
-  status: "active",
-  hireDate: "2024-01-15",
-  accessLevel: "Super Admin",
-  systemRole: "Super Admin"
-};
+export const MASTER_SUPER_ADMIN_SEED = PRIMARY_SUPER_ADMIN_SEED;
 
 export interface CollectionCounts {
   patients: number;
@@ -53,7 +40,10 @@ export interface CleanSystemReport {
 /**
  * Clean and wipe all test and dummy data across the entire system.
  * Removes test patients, queue encounters, tickets, invoices, pharmacy stocks, payroll,
- * and purges test user accounts — leaving ONLY the master Super Admin account.
+ * and purges test user accounts — while strictly preserving the 3 Master Super Admins:
+ * - moraasdorcah@gmail.com
+ * - urbaninteriorkenya@gmail.com
+ * - naisiaetext@gmail.com
  */
 export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> {
   const collectionsToPurge = [
@@ -104,24 +94,25 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
       }
     }
 
-    // 2. Clean employees collection: remove test accounts, keep or seed ONLY the Super Admin (urbaninteriorkenya@gmail.com)
+    // 2. Clean employees collection: remove test accounts, ensure the 3 Master Super Admins are preserved and active
     try {
       const empSnap = await getDocs(collection(db, "employees"));
       let empDeletedCount = 0;
-      let superAdminExists = false;
+      const preservedEmails = new Set<string>();
 
       const batch = writeBatch(db);
       for (const docSnap of empSnap.docs) {
         const data = docSnap.data() as Employee;
         const email = data.email?.toLowerCase().trim();
-        const isSuperAdmin = email === "urbaninteriorkenya@gmail.com" || email === "naisiaetext@gmail.com" || data.accessLevel === "Super Admin" || data.systemRole === "Super Admin";
+        const isMaster = isSuperAdminEmail(email);
 
-        if (isSuperAdmin && !superAdminExists) {
+        if (isMaster && email && !preservedEmails.has(email)) {
           // Normalize to master super admin config
+          const seedMatch = MASTER_SUPER_ADMIN_SEEDS.find(s => s.email.toLowerCase() === email) || PRIMARY_SUPER_ADMIN_SEED;
           batch.set(doc(db, "employees", docSnap.id), {
             ...data,
-            name: data.name || MASTER_SUPER_ADMIN_SEED.name,
-            email: data.email || "urbaninteriorkenya@gmail.com",
+            name: data.name || seedMatch.name,
+            email: email,
             pin: data.pin || "2026",
             department: "administration",
             accessLevel: "Super Admin",
@@ -129,32 +120,38 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
             role: "Super Admin",
             status: "active"
           });
-          superAdminExists = true;
+          preservedEmails.add(email);
+        } else if (isMaster && email && preservedEmails.has(email)) {
+          // Remove duplicate entry for same super admin
+          batch.delete(doc(db, "employees", docSnap.id));
+          empDeletedCount++;
         } else {
-          // Purge test staff / duplicate user account
+          // Purge test staff user account
           batch.delete(doc(db, "employees", docSnap.id));
           empDeletedCount++;
         }
       }
 
-      // If no super admin account was found in the database, seed it now
-      if (!superAdminExists) {
-        const newSuperAdminRef = doc(collection(db, "employees"));
-        batch.set(newSuperAdminRef, {
-          ...MASTER_SUPER_ADMIN_SEED,
-          createdAt: new Date().toISOString()
-        });
-        superAdminExists = true;
+      // Seed any of the 3 Master Super Admins that are missing
+      for (const seed of MASTER_SUPER_ADMIN_SEEDS) {
+        if (!preservedEmails.has(seed.email.toLowerCase())) {
+          const newSuperAdminRef = doc(collection(db, "employees"));
+          batch.set(newSuperAdminRef, {
+            ...seed,
+            createdAt: new Date().toISOString()
+          });
+          preservedEmails.add(seed.email.toLowerCase());
+        }
       }
 
       await batch.commit();
 
       report.collectionsPurged.push({
-        name: "employees (Test Users Purged)",
+        name: "employees (Test Users Purged & 3 Super Admins Preserved)",
         deletedCount: empDeletedCount
       });
       report.totalDeleted += empDeletedCount;
-      report.superAdminPreserved = superAdminExists;
+      report.superAdminPreserved = preservedEmails.size > 0;
     } catch (empErr) {
       console.error("Error cleaning employee registry:", empErr);
     }
@@ -167,8 +164,46 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
 }
 
 /**
- * Bootstrap Cloud Firestore with clean initial state (Super Admin only).
- * Ensures zero test dummy data is auto-seeded.
+ * Ensures all 3 Sovereign Super Admins are created and whitelisted in Firestore
+ */
+export async function ensureSuperAdminsExist(): Promise<number> {
+  try {
+    const empSnap = await getDocs(collection(db, "employees"));
+    const existingEmails = new Set(
+      empSnap.docs
+        .map(d => (d.data() as Employee).email?.toLowerCase().trim())
+        .filter(Boolean)
+    );
+
+    let addedCount = 0;
+    const batch = writeBatch(db);
+
+    for (const seed of MASTER_SUPER_ADMIN_SEEDS) {
+      if (!existingEmails.has(seed.email.toLowerCase())) {
+        const newRef = doc(collection(db, "employees"));
+        batch.set(newRef, {
+          ...seed,
+          createdAt: new Date().toISOString()
+        });
+        addedCount++;
+      }
+    }
+
+    if (addedCount > 0) {
+      await batch.commit();
+      console.log(`[Firestore Bootstrapper] Provisioned ${addedCount} missing Master Super Admin account(s) into database.`);
+    }
+
+    return addedCount;
+  } catch (err) {
+    console.error("Error ensuring Super Admins exist in Firestore:", err);
+    return 0;
+  }
+}
+
+/**
+ * Bootstrap Cloud Firestore with clean initial state (Super Admins only).
+ * Ensures all 3 Top-Tier Super Admins exist and zero dummy data is auto-seeded.
  */
 export async function bootstrapCloudFirestore(): Promise<{
   seeded: boolean;
@@ -187,7 +222,10 @@ export async function bootstrapCloudFirestore(): Promise<{
       procurement_orders: 0
     };
 
-    // Check existing staff
+    // Provision any missing Master Super Admins
+    await ensureSuperAdminsExist();
+
+    // Check existing staff count
     const empSnap = await getDocs(collection(db, "employees"));
     counts.employees = empSnap.size;
 
@@ -208,23 +246,7 @@ export async function bootstrapCloudFirestore(): Promise<{
     counts.medications = medSnap.size;
     counts.payroll = paySnap.size;
 
-    let seeded = false;
-
-    // If employees collection is completely empty, provision ONLY the master Super Admin
-    if (counts.employees === 0) {
-      console.log("[Firestore Bootstrapper] Provisioning sole Master Super Admin into clean database...");
-      const batch = writeBatch(db);
-      const newRef = doc(collection(db, "employees"));
-      batch.set(newRef, {
-        ...MASTER_SUPER_ADMIN_SEED,
-        createdAt: new Date().toISOString()
-      });
-      await batch.commit();
-      counts.employees = 1;
-      seeded = true;
-    }
-
-    return { seeded, counts };
+    return { seeded: counts.employees > 0, counts };
   } catch (err) {
     console.error("Error bootstrapping clean Cloud Firestore:", err);
     return {

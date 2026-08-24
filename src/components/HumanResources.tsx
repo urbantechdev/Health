@@ -249,7 +249,9 @@ export default function HumanResources() {
     e.preventDefault();
     setDuplicateError(null);
     if (!empName || !empRole || !empSalary || !empPhone || !empNationalId) {
-      setDuplicateError("Please fill all required fields");
+      const msg = "Please fill all required fields (Name, National ID, Phone, Role, Salary).";
+      setDuplicateError(msg);
+      toast.warning(msg, "Missing Information");
       return;
     }
 
@@ -261,7 +263,9 @@ export default function HumanResources() {
       // 1. Strict Duplicate Check across National ID and Email
       const dupCheck = await checkDuplicateEmployee(cleanNationalId, calculatedEmail);
       if (dupCheck.isDuplicate) {
-        setDuplicateError(`[DUPLICATE REJECTED] ${dupCheck.reason}`);
+        const dupMsg = `[DUPLICATE REJECTED] ${dupCheck.reason}`;
+        setDuplicateError(dupMsg);
+        toast.warning(dupMsg, "Duplicate Employee Blocked");
         setSubmitting(false);
         return;
       }
@@ -273,7 +277,9 @@ export default function HumanResources() {
           (emp.email && emp.email.trim().toLowerCase() === calculatedEmail)
       );
       if (existingInCache) {
-        setDuplicateError(`[DUPLICATE REJECTED] An employee with National ID ${cleanNationalId} or email ${calculatedEmail} is already registered (${existingInCache.name}).`);
+        const dupMsg = `[DUPLICATE REJECTED] An employee with National ID ${cleanNationalId} or email ${calculatedEmail} is already registered (${existingInCache.name}).`;
+        setDuplicateError(dupMsg);
+        toast.warning(dupMsg, "Duplicate Staff Member Blocked");
         setSubmitting(false);
         return;
       }
@@ -297,6 +303,11 @@ export default function HumanResources() {
 
       await addDoc(collection(db, "employees"), newEmp);
       
+      toast.success(
+        `Staff member ${empName.trim()} registered successfully with PIN ${generatedPin}.`,
+        "Employee Onboarded"
+      );
+
       // Reset form
       setEmpName("");
       setEmpNationalId("");
@@ -309,9 +320,11 @@ export default function HumanResources() {
       setCustomSpecialty("");
       setEmpAccessLevel("Standard Staff");
       setDuplicateError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creating employee:", err);
-      setDuplicateError("Failed to save employee profile. Please check database connection.");
+      const errMsg = "Failed to save employee profile: " + (err?.message || "Please check database connection.");
+      setDuplicateError(errMsg);
+      toast.error(errMsg, "Employee Creation Error");
     } finally {
       setSubmitting(false);
     }

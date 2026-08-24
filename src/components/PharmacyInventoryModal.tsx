@@ -102,7 +102,8 @@ export default function PharmacyInventoryModal({
 
   const handleSaveDrug = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
+    const cleanName = name.trim();
+    if (!cleanName) {
       toast.warning("Please specify the medication name.", "Name Required");
       return;
     }
@@ -112,7 +113,7 @@ export default function PharmacyInventoryModal({
       if (editingMedId) {
         // Update existing drug in Firestore
         await updateDoc(doc(db, "medications", editingMedId), {
-          name: name.trim(),
+          name: cleanName,
           category,
           quantity: Number(quantity),
           minThreshold: Number(minThreshold),
@@ -120,11 +121,21 @@ export default function PharmacyInventoryModal({
           batchNo: batchNo.trim(),
           expiryDate,
         });
-        toast.success(`Updated ${name.trim()} in pharmacy formulary.`, "Formulary Updated");
+        toast.success(`Updated ${cleanName} in pharmacy formulary.`, "Formulary Updated");
       } else {
+        // Duplicate check across existing medications in list
+        const isDuplicate = medications.some(
+          (m) => m.name.toLowerCase().trim() === cleanName.toLowerCase()
+        );
+        if (isDuplicate) {
+          toast.warning(`Medication "${cleanName}" already exists in the formulary list.`, "Duplicate Medication Blocked");
+          setSaving(false);
+          return;
+        }
+
         // Create new drug in Firestore
         await addDoc(collection(db, "medications"), {
-          name: name.trim(),
+          name: cleanName,
           category,
           quantity: Number(quantity),
           minThreshold: Number(minThreshold),
@@ -132,13 +143,13 @@ export default function PharmacyInventoryModal({
           batchNo: batchNo.trim(),
           expiryDate,
         });
-        toast.success(`Registered ${name.trim()} to inventory database.`, "Medication Registered");
+        toast.success(`Registered ${cleanName} to pharmacy inventory database.`, "Medication Registered");
       }
       setActiveTab("list");
       setEditingMedId(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving medication to inventory:", err);
-      toast.error("Failed to save medication to inventory formulary.", "Save Error");
+      toast.error(err?.message || "Failed to save medication to inventory formulary.", "Save Error");
     } finally {
       setSaving(false);
     }
