@@ -29,6 +29,8 @@ import InternalChatModal from "./components/InternalChatModal";
 import IncomingMessagePromptListener from "./components/IncomingMessagePromptListener";
 import PatientTransferModal from "./components/PatientTransferModal";
 import TransfersHub from "./components/TransfersHub";
+import KenyanHospitalFormsModal, { KenyanFormType } from "./components/KenyanHospitalFormsModal";
+import RolePortalLogin from "./components/RolePortalLogin";
 import { ModernPromptHost } from "./components/ModernPromptHost";
 import { bootstrapCloudFirestore } from "./lib/dbInit";
 
@@ -79,7 +81,9 @@ import {
   ChevronRight,
   MessageSquare,
   ArrowRightLeft,
-  Inbox
+  Inbox,
+  Hospital,
+  FileCheck
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -345,14 +349,7 @@ export default function App() {
 
   // Authentication & Session States
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [simulatedUser, setSimulatedUser] = useState<{ email: string; displayName: string; isSimulated: boolean; photoURL?: string } | null>(() => {
-    return {
-      email: "naisiaetext@gmail.com",
-      displayName: "Dr. Sarah Naisiae (Super Admin)",
-      isSimulated: true,
-      photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
-    };
-  });
+  const [simulatedUser, setSimulatedUser] = useState<{ email: string; displayName: string; isSimulated: boolean; photoURL?: string } | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Specialist Simulation & Live Notification States
@@ -604,10 +601,30 @@ export default function App() {
   // Monitor real Firebase Auth changes
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+      if (firebaseUser && firebaseUser.email) {
+        const cleanEmail = firebaseUser.email.toLowerCase().trim();
+        const isMasterAdmin = cleanEmail === "urbaninteriorkenya@gmail.com" || cleanEmail === "naisiaetext@gmail.com";
+        const isRegistered = employees.some(
+          (emp) => emp.email?.toLowerCase().trim() === cleanEmail && emp.status !== "terminated"
+        );
+
+        if (isMasterAdmin || isRegistered || employees.length === 0) {
+          setUser(firebaseUser);
+          setAuthError(null);
+        } else {
+          // Strictly reject unauthorized Google users
+          setUser(null);
+          setAuthError(
+            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (urbaninteriorkenya@gmail.com) to onboard you and generate your credentials.`
+          );
+          signOut(auth).catch(() => {});
+        }
+      } else {
+        setUser(firebaseUser);
+      }
     });
     return () => unsubscribeAuth();
-  }, []);
+  }, [employees]);
 
   const activeUser = user 
     ? { 
@@ -697,18 +714,29 @@ export default function App() {
     );
   };
 
-  // Dynamic Super Admin check:
-  // 1. If database has 0 employees registered yet, initial user acts as Super Admin to set up facility
-  // 2. OR if active user email is naisiaetext@gmail.com
-  // 3. OR if loggedInEmployee has accessLevel === "Super Admin" || role === "Super Admin" || department === "administration"
-  const isSuperAdmin = employees.length === 0 || 
-    activeUser?.email?.toLowerCase().trim() === "naisiaetext@gmail.com" ||
-    loggedInEmployee?.accessLevel === "Super Admin" || 
-    loggedInEmployee?.role === "Super Admin" || 
-    loggedInEmployee?.department === "administration";
-
-  // Role simulation override for Super Admin testing
+  // Role simulation override for role portal login and super admin testing
   const [simulatedRoleOverride, setSimulatedRoleOverride] = useState<SystemRole | null>(null);
+
+  // Dynamic Super Admin check:
+  // 1. If simulatedRoleOverride is set, respect whether it is Super Admin
+  // 2. OR if active user email is urbaninteriorkenya@gmail.com / naisiaetext@gmail.com
+  // 3. OR if loggedInEmployee has accessLevel === "Super Admin" || role === "Super Admin" || department === "administration"
+  const isSuperAdminEmail = (email?: string | null) => {
+    if (!email) return false;
+    const clean = email.toLowerCase().trim();
+    return clean === "urbaninteriorkenya@gmail.com" || clean === "naisiaetext@gmail.com";
+  };
+
+  const isSuperAdmin = simulatedRoleOverride !== null
+    ? simulatedRoleOverride === "Super Admin"
+    : (
+      employees.length === 0 || 
+      isSuperAdminEmail(activeUser?.email) ||
+      isSuperAdminEmail(loggedInEmployee?.email) ||
+      loggedInEmployee?.accessLevel === "Super Admin" || 
+      loggedInEmployee?.role === "Super Admin" || 
+      loggedInEmployee?.department === "administration"
+    );
 
   // Determine active identity for role checks
   const activeStaffRecord = activeSpecialistId
@@ -825,7 +853,7 @@ export default function App() {
     } catch (err: any) {
       console.error("Google Auth popup error:", err);
       setAuthError(
-        "Google Popup Blocked or Mismatched config. Inside the sandboxed iframe, popups might be blocked by your browser settings. Please click 'Super Admin Quick Bypass' to login instantly as naisiaetext@gmail.com, or use 'Open in New Tab'."
+        "Google Popup Blocked or Mismatched config. Inside the sandboxed iframe, popups might be blocked by your browser settings. Please use 'Open in New Tab' or select your station and authenticate with your Security PIN."
       );
     }
   };
@@ -842,13 +870,15 @@ export default function App() {
 
   const handleLogout = async () => {
     setAuthError(null);
-    if (simulatedUser) {
-      setSimulatedUser(null);
-    } else {
-      await signOut(auth);
-    }
-    // Reset impersonation and navigation tab
+    setSimulatedUser(null);
+    setSimulatedRoleOverride(null);
     setActiveSpecialistId("");
+    setProfileOverride({});
+    try {
+      await signOut(auth);
+    } catch {
+      // Ignored if not signed in via Firebase Auth
+    }
     setActiveTab("dashboard");
   };
 
@@ -944,6 +974,11 @@ export default function App() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferInitialPatient, setTransferInitialPatient] = useState<any>(null);
   const [transferInitialTicket, setTransferInitialTicket] = useState<any>(null);
+
+  // Kenyan Statutory Hospital Forms Hub Modal States
+  const [showKenyanFormsModal, setShowKenyanFormsModal] = useState(false);
+  const [kenyanFormsInitialPatient, setKenyanFormsInitialPatient] = useState<any>(null);
+  const [kenyanFormsInitialFormType, setKenyanFormsInitialFormType] = useState<KenyanFormType>("sick_sheet");
 
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [pendingTransfersCount, setPendingTransfersCount] = useState<number>(0);
@@ -1148,90 +1183,28 @@ export default function App() {
 
   if (!activeUser) {
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4 text-slate-800 font-sans">
-        <div className="max-w-sm w-full bg-white border border-slate-200/90 rounded-2xl p-7 shadow-xl shadow-slate-200/60 space-y-6">
-          {/* Corporate Header */}
-          <div className="text-center space-y-2">
-            <div className="inline-flex p-2.5 bg-emerald-600 text-white rounded-xl shadow-sm mb-1">
-              <Building2 className="w-6 h-6" />
-            </div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 uppercase">AfyaCare HMS</h1>
-            <p className="text-[11px] font-semibold text-slate-500 tracking-wide uppercase">Enterprise Staff Portal</p>
-          </div>
-
-          {authError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs space-y-1">
-              <div className="flex items-center gap-1.5 font-semibold">
-                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>Authentication Notice</span>
-              </div>
-              <p className="leading-snug text-[11px]">{authError}</p>
-            </div>
-          )}
-
-          {/* Primary Login Actions */}
-          <div className="space-y-3 pt-1">
-            <button
-              id="btn-google-login"
-              onClick={handleGoogleLogin}
-              className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg text-xs transition-all flex items-center justify-center gap-2.5 shadow-sm cursor-pointer"
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-              <span>Sign in with Google</span>
-            </button>
-
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-3 text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Registered Staff Authentication</span>
-              <div className="flex-grow border-t border-slate-200"></div>
-            </div>
-
-            {/* Dynamic Staff Email Sign-In Form */}
-            <form onSubmit={handleStaffEmailLogin} className="space-y-2">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Corporate Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={loginEmailInput}
-                  onChange={(e) => setLoginEmailInput(e.target.value)}
-                  placeholder="e.g. admin@afyacare.co.ke"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-emerald-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>Sign In to Staff Portal</span>
-              </button>
-            </form>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 text-center text-[10px] text-slate-400">
-            AfyaCare Medical Systems • Authorized Personnel Only
-          </div>
-        </div>
-      </div>
+      <RolePortalLogin
+        employees={employees}
+        hospitalName={brandCustomName || tenant.name || "AfyaCare Medical Systems"}
+        hospitalLogoUrl={brandLogoUrl}
+        authError={authError}
+        onGoogleLogin={handleGoogleLogin}
+        onLoginSuccess={(userProfile, targetTab) => {
+          setAuthError(null);
+          setSimulatedUser({
+            email: userProfile.email,
+            displayName: userProfile.displayName,
+            isSimulated: true,
+            photoURL: userProfile.photoURL || "https://lh3.googleusercontent.com/a/default-user=s96-c"
+          });
+          setSimulatedRoleOverride(userProfile.role);
+          if (userProfile.employeeId) {
+            setActiveSpecialistId(userProfile.employeeId);
+          }
+          // Directs to their role dashboard
+          setActiveTab(targetTab || "dashboard");
+        }}
+      />
     );
   }
 
@@ -1348,24 +1321,41 @@ export default function App() {
                 )}
               </button>
 
+              {/* Mobile Kenyan Statutory Forms Hub */}
+              {(isSuperAdmin || activeRoleConfig.canPerformClinicalActions || ["Doctor", "Nurse", "Reception", "Admin"].includes(currentSystemRole)) && (
+                <button
+                  id="btn-mobile-kenyan-forms"
+                  onClick={() => {
+                    setKenyanFormsInitialPatient(null);
+                    setShowKenyanFormsModal(true);
+                  }}
+                  title="Kenyan Hospital Statutory Forms (Sick Off, MOH 268, Discharge Summary, e-Rx)"
+                  className="p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer relative"
+                >
+                  <Hospital className="w-5 h-5 text-white" />
+                </button>
+              )}
+
               {/* Mobile Quick Patient Transfer */}
-              <button
-                id="btn-mobile-quick-transfer"
-                onClick={() => {
-                  setTransferInitialPatient(null);
-                  setTransferInitialTicket(null);
-                  setShowTransferModal(true);
-                }}
-                title="Patient Transfer & Referral"
-                className="p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer relative"
-              >
-                <ArrowRightLeft className="w-5 h-5 text-white" />
-                {pendingTransfersCount > 0 && (
-                  <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-amber-500 text-slate-950 text-[8px] font-black rounded-full border border-white animate-pulse">
-                    {pendingTransfersCount}
-                  </span>
-                )}
-              </button>
+              {checkTabPermission("transfers").allowed && (
+                <button
+                  id="btn-mobile-quick-transfer"
+                  onClick={() => {
+                    setTransferInitialPatient(null);
+                    setTransferInitialTicket(null);
+                    setShowTransferModal(true);
+                  }}
+                  title="Patient Transfer & Referral"
+                  className="p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer relative"
+                >
+                  <ArrowRightLeft className="w-5 h-5 text-white" />
+                  {pendingTransfersCount > 0 && (
+                    <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-amber-500 text-slate-950 text-[8px] font-black rounded-full border border-white animate-pulse">
+                      {pendingTransfersCount}
+                    </span>
+                  )}
+                </button>
+              )}
 
               {/* Mobile Offline/Online Indicator - Large White Icon (No Background) */}
               <button
@@ -1402,39 +1392,41 @@ export default function App() {
           {/* Desktop Top Header Controls - Large White Icons without Background Color */}
           <div className="hidden md:flex flex-wrap items-center gap-3 lg:gap-4 relative z-10">
             {/* RBAC 11-Role Simulation Switcher - Large White Icon (No Background) */}
-            <div 
-              title={`Simulate Role: ${currentSystemRole} (Click to switch 11 roles)`} 
-              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
-            >
-              <Shield className="w-6 h-6 lg:w-7 lg:h-7 text-white group-hover:text-white/80 group-hover:rotate-6 transition-all duration-200 shrink-0" />
-              
-              {/* Subtle Mini Floating Dot / Badge */}
-              <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-yellow-500 text-slate-950 text-[8px] font-black uppercase rounded-md tracking-wider border border-yellow-600 shadow-xs max-w-[60px] truncate">
-                {currentSystemRole.split(" ")[0]}
-              </span>
-
-              {/* Seamless Full-Cover Select Trigger */}
-              <select
-                id="rbac-role-simulator"
-                value={currentSystemRole}
-                onChange={(e) => {
-                  const role = e.target.value as SystemRole;
-                  setSimulatedRoleOverride(role);
-                  const cfg = getRoleConfig(role);
-                  if (!cfg.allowedModules.includes(activeTab) && role !== "Super Admin" && activeTab !== "dashboard") {
-                    setActiveTab(cfg.allowedModules[0] || "dashboard");
-                  }
-                }}
-                aria-label="Switch RBAC Role Simulation"
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+            {isSuperAdmin && (
+              <div 
+                title={`Simulate Role: ${currentSystemRole} (Click to switch 11 roles)`} 
+                className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
               >
-                {SYSTEM_ROLES_DIRECTORY.map((r) => (
-                  <option key={r.role} value={r.role} className="bg-slate-900 text-white font-bold py-1">
-                    {r.role} ({r.department})
-                  </option>
-                ))}
-              </select>
-            </div>
+                <Shield className="w-6 h-6 lg:w-7 lg:h-7 text-white group-hover:text-white/80 group-hover:rotate-6 transition-all duration-200 shrink-0" />
+                
+                {/* Subtle Mini Floating Dot / Badge */}
+                <span className="absolute -top-1 -right-1 px-1 py-0.2 bg-yellow-500 text-slate-950 text-[8px] font-black uppercase rounded-md tracking-wider border border-yellow-600 shadow-xs max-w-[60px] truncate">
+                  {currentSystemRole.split(" ")[0]}
+                </span>
+
+                {/* Seamless Full-Cover Select Trigger */}
+                <select
+                  id="rbac-role-simulator"
+                  value={currentSystemRole}
+                  onChange={(e) => {
+                    const role = e.target.value as SystemRole;
+                    setSimulatedRoleOverride(role);
+                    const cfg = getRoleConfig(role);
+                    if (!cfg.allowedModules.includes(activeTab) && role !== "Super Admin" && activeTab !== "dashboard") {
+                      setActiveTab(cfg.allowedModules[0] || "dashboard");
+                    }
+                  }}
+                  aria-label="Switch RBAC Role Simulation"
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                >
+                  {SYSTEM_ROLES_DIRECTORY.map((r) => (
+                    <option key={r.role} value={r.role} className="bg-slate-900 text-white font-bold py-1">
+                      {r.role} ({r.department})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Offline/Online Status Indicator & Toggle - Large White Icon (No Background) */}
             <button
@@ -1509,45 +1501,64 @@ export default function App() {
             </button>
 
             {/* Quick Patient Transfer & Referral Launcher - Large White Icon (No Background) */}
-            <button
-              id="btn-header-quick-transfer"
-              onClick={() => {
-                setTransferInitialPatient(null);
-                setTransferInitialTicket(null);
-                setShowTransferModal(true);
-              }}
-              title={`Patient Transfer & Referral Hub (${pendingTransfersCount} pending transfers)`}
-              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
-            >
-              <ArrowRightLeft className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
-              {pendingTransfersCount > 0 && (
-                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-amber-500 text-slate-950 text-[9px] font-black rounded-full border border-white animate-pulse">
-                  {pendingTransfersCount}
-                </span>
-              )}
-            </button>
+            {checkTabPermission("transfers").allowed && (
+              <button
+                id="btn-header-quick-transfer"
+                onClick={() => {
+                  setTransferInitialPatient(null);
+                  setTransferInitialTicket(null);
+                  setShowTransferModal(true);
+                }}
+                title={`Patient Transfer & Referral Hub (${pendingTransfersCount} pending transfers)`}
+                className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+              >
+                <ArrowRightLeft className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
+                {pendingTransfersCount > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-amber-500 text-slate-950 text-[9px] font-black rounded-full border border-white animate-pulse">
+                    {pendingTransfersCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Kenyan Statutory Forms Hub (Sick Sheet, MOH 268, Discharge Summary, etc.) */}
+            {(isSuperAdmin || activeRoleConfig.canPerformClinicalActions || ["Doctor", "Nurse", "Reception", "Admin"].includes(currentSystemRole)) && (
+              <button
+                id="btn-header-kenyan-forms"
+                onClick={() => {
+                  setKenyanFormsInitialPatient(null);
+                  setShowKenyanFormsModal(true);
+                }}
+                title="Kenyan Hospital Statutory Forms (Sick Off, MOH 268 Referral, Discharge Summary, PPB e-Rx)"
+                className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+              >
+                <Hospital className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
+              </button>
+            )}
 
             {/* Header Color Theme Customizer - Large White Icon (No Background) */}
-            <div 
-              title="Header Theme Color Palette (Click to Change Color Scheme)"
-              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
-            >
-              <Palette className="w-6 h-6 lg:w-7 lg:h-7 text-white group-hover:text-white/80 group-hover:rotate-45 transition-all duration-300 shrink-0" />
-              
-              <select
-                id="header-bg-color-select"
-                value={headerBgStyle}
-                onChange={(e) => setHeaderBgStyle(e.target.value)}
-                aria-label="Change Header Color Theme"
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+            {isSuperAdmin && (
+              <div 
+                title="Header Theme Color Palette (Click to Change Color Scheme)"
+                className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 group cursor-pointer"
               >
-                {Object.entries(HEADER_BG_STYLES).map(([key, style]) => (
-                  <option key={key} value={key} className="bg-slate-900 text-white font-bold py-1">
-                    {style.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <Palette className="w-6 h-6 lg:w-7 lg:h-7 text-white group-hover:text-white/80 group-hover:rotate-45 transition-all duration-300 shrink-0" />
+                
+                <select
+                  id="header-bg-color-select"
+                  value={headerBgStyle}
+                  onChange={(e) => setHeaderBgStyle(e.target.value)}
+                  aria-label="Change Header Color Theme"
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                >
+                  {Object.entries(HEADER_BG_STYLES).map(([key, style]) => (
+                    <option key={key} value={key} className="bg-slate-900 text-white font-bold py-1">
+                      {style.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Active User Profile & Logout - Large Icons (No Background) */}
             <div className="flex items-center gap-2">
@@ -2490,8 +2501,8 @@ export default function App() {
       isOpen={showChatModal}
       onClose={() => setShowChatModal(false)}
       currentUser={{
-        name: activeUser?.displayName || "Dr. Sarah Naisiae",
-        email: activeUser?.email || "naisiaetext@gmail.com",
+        name: activeUser?.displayName || "Hospital Staff",
+        email: activeUser?.email || "urbaninteriorkenya@gmail.com",
         role: currentSystemRole,
         photoURL: resolvedPhotoURL
       }}
@@ -2525,8 +2536,8 @@ export default function App() {
       isOpen={showTransferModal}
       onClose={() => setShowTransferModal(false)}
       currentUser={{
-        name: activeUser?.displayName || "Dr. Sarah Naisiae",
-        email: activeUser?.email || "naisiaetext@gmail.com",
+        name: activeUser?.displayName || "Hospital Staff",
+        email: activeUser?.email || "urbaninteriorkenya@gmail.com",
         role: currentSystemRole,
         department: loggedInEmployee?.department || "medical"
       }}
@@ -2579,14 +2590,22 @@ export default function App() {
       isOpen={showProfileModal}
       onClose={() => setShowProfileModal(false)}
       currentUser={{
-        email: activeUser?.email || "naisiaetext@gmail.com",
-        displayName: activeUser?.displayName || "Dr. Sarah Naisiae (Super Admin)",
+        email: activeUser?.email || "urbaninteriorkenya@gmail.com",
+        displayName: activeUser?.displayName || "Super Admin (Urban Interior Kenya)",
         photoURL: resolvedPhotoURL,
         isSimulated: activeUser?.isSimulated
       }}
       employeeRecord={loggedInEmployee}
       isSuperAdmin={isSuperAdmin}
       onUpdateUserProfile={handleUpdateUserProfile}
+    />
+
+    {/* Kenyan Hospital Statutory Forms Hub Modal */}
+    <KenyanHospitalFormsModal
+      isOpen={showKenyanFormsModal}
+      onClose={() => setShowKenyanFormsModal(false)}
+      patient={kenyanFormsInitialPatient || undefined}
+      initialFormType={kenyanFormsInitialFormType}
     />
 
     {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}

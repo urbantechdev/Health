@@ -24,6 +24,7 @@ import { createAutoTicket, checkActivePatientEncounter, findPatientByNationalId,
 import { upsertUnifiedPatientRecord, findUnifiedPatient } from "../lib/patientSyncService";
 import { HOSPITAL_SPECIALISTS_DIRECTORY, SPECIALIST_CATEGORIES, SpecialistDefinition, getSpecialistByName } from "../constants/specialists";
 import { toast } from "../lib/promptService";
+import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 
 interface ReceptionKioskProps {
   onTicketCreated: () => void;
@@ -38,6 +39,15 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   const [bloodType, setBloodType] = useState("O+");
   const [service, setService] = useState("General Doctor");
   const [issue, setIssue] = useState("");
+
+  // Triage & Vitals
+  const [triageTemp, setTriageTemp] = useState("36.8");
+  const [triageBp, setTriageBp] = useState("120/80");
+  const [triagePulse, setTriagePulse] = useState("72");
+  const [triageWeight, setTriageWeight] = useState("68");
+  const [triageHeight, setTriageHeight] = useState("170");
+  const [allergies, setAllergies] = useState("No Known Drug Allergies (NKDA)");
+  const [chronicConditions, setChronicConditions] = useState("None");
 
   // Specialists state
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -313,12 +323,12 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         shaEligible: shaStatus?.eligible ? "eligible" : "not_eligible",
         shaId: shaStatus?.shaId || "",
         vitals: {
-          temp: "36.8",
-          bp: "120/80",
-          pulse: "72",
-          weight: "68",
+          temp: triageTemp || "36.8",
+          bp: triageBp || "120/80",
+          pulse: triagePulse || "72",
+          weight: triageWeight || "68",
         },
-        symptoms: issue.trim() || `Walk-in registration. Presenting for ${specialistDef ? specialistDef.name : service} assessment/consultation.`,
+        symptoms: `${issue.trim() || `Walk-in registration for ${specialistDef ? specialistDef.name : service}.`}${allergies ? ` | Allergies: ${allergies}` : ""}${chronicConditions && chronicConditions !== "None" ? ` | Chronic: ${chronicConditions}` : ""}`,
         diagnosis: specialistDef ? `Pending specialist review (${specialistDef.name})` : "Initial checkup pending clinical consultation",
         currentDepartment: currentDept,
         activeTicketNo: ticketNo,
@@ -370,6 +380,14 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         doctorName: assignedDoctorId ? employees.find(e => e.id === assignedDoctorId)?.name : undefined,
         room: consultationRoom
       } : null);
+
+      // Automated Vocal PA Announcement on Ticket Creation
+      voiceAnnouncer.announceNewTicket({
+        ticketNo: ticketNo,
+        patientName: cleanName,
+        department: (specialistDef ? specialistDef.name : service).toUpperCase(),
+        assignedRoom: consultationRoom || "Waiting Area"
+      }).catch(e => console.warn("Kiosk voice announcement error:", e));
 
       // Reset form fields
       setPatientName("");
@@ -633,6 +651,128 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
                 <option>AB+</option>
                 <option>O-</option>
               </select>
+            </div>
+          </div>
+
+          {/* Triage Vitals, Biometrics & Clinical Safety Intake */}
+          <div className="p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                  Triage & Vitals Recording (TEWS / Kenya Clinical Standard)
+                </h3>
+              </div>
+              {(() => {
+                const hM = (parseFloat(triageHeight) || 170) / 100;
+                const wKg = parseFloat(triageWeight) || 68;
+                const bmi = hM > 0 ? (wKg / (hM * hM)).toFixed(1) : "22.5";
+                const numBmi = parseFloat(bmi);
+                let badgeClass = "bg-emerald-100 text-emerald-800 border-emerald-200";
+                let status = "Normal Weight";
+                if (numBmi < 18.5) {
+                  badgeClass = "bg-blue-100 text-blue-800 border-blue-200";
+                  status = "Underweight";
+                } else if (numBmi >= 25 && numBmi < 30) {
+                  badgeClass = "bg-amber-100 text-amber-800 border-amber-200";
+                  status = "Overweight";
+                } else if (numBmi >= 30) {
+                  badgeClass = "bg-rose-100 text-rose-800 border-rose-200";
+                  status = "Obese";
+                }
+                return (
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${badgeClass}`}>
+                    BMI: {bmi} kg/m² ({status})
+                  </span>
+                );
+              })()}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">BP (mmHg)</label>
+                <input
+                  id="input-triage-bp"
+                  type="text"
+                  value={triageBp}
+                  onChange={(e) => setTriageBp(e.target.value)}
+                  placeholder="120/80"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Temp (°C)</label>
+                <input
+                  id="input-triage-temp"
+                  type="text"
+                  value={triageTemp}
+                  onChange={(e) => setTriageTemp(e.target.value)}
+                  placeholder="36.8"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Pulse (bpm)</label>
+                <input
+                  id="input-triage-pulse"
+                  type="text"
+                  value={triagePulse}
+                  onChange={(e) => setTriagePulse(e.target.value)}
+                  placeholder="72"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Weight (kg)</label>
+                <input
+                  id="input-triage-weight"
+                  type="text"
+                  value={triageWeight}
+                  onChange={(e) => setTriageWeight(e.target.value)}
+                  placeholder="68"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Height (cm)</label>
+                <input
+                  id="input-triage-height"
+                  type="text"
+                  value={triageHeight}
+                  onChange={(e) => setTriageHeight(e.target.value)}
+                  placeholder="170"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Known Allergies / Intolerances</label>
+                <input
+                  id="input-triage-allergies"
+                  type="text"
+                  value={allergies}
+                  onChange={(e) => setAllergies(e.target.value)}
+                  placeholder="e.g. Penicillin, Sulfa, Peanuts or NKDA"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Chronic Conditions / Alerts</label>
+                <input
+                  id="input-triage-chronic"
+                  type="text"
+                  value={chronicConditions}
+                  onChange={(e) => setChronicConditions(e.target.value)}
+                  placeholder="e.g. Hypertension, Type 2 Diabetes, Asthma"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs"
+                />
+              </div>
             </div>
           </div>
 

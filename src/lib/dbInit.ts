@@ -13,14 +13,15 @@ import { Employee } from "../types";
  * Sole account retained to allow the Super Admin to onboard and create other hospital users.
  */
 export const MASTER_SUPER_ADMIN_SEED: Omit<Employee, "id"> = {
-  name: "Dr. Sarah Naisiae (Super Admin)",
+  name: "Super Admin (Urban Interior Kenya)",
   nationalId: "24189342",
-  role: "Chief Medical Officer",
+  role: "Super Admin",
   department: "administration",
-  specialty: "Consulting Physician & CMO",
-  salary: 380000,
+  specialty: "Hospital Director & Super Admin",
+  salary: 450000,
   phone: "+254 712 345 678",
-  email: "naisiaetext@gmail.com",
+  email: "urbaninteriorkenya@gmail.com",
+  pin: "2026",
   status: "active",
   hireDate: "2024-01-15",
   accessLevel: "Super Admin",
@@ -103,7 +104,7 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
       }
     }
 
-    // 2. Clean employees collection: remove test accounts, keep or seed ONLY the Super Admin (naisiaetext@gmail.com)
+    // 2. Clean employees collection: remove test accounts, keep or seed ONLY the Super Admin (urbaninteriorkenya@gmail.com)
     try {
       const empSnap = await getDocs(collection(db, "employees"));
       let empDeletedCount = 0;
@@ -113,14 +114,15 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
       for (const docSnap of empSnap.docs) {
         const data = docSnap.data() as Employee;
         const email = data.email?.toLowerCase().trim();
-        const isSuperAdmin = email === "naisiaetext@gmail.com" || data.accessLevel === "Super Admin" || data.systemRole === "Super Admin";
+        const isSuperAdmin = email === "urbaninteriorkenya@gmail.com" || email === "naisiaetext@gmail.com" || data.accessLevel === "Super Admin" || data.systemRole === "Super Admin";
 
         if (isSuperAdmin && !superAdminExists) {
           // Normalize to master super admin config
           batch.set(doc(db, "employees", docSnap.id), {
             ...data,
             name: data.name || MASTER_SUPER_ADMIN_SEED.name,
-            email: "naisiaetext@gmail.com",
+            email: data.email || "urbaninteriorkenya@gmail.com",
+            pin: data.pin || "2026",
             department: "administration",
             accessLevel: "Super Admin",
             systemRole: "Super Admin",

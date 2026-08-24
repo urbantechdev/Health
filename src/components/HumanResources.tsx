@@ -3,6 +3,7 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, addDoc, updateDoc, writeBatch, deleteDoc, query, where } from "firebase/firestore";
 import { Employee, PayrollRecord } from "../types";
 import { checkDuplicateEmployee } from "../lib/deduplicationService";
+import StaffOnboardingModal from "./StaffOnboardingModal";
 import { 
   Users, 
   UserPlus, 
@@ -25,7 +26,10 @@ import {
   Award,
   Eye,
   X,
-  Ban
+  Ban,
+  Copy,
+  KeyRound,
+  IdCard
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { toast, modernConfirm } from "../lib/promptService";
@@ -138,6 +142,8 @@ export default function HumanResources() {
 
   // Detailed Employee profile state
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  const [showStaffOnboardingModal, setShowStaffOnboardingModal] = useState(false);
+  const [copiedStaffId, setCopiedStaffId] = useState<string | null>(null);
 
   // Status flags
   const [submitting, setSubmitting] = useState(false);
@@ -273,6 +279,7 @@ export default function HumanResources() {
       }
 
       const finalSpecialty = empSpecialty.startsWith("Other") ? (customSpecialty || empSpecialty) : empSpecialty;
+      const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
       const newEmp = {
         name: empName.trim(),
         nationalId: cleanNationalId,
@@ -284,7 +291,8 @@ export default function HumanResources() {
         email: calculatedEmail,
         status: "active",
         hireDate: new Date().toISOString().split("T")[0],
-        accessLevel: empAccessLevel
+        accessLevel: empAccessLevel,
+        pin: generatedPin
       };
 
       await addDoc(collection(db, "employees"), newEmp);
@@ -753,7 +761,16 @@ export default function HumanResources() {
                 </div>
                 
                 {/* Search Bar & Filters */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowStaffOnboardingModal(true)}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                    <span>Generate Passcard & Credentials</span>
+                  </button>
+
                   <div className="relative">
                     <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                     <input
@@ -761,7 +778,7 @@ export default function HumanResources() {
                       placeholder="Search employees..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 pr-4 py-1.5 border border-gray-200 bg-gray-50 rounded-xl text-xs focus:outline-hidden focus:border-emerald-500 font-medium w-44"
+                      className="pl-9 pr-4 py-1.5 border border-gray-200 bg-gray-50 rounded-xl text-xs focus:outline-hidden focus:border-emerald-500 font-medium w-40"
                     />
                   </div>
                   <select
@@ -792,85 +809,110 @@ export default function HumanResources() {
                       <th className="p-3">Personnel Profile</th>
                       <th className="p-3">Department</th>
                       <th className="p-3">National ID</th>
+                      <th className="p-3">Security PIN</th>
                       <th className="p-3 text-right">Base Salary</th>
                       <th className="p-3 text-center">Status</th>
                       <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-150">
-                    {filteredEmployees.map((emp) => (
-                      <tr key={emp.id} className="hover:bg-gray-50/40">
-                        <td className="p-3">
-                          <div className="flex items-center gap-3">
-                            {emp.photoURL || emp.avatarUrl ? (
-                              <img
-                                src={emp.photoURL || emp.avatarUrl}
-                                alt={emp.name}
-                                className="w-9 h-9 rounded-xl object-cover border border-emerald-300 shadow-xs shrink-0"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="w-9 h-9 rounded-xl bg-emerald-700 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
-                                {emp.name.charAt(0).toUpperCase()}
+                    {filteredEmployees.map((emp) => {
+                      const staffPin = emp.pin || "2026";
+                      return (
+                        <tr key={emp.id} className="hover:bg-gray-50/40">
+                          <td className="p-3">
+                            <div className="flex items-center gap-3">
+                              {emp.photoURL || emp.avatarUrl ? (
+                                <img
+                                  src={emp.photoURL || emp.avatarUrl}
+                                  alt={emp.name}
+                                  className="w-9 h-9 rounded-xl object-cover border border-emerald-300 shadow-xs shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-xl bg-emerald-700 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
+                                  {emp.name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-extrabold text-gray-950 text-sm">{emp.name}</p>
+                                  {emp.specialty && (
+                                    <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[9px] font-extrabold uppercase tracking-wide">
+                                      {emp.specialty}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-gray-500 text-[10px] font-medium">{emp.role} • {emp.email}</p>
+                                <p className="text-gray-400 text-[9px] font-mono mt-0.5">Tel: {emp.phone} • Hired: {emp.hireDate}</p>
                               </div>
-                            )}
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="font-extrabold text-gray-950 text-sm">{emp.name}</p>
-                                {emp.specialty && (
-                                  <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[9px] font-extrabold uppercase tracking-wide">
-                                    {emp.specialty}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-gray-500 text-[10px] font-medium">{emp.role} • {emp.email}</p>
-                              <p className="text-gray-400 text-[9px] font-mono mt-0.5">Tel: {emp.phone} • Hired: {emp.hireDate}</p>
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-3 font-semibold uppercase text-[10px] text-emerald-800">
-                          <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-150 rounded">
-                            {emp.department}
-                          </span>
-                        </td>
-                        <td className="p-3 font-mono text-gray-600">{emp.nationalId}</td>
-                        <td className="p-3 text-right font-bold text-gray-900 font-mono">
-                          KES {emp.salary.toLocaleString()}
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
-                            emp.status === "active" 
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-150"
-                              : "bg-red-50 text-red-700 border border-red-150"
-                          }`}>
-                            {emp.status}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => setViewingEmployee(emp)}
-                              className="p-1.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg cursor-pointer transition-all inline-flex items-center justify-center"
-                              title="View & Print Full Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {emp.status === "active" && (
+                          </td>
+                          <td className="p-3 font-semibold uppercase text-[10px] text-emerald-800">
+                            <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-150 rounded">
+                              {emp.department}
+                            </span>
+                          </td>
+                          <td className="p-3 font-mono text-gray-600">{emp.nationalId}</td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-black text-xs px-2 py-0.5 bg-slate-100 text-emerald-950 rounded-md border border-slate-200">
+                                {staffPin}
+                              </span>
                               <button
-                                onClick={() => handleTerminateEmployee(emp.id)}
-                                className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-lg cursor-pointer transition-all inline-flex items-center justify-center"
-                                title="Terminate Employee"
+                                type="button"
+                                onClick={() => {
+                                  const text = `Hospital Credentials for ${emp.name}:\nRole: ${emp.role}\nEmail: ${emp.email}\nSecurity PIN: ${staffPin}\nLogin Portal: Select station and enter PIN ${staffPin}`;
+                                  navigator.clipboard.writeText(text);
+                                  setCopiedStaffId(emp.id);
+                                  toast.success(`Copied login credentials for ${emp.name}!`, "Credentials Copied");
+                                  setTimeout(() => setCopiedStaffId(null), 2500);
+                                }}
+                                className="p-1 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded cursor-pointer transition-colors"
+                                title="Copy Credentials to Clipboard"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                {copiedStaffId === emp.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                            </div>
+                          </td>
+                          <td className="p-3 text-right font-bold text-gray-900 font-mono">
+                            KES {emp.salary.toLocaleString()}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
+                              emp.status === "active" 
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-150"
+                                : "bg-red-50 text-red-700 border border-red-150"
+                            }`}>
+                              {emp.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setViewingEmployee(emp)}
+                                className="p-1.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg cursor-pointer transition-all inline-flex items-center justify-center"
+                                title="View & Print Full Details"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              {emp.status === "active" && (
+                                <button
+                                  onClick={() => handleTerminateEmployee(emp.id)}
+                                  className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-lg cursor-pointer transition-all inline-flex items-center justify-center"
+                                  title="Terminate Employee"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {filteredEmployees.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="p-6 text-center text-gray-400 italic">
+                        <td colSpan={7} className="p-6 text-center text-gray-400 italic">
                           No matching active staff personnel cataloged.
                         </td>
                       </tr>
@@ -1216,6 +1258,18 @@ export default function HumanResources() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Super Admin Staff Onboarding & Passcard Modal */}
+      {showStaffOnboardingModal && (
+        <StaffOnboardingModal
+          isOpen={showStaffOnboardingModal}
+          onClose={() => setShowStaffOnboardingModal(false)}
+          onStaffCreated={() => {
+            setShowStaffOnboardingModal(false);
+            toast.success("Staff member onboarded and credentials generated!", "Staff Onboarded");
+          }}
+        />
       )}
     </div>
   );

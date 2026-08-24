@@ -22,10 +22,16 @@ import {
   UserCheck,
   CheckCircle2,
   ArrowRightLeft,
-  MessageSquare
+  MessageSquare,
+  FileCheck,
+  Award,
+  Activity,
+  Hospital
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import KenyanHospitalFormsModal, { KenyanFormType, COMMON_ICD10_KENYA } from "./KenyanHospitalFormsModal";
 import { toast } from "../lib/promptService";
+import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 
 interface DoctorsDeskProps {
   toggles: any;
@@ -66,6 +72,12 @@ export default function DoctorsDesk({
   // Printing digital prescription states
   const [printOpen, setPrintOpen] = useState(false);
   const [printTarget, setPrintTarget] = useState<{ patient: MedicalRecord; visit: ClinicalVisit } | null>(null);
+
+  // Kenyan Statutory & Medical Forms Modal State
+  const [kenyanFormModalOpen, setKenyanFormModalOpen] = useState(false);
+  const [activeKenyanFormType, setActiveKenyanFormType] = useState<KenyanFormType>("sick_sheet");
+  const [selectedFormVisit, setSelectedFormVisit] = useState<ClinicalVisit | null>(null);
+  const [showIcdDropdown, setShowIcdDropdown] = useState(false);
 
   // Clinical inputs
   const [symptoms, setSymptoms] = useState("");
@@ -233,7 +245,15 @@ export default function DoctorsDesk({
         setSymptoms(ticket.issue);
       }
       setIncomingPatientPrompt(null);
-      speakStationAnnouncement(`Calling ${ticket.patientName}. Ticket ${ticket.ticketNo}. Please enter consultation room.`);
+      
+      // PA Voice Queue Announcement with Banking/Hospital Chime
+      const room = ticket.consultationRoom || "Room 5, Doctor";
+      voiceAnnouncer.announceTurnArrived({
+        ticketNo: ticket.ticketNo,
+        patientName: ticket.patientName,
+        roomOrDesk: room,
+        departmentOrRole: "Doctor"
+      }).catch(err => console.warn("Voice broadcast error:", err));
     } catch (e) {
       console.error("Error accepting incoming patient:", e);
     }
@@ -642,42 +662,58 @@ export default function DoctorsDesk({
                   <p>SHA Code: <span className="font-mono font-bold text-[10px]">{selectedPatient.shaId || "N/A"}</span></p>
                 </div>
 
-                {/* Quick Referral & Inter-departmental Transfer Hub Actions */}
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
-                  {onOpenTransferModal && (
-                    <button
-                      id="btn-quick-patient-transfer"
-                      type="button"
-                      onClick={() => onOpenTransferModal({
-                        patientName: selectedPatient.patientName,
-                        nationalId: selectedPatient.nationalId || "",
-                        age: selectedPatient.age,
-                        gender: selectedPatient.gender,
-                        symptoms: symptoms,
-                        diagnosis: diagnosis,
-                        vitals: { temp, bp, pulse, weight }
-                      })}
-                      className="flex-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-blue-200 transition-colors cursor-pointer"
-                    >
-                      <ArrowRightLeft className="w-3.5 h-3.5" />
-                      <span>Transfer / Refer Patient</span>
-                    </button>
-                  )}
-                  {onOpenChatModal && (
-                    <button
-                      id="btn-quick-patient-chat"
-                      type="button"
-                      onClick={() => onOpenChatModal("all", {
-                        patientName: selectedPatient.patientName,
-                        nationalId: selectedPatient.nationalId || "",
-                        diagnosis: diagnosis || symptoms
-                      })}
-                      className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Staff Chat</span>
-                    </button>
-                  )}
+                {/* Quick Referral, Staff Chat & Kenyan Statutory Forms Hub Actions */}
+                <div className="space-y-2 pt-2 border-t border-gray-200">
+                  <div className="flex flex-wrap gap-2">
+                    {onOpenTransferModal && (
+                      <button
+                        id="btn-quick-patient-transfer"
+                        type="button"
+                        onClick={() => onOpenTransferModal({
+                          patientName: selectedPatient.patientName,
+                          nationalId: selectedPatient.nationalId || "",
+                          age: selectedPatient.age,
+                          gender: selectedPatient.gender,
+                          symptoms: symptoms,
+                          diagnosis: diagnosis,
+                          vitals: { temp, bp, pulse, weight }
+                        })}
+                        className="flex-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-blue-200 transition-colors cursor-pointer"
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                        <span>Transfer / Refer</span>
+                      </button>
+                    )}
+                    {onOpenChatModal && (
+                      <button
+                        id="btn-quick-patient-chat"
+                        type="button"
+                        onClick={() => onOpenChatModal("all", {
+                          patientName: selectedPatient.patientName,
+                          nationalId: selectedPatient.nationalId || "",
+                          diagnosis: diagnosis || symptoms
+                        })}
+                        className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-purple-200 transition-colors cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Staff Chat</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Primary Kenyan Medical Forms Trigger Button */}
+                  <button
+                    id="btn-open-kenyan-forms-hub"
+                    type="button"
+                    onClick={() => {
+                      setActiveKenyanFormType("sick_sheet");
+                      setKenyanFormModalOpen(true);
+                    }}
+                    className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Hospital className="w-4 h-4 text-emerald-200" />
+                    <span>Kenyan Hospital Forms Hub (Sick Sheet, MOH 268, etc.)</span>
+                  </button>
                 </div>
               </div>
 
@@ -703,8 +739,8 @@ export default function DoctorsDesk({
                       <p className="font-medium text-gray-800">Diagnosis: <span className="font-normal text-gray-600">{v.diagnosis}</span></p>
                       <p className="text-gray-500">Symptoms: <span className="italic">{v.symptoms}</span></p>
                       {v.prescriptions?.length > 0 && (
-                        <div className="flex flex-col gap-1.5 mt-1 border-t border-gray-50 pt-2">
-                          <p className="text-[10px] text-gray-500 font-medium">Prescribed: {v.prescriptions.map(p => p.drugName).join(", ")}</p>
+                        <div className="flex flex-wrap gap-1.5 mt-1 border-t border-gray-50 pt-2">
+                          <p className="text-[10px] text-gray-500 font-medium w-full">Prescribed: {v.prescriptions.map(p => p.drugName).join(", ")}</p>
                           <button
                             id={`btn-print-rx-${v.id || idx}`}
                             type="button"
@@ -712,10 +748,49 @@ export default function DoctorsDesk({
                               setPrintTarget({ patient: selectedPatient, visit: v });
                               setPrintOpen(true);
                             }}
-                            className="w-fit px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 rounded text-[9px] font-bold flex items-center gap-1.5 cursor-pointer border border-emerald-150 transition-colors"
+                            className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 rounded text-[9px] font-bold flex items-center gap-1 cursor-pointer border border-emerald-150 transition-colors"
                           >
                             <Printer className="w-3 h-3" />
-                            <span>Digital Prescription (PDF)</span>
+                            <span>PPB e-Rx</span>
+                          </button>
+                          <button
+                            id={`btn-print-sick-${v.id || idx}`}
+                            type="button"
+                            onClick={() => {
+                              setSelectedFormVisit(v);
+                              setActiveKenyanFormType("sick_sheet");
+                              setKenyanFormModalOpen(true);
+                            }}
+                            className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded text-[9px] font-bold flex items-center gap-1 cursor-pointer border border-amber-200 transition-colors"
+                          >
+                            <Award className="w-3 h-3" />
+                            <span>Sick Sheet</span>
+                          </button>
+                          <button
+                            id={`btn-print-ref-${v.id || idx}`}
+                            type="button"
+                            onClick={() => {
+                              setSelectedFormVisit(v);
+                              setActiveKenyanFormType("referral_moh268");
+                              setKenyanFormModalOpen(true);
+                            }}
+                            className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded text-[9px] font-bold flex items-center gap-1 cursor-pointer border border-blue-200 transition-colors"
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>MOH 268</span>
+                          </button>
+                          <button
+                            id={`btn-print-dis-${v.id || idx}`}
+                            type="button"
+                            onClick={() => {
+                              setSelectedFormVisit(v);
+                              setActiveKenyanFormType("discharge_summary");
+                              setKenyanFormModalOpen(true);
+                            }}
+                            className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded text-[9px] font-bold flex items-center gap-1 cursor-pointer border border-purple-200 transition-colors"
+                          >
+                            <FileCheck className="w-3 h-3" />
+                            <span>Discharge</span>
                           </button>
                         </div>
                       )}
@@ -810,16 +885,49 @@ export default function DoctorsDesk({
                       className="w-full p-2 border border-gray-200 rounded-xl text-xs focus:border-emerald-500 focus:outline-hidden"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-600">Clinical Diagnosis</label>
+                  <div className="space-y-1 relative">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-gray-600">Clinical Diagnosis (ICD-10/ICD-11 Compliant)</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowIcdDropdown(!showIcdDropdown)}
+                        className="text-[10px] text-emerald-700 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Activity className="w-3 h-3 text-emerald-600" />
+                        <span>{showIcdDropdown ? "Close ICD-10 List" : "Quick ICD-10 Kenya Pick"}</span>
+                      </button>
+                    </div>
                     <input
                       id="input-diagnosis"
                       type="text"
-                      placeholder="e.g. Acute Bacterial Tonsillitis"
+                      placeholder="e.g. B54 Unspecified Malaria or Acute Tonsillitis"
                       value={diagnosis}
                       onChange={(e) => setDiagnosis(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:border-emerald-500 focus:outline-hidden"
                     />
+
+                    {/* ICD-10 Quick picker popover */}
+                    {showIcdDropdown && (
+                      <div className="p-2.5 bg-white border border-emerald-200 rounded-xl shadow-lg z-20 space-y-2 mt-1">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Common Kenyan MOH Top Diagnoses</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                          {COMMON_ICD10_KENYA.map((item) => (
+                            <button
+                              key={item.code}
+                              type="button"
+                              onClick={() => {
+                                setDiagnosis(`${item.code} - ${item.name}`);
+                                setShowIcdDropdown(false);
+                              }}
+                              className="text-left p-1.5 rounded-lg hover:bg-emerald-50 border border-gray-100 hover:border-emerald-200 text-xs transition-colors flex items-center justify-between cursor-pointer"
+                            >
+                              <span className="font-medium text-gray-800 text-[11px] truncate">{item.name}</span>
+                              <span className="font-mono text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded ml-1">{item.code}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1223,6 +1331,28 @@ export default function DoctorsDesk({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Kenyan Statutory Hospital Forms Hub Modal */}
+      {selectedPatient && (
+        <KenyanHospitalFormsModal
+          isOpen={kenyanFormModalOpen}
+          onClose={() => setKenyanFormModalOpen(false)}
+          patient={selectedPatient}
+          visit={
+            selectedFormVisit || (selectedPatient.visits && selectedPatient.visits.length > 0 ? selectedPatient.visits[0] : {
+              id: "active-draft",
+              date: new Date().toISOString().split("T")[0],
+              doctor: "Dr. Doctor In-Charge (KMPDC #A.4892)",
+              symptoms: symptoms,
+              diagnosis: diagnosis || "Clinical Outpatient Evaluation",
+              vitals: { temp, bp, pulse, weight },
+              prescriptions: draftPrescriptions,
+              referrals: draftReferrals
+            })
+          }
+          initialFormType={activeKenyanFormType}
+        />
       )}
     </div>
   );

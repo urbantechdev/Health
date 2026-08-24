@@ -3,6 +3,7 @@ import { DepartmentToggles, Tenant, Employee } from "../types";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import KenyanIntegrationsShowcase from "./KenyanIntegrationsShowcase";
+import StaffOnboardingModal from "./StaffOnboardingModal";
 import { runFullDatabaseDeduplication, checkDuplicateEmployee, DeduplicationReport } from "../lib/deduplicationService";
 import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "../constants/roles";
 import { bootstrapCloudFirestore, cleanSystemAndPurgeTestData, CleanSystemReport, CollectionCounts } from "../lib/dbInit";
@@ -43,7 +44,10 @@ import {
   Upload,
   Image as ImageIcon,
   Crown,
-  Award
+  Award,
+  Copy,
+  Printer,
+  IdCard
 } from "lucide-react";
 
 const GOOGLE_FONTS = [
@@ -148,6 +152,8 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   // System Users / Staff list from Firestore
   const [systemUsers, setSystemUsers] = React.useState<Employee[]>([]);
   const [showAddUserModal, setShowAddUserModal] = React.useState(false);
+  const [showStaffOnboardingModal, setShowStaffOnboardingModal] = React.useState(false);
+  const [copiedStaffId, setCopiedStaffId] = React.useState<string | null>(null);
   const [userName, setUserName] = React.useState("");
   const [userEmail, setUserEmail] = React.useState("");
   const [userDept, setUserDept] = React.useState("administration");
@@ -226,7 +232,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
   const handlePurgeAndCleanSystem = async () => {
     const confirmWipe = await modernConfirm(
-      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nOnly the Master Super Admin (naisiaetext@gmail.com) will be retained to allow fresh onboarding of real hospital users.",
+      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nOnly the Master Super Admin (urbaninteriorkenya@gmail.com) will be retained to allow fresh onboarding of real hospital users.",
       {
         title: "PURGE ALL TEST DATA",
         type: "error",
@@ -244,7 +250,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       const report = await cleanSystemAndPurgeTestData();
       setPurgeReport(report);
       setDbSyncMessage(
-        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. Only Master Super Admin is active for fresh staff onboarding.`
+        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. Only Master Super Admin (urbaninteriorkenya@gmail.com) is active for fresh staff onboarding.`
       );
       toast.success(`Purged ${report.totalDeleted} test records across 7 collections.`, "System Cleaned");
     } catch (err) {
@@ -784,13 +790,23 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
             </button>
 
             <button
+              id="btn-open-staff-onboarding"
+              type="button"
+              onClick={() => setShowStaffOnboardingModal(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+              <span>Onboard Staff & Generate Passcard</span>
+            </button>
+
+            <button
               id="btn-add-system-user"
               type="button"
               onClick={() => setShowAddUserModal(!showAddUserModal)}
               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
             >
               {showAddUserModal ? <X className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
-              <span>{showAddUserModal ? "Cancel" : "Create New User Account"}</span>
+              <span>{showAddUserModal ? "Cancel" : "Quick Register"}</span>
             </button>
           </div>
         </div>
@@ -913,7 +929,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
           {systemUsers.length === 0 ? (
             <div className="p-6 text-center text-xs text-gray-500">
               <p className="font-semibold text-gray-700 mb-1">No System Users Registered</p>
-              <p>Click "Create New User Account" above to register staff under the 11 defined roles.</p>
+              <p>Click "Onboard Staff & Generate Passcard" above to register staff under the 11 defined roles.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -921,8 +937,9 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                 <thead className="bg-slate-50 border-b border-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
                   <tr>
                     <th className="p-3">User / Staff Member</th>
-                    <th className="p-3">Email Address (Login ID)</th>
-                    <th className="p-3">Assigned System Role (RBAC)</th>
+                    <th className="p-3">Corporate Email (Login ID)</th>
+                    <th className="p-3">Assigned System Role</th>
+                    <th className="p-3">Security PIN & Passcard</th>
                     <th className="p-3">Need-to-Know Workspaces</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
@@ -932,6 +949,8 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                     const matchedRole = SYSTEM_ROLES_DIRECTORY.find((r) => r.role === u.role) || SYSTEM_ROLES_DIRECTORY.find((r) => r.department === u.department) || SYSTEM_ROLES_DIRECTORY[0];
                     const activeRoleName = (u.role as SystemRole) || matchedRole.role;
                     const roleCfg = getRoleConfig(activeRoleName);
+                    const staffPin = u.pin || "2026";
+                    const isMasterAdmin = u.email?.toLowerCase().trim() === "urbaninteriorkenya@gmail.com";
 
                     return (
                       <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
@@ -950,7 +969,14 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                               </div>
                             )}
                             <div>
-                              <div>{u.name}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span>{u.name}</span>
+                                {isMasterAdmin && (
+                                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-black rounded border border-amber-300">
+                                    Super Admin
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-[10px] text-gray-400 font-mono">ID: {u.nationalId || u.id.slice(0, 8)}</div>
                             </div>
                           </div>
@@ -970,6 +996,27 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                           </select>
                         </td>
                         <td className="p-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-black text-xs px-2 py-0.5 bg-slate-100 text-purple-950 rounded-md border border-slate-200">
+                              PIN: {staffPin}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const text = `Hospital Login Credentials:\nName: ${u.name}\nEmail: ${u.email}\nRole: ${activeRoleName}\nSecurity PIN: ${staffPin}\nLogin Portal: Select station and enter PIN ${staffPin}`;
+                                navigator.clipboard.writeText(text);
+                                setCopiedStaffId(u.id);
+                                toast.success(`Copied login credentials for ${u.name} to clipboard!`, "Credentials Copied");
+                                setTimeout(() => setCopiedStaffId(null), 2500);
+                              }}
+                              className="p-1 text-slate-500 hover:text-purple-700 hover:bg-purple-50 rounded cursor-pointer transition-colors"
+                              title="Copy Credentials to Clipboard"
+                            >
+                              {copiedStaffId === u.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="p-3">
                           <div className="flex flex-wrap gap-1 max-w-xs">
                             {roleCfg.allowedModules.map((mod) => (
                               <span key={mod} className="px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[9px] font-semibold rounded capitalize">
@@ -981,8 +1028,11 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                         <td className="p-3 text-right">
                           <button
                             onClick={() => handleDeleteUser(u.id, u.name)}
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
-                            title="Remove User Account"
+                            disabled={isMasterAdmin}
+                            className={`p-1.5 rounded-md transition-colors ${
+                              isMasterAdmin ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                            }`}
+                            title={isMasterAdmin ? "Master Super Admin cannot be deleted" : "Remove User Account"}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -995,6 +1045,18 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
             </div>
           )}
         </div>
+
+        {/* Super Admin Staff Onboarding & Passcard Modal */}
+        {showStaffOnboardingModal && (
+          <StaffOnboardingModal
+            isOpen={showStaffOnboardingModal}
+            onClose={() => setShowStaffOnboardingModal(false)}
+            onStaffCreated={() => {
+              setShowStaffOnboardingModal(false);
+              toast.success("Staff member successfully onboarded and credentials generated!", "Staff Onboarded");
+            }}
+          />
+        )}
       </div>
 
       {/* 4. Anti-Duplication & Database Integrity Engine */}

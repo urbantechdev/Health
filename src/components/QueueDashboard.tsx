@@ -110,11 +110,12 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
       
       const ticket = tickets.find(t => t.id === ticketId);
       if (status === "serving" && ticket) {
-        let roomName = "Consultation Desk 1";
+        let roomName = "Room 5, Doctor";
         if (currentDept === "laboratory") roomName = "Lab Window A";
         if (currentDept === "radiology") roomName = "X-Ray Room 1";
         if (currentDept === "pharmacy") roomName = "Pharmacy Dispensing Counter";
-        announceTicket(ticket.ticketNo, roomName);
+        if (currentDept === "doctor") roomName = "Room 5, Doctor";
+        announceTicket(ticket, roomName);
       }
     } catch (err) {
       console.error("Failed to update ticket status:", err);
@@ -157,6 +158,31 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
           </button>
         </div>
 
+        {/* Live Vocal Marquee on Public Display */}
+        {activeAnnouncement && (
+          <div className="mb-8 p-6 bg-gradient-to-r from-emerald-900 via-slate-900 to-indigo-950 border-4 border-emerald-400 rounded-3xl text-white shadow-2xl animate-fade-in flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-emerald-500 text-slate-950 rounded-2xl animate-bounce">
+                <Megaphone className="w-8 h-8" />
+              </div>
+              <div>
+                <span className="px-3 py-1 bg-emerald-400 text-slate-950 font-black text-xs uppercase rounded-lg tracking-widest animate-pulse">
+                  PUBLIC PA ANNOUNCEMENT
+                </span>
+                <h2 className="text-2xl lg:text-3xl font-black text-emerald-300 font-mono tracking-wide mt-2">
+                  📢 {activeAnnouncement.formattedText}
+                </h2>
+              </div>
+            </div>
+            <div className="hidden md:flex items-end gap-1.5 h-8">
+              <span className="w-1.5 bg-emerald-400 rounded-full animate-[pulse_0.4s_ease-in-out_infinite] h-4" />
+              <span className="w-1.5 bg-emerald-400 rounded-full animate-[pulse_0.6s_ease-in-out_infinite] h-8" />
+              <span className="w-1.5 bg-emerald-400 rounded-full animate-[pulse_0.3s_ease-in-out_infinite] h-5" />
+              <span className="w-1.5 bg-emerald-400 rounded-full animate-[pulse_0.5s_ease-in-out_infinite] h-7" />
+            </div>
+          </div>
+        )}
+
         {/* Current serving board */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
           {/* Active Serving Area */}
@@ -194,7 +220,7 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
                     bg = "bg-pink-50/90 border-pink-300 text-pink-950 shadow-sm";
                   }
 
-                  const isAnnouncing = announcingTicket === t.ticketNo;
+                  const isAnnouncing = activeAnnouncement?.ticketNo === t.ticketNo;
 
                   return (
                     <div
@@ -358,11 +384,11 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
                         <button
                           id={`btn-reannounce-${t.id}`}
                           onClick={() => {
-                            let roomName = "Consultation Desk 1";
+                            let roomName = "Room 5, Doctor";
                             if (t.currentDepartment === "laboratory") roomName = "Lab Window A";
                             if (t.currentDepartment === "radiology") roomName = "X-Ray Room 1";
                             if (t.currentDepartment === "pharmacy") roomName = "Pharmacy Counter";
-                            announceTicket(t.ticketNo, roomName);
+                            announceTicket(t, roomName);
                           }}
                           className="p-1.5 hover:bg-gray-100 text-gray-500 rounded-lg transition-colors border border-gray-200 cursor-pointer"
                           title="Re-announce Ticket Vocal Alert"
