@@ -31,6 +31,7 @@ import PatientTransferModal from "./components/PatientTransferModal";
 import TransfersHub from "./components/TransfersHub";
 import AdmissionDischargeManager from "./components/AdmissionDischargeManager";
 import KenyanHospitalFormsModal, { KenyanFormType } from "./components/KenyanHospitalFormsModal";
+import PatientHistoryLookupModal from "./components/PatientHistoryLookupModal";
 import RolePortalLogin from "./components/RolePortalLogin";
 import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
@@ -87,7 +88,8 @@ import {
   Inbox,
   Hospital,
   FileCheck,
-  Bed
+  Bed,
+  History
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -396,6 +398,7 @@ export default function App() {
     defaultPatientName?: string;
   }>({});
 
+  const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState<boolean>(false);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [profileOverride, setProfileOverride] = useState<{
     displayName?: string;
@@ -1516,6 +1519,16 @@ export default function App() {
               </button>
             )}
 
+            {/* Instant Patient ID Lookup & Full EHR Treatment History Modal Button */}
+            <button
+              id="btn-header-patient-id-lookup"
+              onClick={() => setShowGlobalHistoryModal(true)}
+              title="Instant Patient ID Lookup & EHR Medical History (National ID / Passport / Phone / Name)"
+              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+            >
+              <History className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
+            </button>
+
             {/* Kenyan Statutory Forms Hub (Sick Sheet, MOH 268, Discharge Summary, etc.) */}
             {(isSuperAdmin || activeRoleConfig.canPerformClinicalActions || ["Doctor", "Nurse", "Reception", "Admin"].includes(currentSystemRole)) && (
               <button
@@ -2627,6 +2640,18 @@ export default function App() {
       onClose={() => setShowKenyanFormsModal(false)}
       patient={kenyanFormsInitialPatient || undefined}
       initialFormType={kenyanFormsInitialFormType}
+    />
+
+    {/* Instant Patient ID & Treatment History Lookup Modal */}
+    <PatientHistoryLookupModal
+      isOpen={showGlobalHistoryModal}
+      onClose={() => setShowGlobalHistoryModal(false)}
+      onSelectPatientForDoctor={(p) => {
+        setActiveTab("doctor");
+      }}
+      onSelectPatientForIntake={(p) => {
+        setActiveTab("reception");
+      }}
     />
 
     {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}

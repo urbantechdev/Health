@@ -17,7 +17,9 @@ import {
   Ban,
   Clock,
   X,
-  History
+  History,
+  FileText,
+  Eye
 } from "lucide-react";
 import { Employee, MedicalRecord, SystemTicket, QueueTicket } from "../types";
 import { createAutoTicket, checkActivePatientEncounter, findPatientByNationalId, DuplicateEncounterCheck } from "../lib/ticketService";
@@ -25,6 +27,7 @@ import { upsertUnifiedPatientRecord, findUnifiedPatient } from "../lib/patientSy
 import { HOSPITAL_SPECIALISTS_DIRECTORY, SPECIALIST_CATEGORIES, SpecialistDefinition, getSpecialistByName } from "../constants/specialists";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
+import PatientHistoryLookupModal from "./PatientHistoryLookupModal";
 
 interface ReceptionKioskProps {
   onTicketCreated: () => void;
@@ -39,6 +42,10 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   const [bloodType, setBloodType] = useState("O+");
   const [service, setService] = useState("General Doctor");
   const [issue, setIssue] = useState("");
+
+  // History Lookup Modal state
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historySearchId, setHistorySearchId] = useState("");
 
   // Triage & Vitals
   const [triageTemp, setTriageTemp] = useState("36.8");
@@ -424,14 +431,29 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
 
   return (
     <div id="reception-kiosk" className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-          <User className="w-5 h-5" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+            <User className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Walk-in Reception Desk</h2>
+            <p className="text-xs text-gray-500">ID Verification, Biometrics & SHA Claim Intake</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Walk-in Reception Desk</h2>
-          <p className="text-xs text-gray-500">ID Verification, Biometrics & SHA Claim Intake</p>
-        </div>
+
+        <button
+          id="btn-instant-patient-history-lookup"
+          type="button"
+          onClick={() => {
+            setHistorySearchId(nationalId);
+            setShowHistoryModal(true);
+          }}
+          className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+        >
+          <History className="w-4 h-4 text-indigo-600" />
+          <span>Instant Patient ID / History Lookup</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -541,25 +563,39 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
           {existingPatientProfile && !activeDuplicateEncounter && (
             <div
               id="existing-patient-found-badge"
-              className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 text-emerald-950 text-xs flex items-start gap-2.5 animate-fade-in"
+              className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/70 text-emerald-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in"
             >
-              <UserCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-emerald-900">
-                    Existing Medical Record Recognized
+              <div className="flex items-start gap-2.5">
+                <UserCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-emerald-900">
+                      Existing Medical Record Recognized
+                    </p>
+                    <span className="px-2 py-0.2 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[9px] font-bold">
+                      Profile Linked
+                    </span>
+                  </div>
+                  <p className="text-emerald-800 text-[11px]">
+                    Patient: <strong className="font-semibold text-emerald-950">{existingPatientProfile.patientName}</strong> • Age: {existingPatientProfile.age} • Gender: {existingPatientProfile.gender} • Blood: {existingPatientProfile.bloodType} • <span className="font-semibold">{existingPatientProfile.visits?.length || 1} Past Visit(s) on File</span>.
                   </p>
-                  <span className="px-2 py-0.2 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[9px] font-bold">
-                    Profile Linked
-                  </span>
+                  <p className="text-[10px] text-emerald-700">
+                    All prior treatments, diagnoses, and prescriptions retrieved automatically.
+                  </p>
                 </div>
-                <p className="text-emerald-800 text-[11px]">
-                  Patient: <strong className="font-semibold text-emerald-950">{existingPatientProfile.patientName}</strong> • Age: {existingPatientProfile.age} • Gender: {existingPatientProfile.gender} • Blood: {existingPatientProfile.bloodType} • <span className="font-semibold">{existingPatientProfile.visits?.length || 1} Past Visit(s) on File</span>.
-                </p>
-                <p className="text-[10px] text-emerald-700">
-                  New intake will be appended directly to their existing medical history without creating duplicate patient records.
-                </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setHistorySearchId(existingPatientProfile.nationalId || nationalId);
+                  setShowHistoryModal(true);
+                }}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View Full Treatment History</span>
+              </button>
             </div>
           )}
 
@@ -1203,6 +1239,30 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
           </div>
         </div>
       )}
+
+      {/* Instant Patient EHR & Treatment History Modal */}
+      <PatientHistoryLookupModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        initialSearchId={historySearchId || nationalId}
+        onSelectPatientForIntake={(p) => {
+          setNationalId(p.nationalId || "");
+          setPatientName(p.patientName || "");
+          setPhone(p.phone || "");
+          setAge(p.age ? String(p.age) : "");
+          if (p.gender) setGender(p.gender);
+          if (p.bloodType) setBloodType(p.bloodType);
+          if (p.shaEligible === "eligible" && p.shaId) {
+            setShaStatus({
+              eligible: true,
+              shaId: p.shaId,
+              patientName: p.patientName,
+              benefitLimits: { outpatient: 100000, inpatient: 500000 }
+            });
+          }
+          toast.success(`Loaded clinical profile for ${p.patientName}`, "Patient Record Retrieved");
+        }}
+      />
     </div>
   );
 }

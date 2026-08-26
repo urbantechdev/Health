@@ -1,5 +1,5 @@
 import React from "react";
-import { DepartmentToggles, Tenant, Employee } from "../types";
+import { DepartmentToggles, Tenant, Employee, SettingsAuditLog } from "../types";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import KenyanIntegrationsShowcase from "./KenyanIntegrationsShowcase";
@@ -9,6 +9,7 @@ import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "../constants/
 import { bootstrapCloudFirestore, cleanSystemAndPurgeTestData, CleanSystemReport, CollectionCounts } from "../lib/dbInit";
 import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "../lib/superAdmins";
 import { toast, modernConfirm } from "../lib/promptService";
+import { logSettingsChange } from "../lib/auditService";
 import { 
   ToggleLeft, 
   ToggleRight, 
@@ -183,6 +184,11 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   const [isBootstrappingDb, setIsBootstrappingDb] = React.useState(false);
   const [dbSyncMessage, setDbSyncMessage] = React.useState<string | null>(null);
 
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = React.useState<SettingsAuditLog[]>([]);
+  const [auditSearch, setAuditSearch] = React.useState("");
+  const [auditTypeFilter, setAuditTypeFilter] = React.useState("all");
+
   React.useEffect(() => {
     const unsubEmployees = onSnapshot(collection(db, "employees"), (snapshot) => {
       const usersList: Employee[] = [];
@@ -191,6 +197,15 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       });
       setSystemUsers(usersList);
       setDbCounts((prev) => ({ ...prev, employees: snapshot.size }));
+    });
+
+    const unsubAudit = onSnapshot(collection(db, "settings_audit_logs"), (snapshot) => {
+      const logs: SettingsAuditLog[] = [];
+      snapshot.forEach((doc) => {
+        logs.push({ id: doc.id, ...doc.data() } as SettingsAuditLog);
+      });
+      logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setAuditLogs(logs);
     });
 
     const unsubPatients = onSnapshot(collection(db, "patients"), (snapshot) => {
@@ -468,8 +483,16 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   };
 
   const updateBrandingSettings = (key: string, value: string) => {
+    const oldVal = localStorage.getItem(key) || "N/A";
     localStorage.setItem(key, value);
     window.dispatchEvent(new Event("platform_branding_changed"));
+    logSettingsChange({
+      changeType: "SYSTEM_SECURITY_CONFIG",
+      fieldName: key,
+      oldValue: oldVal,
+      newValue: value,
+      reason: `Custom branding or appearance parameter '${key}' modified in system settings.`,
+    });
   };
 
   const [features, setFeatures] = React.useState<CustomFeature[]>(() => {
@@ -498,13 +521,22 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   const [error, setError] = React.useState("");
 
   const handleToggle = (key: keyof DepartmentToggles) => {
+    const newVal = !toggles[key];
     onToggleChange({
       ...toggles,
-      [key]: !toggles[key],
+      [key]: newVal,
+    });
+    logSettingsChange({
+      changeType: "SYSTEM_SECURITY_CONFIG",
+      fieldName: `Module Switch: ${key}`,
+      oldValue: String(toggles[key]),
+      newValue: String(newVal),
+      reason: `Department plugin '${key}' toggled to ${newVal ? "ENABLED" : "DISABLED"}.`,
     });
   };
 
   const handleTypeChange = (type: "clinic" | "hospital_level_4" | "hospital_level_5") => {
+    const oldTier = tenant.type;
     const defaultToggles: DepartmentToggles = {
       reception: true,
       queue: true,
@@ -523,6 +555,14 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
     });
 
     onToggleChange(defaultToggles);
+
+    logSettingsChange({
+      changeType: "FACILITY_TIER_CHANGED",
+      fieldName: "Facility Classification Tier",
+      oldValue: oldTier,
+      newValue: type,
+      reason: `Hospital tier classification updated from ${oldTier} to ${type}. Modules synchronized.`,
+    });
   };
 
   const handleAddFeature = (e: React.FormEvent) => {
@@ -1750,6 +1790,149 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                 );
               })}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 7. Security Audit Trail & Governance Log */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5 text-indigo-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider">7. System Security Audit Trail & Governance Log</h3>
+                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[9px] font-mono font-bold">
+                  Immutable Ledger
+                </span>
+              </div>
+              <p className="text-xs text-slate-300">
+                Audits all administrative changes to facility tiers, branding parameters, security rules, and feature switches.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-3 py-1.5 bg-white/10 rounded-xl font-mono text-indigo-200 border border-white/15">
+              {auditLogs.length} Total Events Logged
+            </span>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Filter and Search Bar */}
+          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search audit trail by field, user, or reason..."
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-indigo-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={auditTypeFilter}
+                onChange={(e) => setAuditTypeFilter(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-indigo-500"
+              >
+                <option value="all">All Audit Event Types</option>
+                <option value="SYSTEM_SECURITY_CONFIG">System Security & Feature Configs</option>
+                <option value="FACILITY_TIER_CHANGED">Facility Tier Changes</option>
+                <option value="KRA_PIN_MODIFIED">KRA PIN Updates</option>
+                <option value="LICENSE_NO_MODIFIED">License Updates</option>
+                <option value="LEGAL_DETAILS_UPDATED">Legal Details Updates</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Audit Logs Table */}
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-gray-200 text-gray-500 uppercase text-[10px] font-bold tracking-wider">
+                  <th className="p-3">Timestamp (EAT)</th>
+                  <th className="p-3">Actor / Administrator</th>
+                  <th className="p-3">Event Type</th>
+                  <th className="p-3">Target Field</th>
+                  <th className="p-3">Old Value → New Value</th>
+                  <th className="p-3">Audit Context / Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {auditLogs
+                  .filter((log) => {
+                    const matchesSearch =
+                      auditSearch === "" ||
+                      log.fieldName?.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                      log.changedBy?.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                      log.userEmail?.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                      log.changeType?.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                      log.reason?.toLowerCase().includes(auditSearch.toLowerCase());
+                    const matchesType = auditTypeFilter === "all" || log.changeType === auditTypeFilter;
+                    return matchesSearch && matchesType;
+                  })
+                  .slice(0, 50)
+                  .map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="p-3 text-gray-500 font-mono text-[11px] whitespace-nowrap">
+                        {new Date(log.timestamp).toLocaleString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </td>
+                      <td className="p-3">
+                        <div className="font-bold text-gray-900">{log.changedBy}</div>
+                        <div className="text-[10px] text-gray-400 font-mono">{log.userEmail} ({log.userRole})</div>
+                      </td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                          log.changeType === "FACILITY_TIER_CHANGED"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : log.changeType === "KRA_PIN_MODIFIED" || log.changeType === "LICENSE_NO_MODIFIED"
+                            ? "bg-rose-50 text-rose-700 border border-rose-200"
+                            : "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                        }`}>
+                          {log.changeType}
+                        </span>
+                      </td>
+                      <td className="p-3 font-semibold text-gray-800">
+                        {log.fieldName}
+                      </td>
+                      <td className="p-3 font-mono text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-gray-400 line-through max-w-[120px] truncate" title={log.oldValue}>
+                            {log.oldValue || "N/A"}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <span className="font-bold text-emerald-700 max-w-[140px] truncate" title={log.newValue}>
+                            {log.newValue}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-gray-600 max-w-xs truncate" title={log.reason}>
+                        {log.reason || "Administrative update"}
+                      </td>
+                    </tr>
+                  ))}
+
+                {auditLogs.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-gray-400 italic">
+                      No security audit events recorded yet. Changes made to settings and tiers will appear here in real-time.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

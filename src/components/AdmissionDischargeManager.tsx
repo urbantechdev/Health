@@ -17,7 +17,9 @@ import {
   HospitalWard,
   MedicalRecord,
   AdmissionType,
-  EncounterStatus
+  EncounterStatus,
+  BedTransferRecord,
+  DoctorDischargeClearance
 } from "../types";
 import {
   initDefaultHospitalWardsAndBeds,
@@ -31,6 +33,7 @@ import {
   addEncounterBillItem,
   payEncounterBill,
   signDoctorClinicalDischarge,
+  transferEncounterBed,
   executeAtomicDischarge,
   subscribeEncounters,
   subscribeHospitalBeds,
@@ -106,11 +109,30 @@ export default function AdmissionDischargeManager() {
   const [showAddLabModal, setShowAddLabModal] = useState<boolean>(false);
   const [showPayModal, setShowPayModal] = useState<boolean>(false);
   const [showDoctorSignoffModal, setShowDoctorSignoffModal] = useState<boolean>(false);
+  const [showBedTransferModal, setShowBedTransferModal] = useState<boolean>(false);
   const [showDischargeSuccessModal, setShowDischargeSuccessModal] = useState<boolean>(false);
   const [dischargeSuccessData, setDischargeSuccessData] = useState<any>(null);
 
   // Action loaders
   const [actionLoading, setActionLoading] = useState<boolean>(false);
+
+  // Form states for Bed Transfer
+  const [xferTargetBedId, setXferTargetBedId] = useState("");
+  const [xferReason, setXferReason] = useState("Patient clinical condition requires stepped care / specialized monitoring");
+  const [xferStaffName, setXferStaffName] = useState("Nurse in Charge");
+
+  // Form states for Doctor Sign-off & Clearance
+  const [docSignoffName, setDocSignoffName] = useState("Dr. Beatrice Omwamba (Lead Surgeon)");
+  const [docSignoffNotes, setDocSignoffNotes] = useState("Patient is clinically stable, surgical site healing satisfactorily, afebrile, and ready for home recovery.");
+  const [docCondition, setDocCondition] = useState<"Recovered" | "Improved / Stable for Home Care" | "Transferred / Referred" | "Against Medical Advice (DAMA)" | "Deceased">("Improved / Stable for Home Care");
+  const [docDischargeMeds, setDocDischargeMeds] = useState("Tabs Augmentin 625mg PO BD x 5/7, Tabs Paracetamol 1g PO TDS PRN x 3/7");
+  const [docFollowUpDate, setDocFollowUpDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  });
+  const [docFollowUpInstructions, setDocFollowUpInstructions] = useState("Review in Surgical Outpatient Clinic Room 4 in 7 days for wound review and stitch removal. Return immediately if high fever, severe wound pain, or active discharge occurs.");
+  const [docSignaturePin, setDocSignaturePin] = useState("MED-SIG-8492");
 
   // Form states for New Admission
   const [admPatientSearch, setAdmPatientSearch] = useState("");
@@ -155,9 +177,6 @@ export default function AdmissionDischargeManager() {
   const [payAmount, setPayAmount] = useState(0);
   const [payMethod, setPayMethod] = useState<"Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split">("M-PESA");
   const [payMpesaPhone, setPayMpesaPhone] = useState("0722123456");
-
-  const [docSignoffNotes, setDocSignoffNotes] = useState("Patient is clinically stable, surgical site healing satisfactorily, afebrile, and ready for home recovery.");
-  const [docSignoffName, setDocSignoffName] = useState("Dr. Beatrice Omwamba (Lead Surgeon)");
 
   const [nurseNoteText, setNurseNoteText] = useState("");
   const [nurseShift, setNurseShift] = useState<"Morning" | "Afternoon" | "Night">("Morning");
@@ -386,15 +405,57 @@ export default function AdmissionDischargeManager() {
     }
   };
 
+  // Handle Bed Transfer
+  const handleBedTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEncounterId || !xferTargetBedId) {
+      toast.warning("Please select a destination bed.", "Select Bed");
+      return;
+    }
+    const targetBed = beds.find((b) => b.id === xferTargetBedId);
+    if (!targetBed) {
+      toast.error("Selected destination bed not found.", "Error");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await transferEncounterBed({
+        encounterId: selectedEncounterId,
+        toWardId: targetBed.wardId,
+        toWardName: targetBed.wardName,
+        toBedId: targetBed.id,
+        toBedNumber: targetBed.bedNumber,
+        toDailyRate: targetBed.dailyRate,
+        transferredBy: xferStaffName,
+        reason: xferReason
+      });
+      setShowBedTransferModal(false);
+      toast.success(res.message, "Bed Transfer Recorded");
+    } catch (err: any) {
+      toast.error(err.message, "Bed Transfer Failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Handle Doctor Discharge Signoff
   const handleDoctorSignoff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEncounterId) return;
     setActionLoading(true);
     try {
-      await signDoctorClinicalDischarge(selectedEncounterId, docSignoffName, docSignoffNotes);
+      await signDoctorClinicalDischarge({
+        encounterId: selectedEncounterId,
+        doctorName: docSignoffName,
+        dischargeCondition: docCondition,
+        clinicalSummary: docSignoffNotes,
+        dischargeMedications: docDischargeMeds,
+        followUpDate: docFollowUpDate,
+        followUpInstructions: docFollowUpInstructions,
+        doctorSignature: docSignaturePin || `SIG-${docSignoffName.replace(/\s+/g, "_")}`
+      });
       setShowDoctorSignoffModal(false);
-      toast.success("Doctor clinical discharge sign-off approved! Encounter status moved to DISCHARGING.", "Clinical Sign-off Approved");
+      toast.success("Doctor clinical discharge clearance signed and locked in encounter! Gate 1 Cleared.", "Discharge Clearance Approved");
     } catch (err: any) {
       toast.error(err.message, "Error");
     } finally {
@@ -704,6 +765,7 @@ export default function AdmissionDischargeManager() {
               <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 overflow-x-auto text-xs font-bold">
                 {[
                   { id: "discharge", label: "Discharge Clearance", icon: ShieldCheck },
+                  { id: "transfers", label: `Bed & Ward Transfers (${selectedEncounter.bedTransfers?.length || (selectedEncounter.assignedBed ? 1 : 0)})`, icon: Bed },
                   { id: "vitals", label: `Vitals (${subcollections.vitals.length})`, icon: Heart },
                   { id: "prescriptions", label: `Prescriptions (${subcollections.prescriptions.length})`, icon: ShoppingBag },
                   { id: "labs", label: `Lab Orders (${subcollections.labRequests.length})`, icon: FlaskRound },
@@ -760,19 +822,26 @@ export default function AdmissionDischargeManager() {
                           <AlertCircle className="w-5 h-5 text-amber-600 animate-pulse" />
                         )}
                       </div>
-                      <h4 className="text-xs font-black text-slate-900">Clinical Approval</h4>
+                      <h4 className="text-xs font-black text-slate-900">Doctor Clinical Sign-Off</h4>
                       <p className="text-[11px] text-slate-600 mt-1">
                         {selectedEncounter.doctorDischargeApproved
                           ? `Approved by ${selectedEncounter.doctorDischargeApprovedBy || "Doctor"}`
-                          : "Pending attending doctor examination and discharge summary."}
+                          : "Pending attending doctor examination, clinical discharge condition, and take-home medications."}
                       </p>
 
-                      {!selectedEncounter.doctorDischargeApproved && (
+                      {!selectedEncounter.doctorDischargeApproved ? (
                         <button
                           onClick={() => setShowDoctorSignoffModal(true)}
                           className="mt-3 w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black transition-all cursor-pointer shadow-xs"
                         >
                           Doctor Sign-off Now
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setShowDoctorSignoffModal(true)}
+                          className="mt-3 w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-[10px] font-black transition-all cursor-pointer shadow-xs"
+                        >
+                          View / Edit Clearance
                         </button>
                       )}
                     </div>
@@ -843,6 +912,60 @@ export default function AdmissionDischargeManager() {
                     </div>
                   </div>
 
+                  {/* Doctor Digital Clearance Certificate Card (if approved) */}
+                  {selectedEncounter.doctorDischargeApproved && (
+                    <div className="bg-emerald-50/90 rounded-2xl p-5 border border-emerald-200 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Stethoscope className="w-5 h-5 text-emerald-700" />
+                          <h4 className="text-sm font-black text-emerald-950">Attending Doctor Clinical Discharge Clearance</h4>
+                        </div>
+                        <span className="px-2.5 py-1 text-[10px] font-black uppercase rounded-full bg-emerald-200 text-emerald-900 border border-emerald-300 font-mono">
+                          {selectedEncounter.doctorClearance?.doctorSignature || "DIGITALLY SIGNED"}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div className="p-3 bg-white rounded-xl border border-emerald-200/80">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Discharge Condition</span>
+                          <span className="text-xs font-black text-emerald-800">
+                            {selectedEncounter.doctorClearance?.dischargeCondition || "Recovered / Clinically Stable"}
+                          </span>
+                        </div>
+
+                        <div className="p-3 bg-white rounded-xl border border-emerald-200/80">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Attending Consultant</span>
+                          <span className="text-xs font-black text-slate-800">
+                            {selectedEncounter.doctorClearance?.doctorName || selectedEncounter.doctorDischargeApprovedBy || "Doctor on Duty"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {selectedEncounter.doctorClearance?.clinicalSummary && (
+                        <div className="p-3 bg-white rounded-xl border border-emerald-200/80 text-xs">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Clinical Treatment Summary</span>
+                          <p className="text-slate-700">{selectedEncounter.doctorClearance.clinicalSummary}</p>
+                        </div>
+                      )}
+
+                      {selectedEncounter.doctorClearance?.dischargeMedications && (
+                        <div className="p-3 bg-white rounded-xl border border-emerald-200/80 text-xs">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Discharge Medications / Take-Home Drugs</span>
+                          <p className="font-mono text-emerald-900 font-bold">{selectedEncounter.doctorClearance.dischargeMedications}</p>
+                        </div>
+                      )}
+
+                      {selectedEncounter.doctorClearance?.followUpInstructions && (
+                        <div className="p-3 bg-white rounded-xl border border-emerald-200/80 text-xs">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                            Follow-Up Review Instructions {selectedEncounter.doctorClearance.followUpDate && `(Date: ${selectedEncounter.doctorClearance.followUpDate})`}
+                          </span>
+                          <p className="text-slate-700">{selectedEncounter.doctorClearance.followUpInstructions}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Main Action Trigger */}
                   {selectedEncounter.status === "DISCHARGED" ? (
                     <div className="p-4 bg-slate-100 rounded-2xl border border-slate-200 text-center space-y-1">
@@ -886,6 +1009,104 @@ export default function AdmissionDischargeManager() {
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Tab: BED & WARD TRANSFERS */}
+              {activeTab === "transfers" && (
+                <div className="space-y-6">
+                  {/* Current Bed Allocation Card */}
+                  <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Bed Occupancy</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Building className="w-5 h-5 text-blue-600 shrink-0" />
+                        <h3 className="text-base font-black text-slate-900">
+                          {selectedEncounter.assignedWard || "Outpatient (No Bed)"}
+                        </h3>
+                        {selectedEncounter.assignedBed && (
+                          <span className="px-2.5 py-0.5 text-xs font-black bg-blue-100 text-blue-800 rounded-lg border border-blue-200">
+                            Bed: {selectedEncounter.assignedBed}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Dynamic daily rate is applied automatically to billing ledger upon room transfer.
+                      </p>
+                    </div>
+
+                    {selectedEncounter.status !== "DISCHARGED" && (
+                      <button
+                        onClick={() => {
+                          setXferTargetBedId("");
+                          setShowBedTransferModal(true);
+                        }}
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
+                      >
+                        <Bed className="w-4 h-4" />
+                        <span>Transfer to Different Bed / Ward</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Bed Transfer History Timeline */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-slate-500" />
+                      Bed Stay & Differential Rate Transfer Audit Trail
+                    </h4>
+
+                    {(!selectedEncounter.bedTransfers || selectedEncounter.bedTransfers.length === 0) ? (
+                      <div className="p-6 bg-white rounded-2xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
+                        <Bed className="w-6 h-6 mx-auto mb-2 text-slate-300" />
+                        <p className="font-bold">Initial Admission Bed Allocation</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Patient currently placed in {selectedEncounter.assignedWard || "General Ward"} ({selectedEncounter.assignedBed || "N/A"}).
+                          No mid-admission ward transfers logged yet.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                        {selectedEncounter.bedTransfers.map((rec: BedTransferRecord, idx: number) => (
+                          <div key={rec.id || idx} className="relative bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-2 text-xs">
+                            <div className="absolute -left-6 top-4 w-3.5 h-3.5 rounded-full bg-blue-600 ring-4 ring-white" />
+                            
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                              <div className="flex items-center gap-2 font-black text-slate-900">
+                                <span>{rec.fromWardName} ({rec.fromBedNumber})</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span className="text-blue-700">{rec.toWardName} ({rec.toBedNumber})</span>
+                              </div>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                {new Date(rec.transferredAt).toLocaleString()}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[11px]">
+                              <div>
+                                <span className="text-[9px] text-slate-400 font-bold uppercase block">New Daily Rate</span>
+                                <span className="font-mono font-black text-slate-800">KES {rec.dailyRate.toLocaleString()} / day</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-slate-400 font-bold uppercase block">Transferred By</span>
+                                <span className="font-bold text-slate-700">{rec.transferredBy}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-slate-400 font-bold uppercase block">Billing Ledger</span>
+                                <span className="font-bold text-emerald-700">✓ Auto-billed item created</span>
+                              </div>
+                            </div>
+
+                            {rec.reason && (
+                              <p className="text-[11px] text-slate-600 italic">
+                                "{rec.reason}"
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1764,51 +1985,118 @@ export default function AdmissionDischargeManager() {
         </div>
       )}
 
-      {/* 8. MODAL: DOCTOR SIGNOFF */}
-      {showDoctorSignoffModal && (
+      {/* 8. MODAL: BED & WARD TRANSFER */}
+      {showBedTransferModal && selectedEncounter && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4">
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <Stethoscope className="w-4 h-4 text-emerald-600" />
-              Doctor Clinical Discharge Sign-off
-            </h3>
-            <form onSubmit={handleDoctorSignoff} className="space-y-3 text-xs">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full border border-slate-200 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-blue-600 text-white rounded-xl">
+                  <Bed className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Bed & Ward Transfer</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Patient: <strong className="text-slate-800">{selectedEncounter.patientName}</strong> ({selectedEncounter.id})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBedTransferModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Current Bed info */}
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Current Bed Placement</span>
+              <div className="flex items-center justify-between mt-1">
+                <span className="font-black text-slate-900">
+                  {selectedEncounter.assignedWard || "General Ward"} ({selectedEncounter.assignedBed || "Unassigned"})
+                </span>
+                <span className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md font-mono text-[10px]">
+                  Active Inpatient
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleBedTransfer} className="space-y-3.5 text-xs">
               <div>
-                <label className="text-[10px] font-bold text-slate-500">Attending Consultant / Medical Officer</label>
+                <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Select Destination Available Bed</label>
+                <select
+                  required
+                  value={xferTargetBedId}
+                  onChange={(e) => setXferTargetBedId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-900 focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">-- Choose Target Ward & Bed --</option>
+                  {beds
+                    .filter((b) => b.status === "AVAILABLE" || b.id === selectedEncounter.assignedBedId)
+                    .map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.wardName} — {b.bedNumber} (KES {b.dailyRate.toLocaleString()} / day) [{b.wardType}]
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {xferTargetBedId && (
+                <div className="p-3 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 space-y-1">
+                  <div className="flex justify-between font-bold">
+                    <span>Destination Ward:</span>
+                    <span>{beds.find((b) => b.id === xferTargetBedId)?.wardName}</span>
+                  </div>
+                  <div className="flex justify-between font-bold">
+                    <span>New Daily Bed Rate:</span>
+                    <span className="font-mono text-blue-700">
+                      KES {beds.find((b) => b.id === xferTargetBedId)?.dailyRate.toLocaleString()} / day
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-blue-600 mt-1">
+                    Differential billing line item will be posted automatically to the encounter ledger.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Clinical / Administrative Reason for Transfer</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={xferReason}
+                  onChange={(e) => setXferReason(e.target.value)}
+                  placeholder="e.g. ICU step-down to surgical ward, condition stabilization, isolation required..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Authorizing Nurse / Clinical Officer</label>
                 <input
                   type="text"
                   required
-                  value={docSignoffName}
-                  onChange={(e) => setDocSignoffName(e.target.value)}
-                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold"
+                  value={xferStaffName}
+                  onChange={(e) => setXferStaffName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold"
                 />
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-slate-500">Discharge Summary & Take-Home Plan</label>
-                <textarea
-                  rows={3}
-                  required
-                  value={docSignoffNotes}
-                  onChange={(e) => setDocSignoffNotes(e.target.value)}
-                  className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowDoctorSignoffModal(false)}
-                  className="px-4 py-2 bg-slate-100 rounded-xl font-bold cursor-pointer"
+                  onClick={() => setShowBedTransferModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
-                  className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-black cursor-pointer shadow-md shadow-emerald-600/20"
+                  disabled={actionLoading || !xferTargetBedId}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black cursor-pointer shadow-md shadow-blue-600/20 disabled:opacity-50"
                 >
-                  Sign & Approve
+                  {actionLoading ? "Executing Transfer..." : "Confirm & Transfer Bed"}
                 </button>
               </div>
             </form>
@@ -1816,7 +2104,138 @@ export default function AdmissionDischargeManager() {
         </div>
       )}
 
-      {/* 9. MODAL: DISCHARGE SUCCESS & CERTIFICATE */}
+      {/* 9. MODAL: DOCTOR DISCHARGE CLEARANCE & DIGITAL SIGN-OFF */}
+      {showDoctorSignoffModal && selectedEncounter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl p-6 max-w-xl w-full border border-slate-200 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 bg-emerald-600 text-white rounded-xl">
+                  <Stethoscope className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Doctor Digital Clinical Discharge Clearance</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Patient: <strong className="text-slate-800">{selectedEncounter.patientName}</strong> ({selectedEncounter.id})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDoctorSignoffModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDoctorSignoff} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Attending Consultant / Doctor</label>
+                  <input
+                    type="text"
+                    required
+                    value={docSignoffName}
+                    onChange={(e) => setDocSignoffName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Discharge Clinical Condition</label>
+                  <select
+                    value={docCondition}
+                    onChange={(e) => setDocCondition(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-emerald-800"
+                  >
+                    <option value="Recovered">Recovered / Resolved</option>
+                    <option value="Improved / Stable for Home Care">Improved / Stable for Home Care</option>
+                    <option value="Transferred / Referred">Transferred / Referred to Higher Facility</option>
+                    <option value="Against Medical Advice (DAMA)">Discharged Against Medical Advice (DAMA)</option>
+                    <option value="Deceased">Deceased (Brought / In-Ward)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Clinical Summary & Treatment Course</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={docSignoffNotes}
+                  onChange={(e) => setDocSignoffNotes(e.target.value)}
+                  placeholder="Summary of inpatient stay, procedures performed, resolution of symptoms..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Take-Home Discharge Medications</label>
+                <input
+                  type="text"
+                  value={docDischargeMeds}
+                  onChange={(e) => setDocDischargeMeds(e.target.value)}
+                  placeholder="e.g. Tabs Augmentin 625mg BD x 5 days, Tabs Paracetamol 1g TDS x 3 days"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Follow-Up Review Date</label>
+                  <input
+                    type="date"
+                    value={docFollowUpDate}
+                    onChange={(e) => setDocFollowUpDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Doctor Digital PIN / Electronic Signature</label>
+                  <input
+                    type="text"
+                    required
+                    value={docSignaturePin}
+                    onChange={(e) => setDocSignaturePin(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono font-black text-emerald-800"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Follow-Up Instructions & Red-Flag Warnings</label>
+                <textarea
+                  rows={2}
+                  value={docFollowUpInstructions}
+                  onChange={(e) => setDocFollowUpInstructions(e.target.value)}
+                  placeholder="Special instructions, wound care, red-flag symptoms triggering emergency return..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowDoctorSignoffModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black cursor-pointer shadow-md shadow-emerald-600/20"
+                >
+                  {actionLoading ? "Signing Clearance..." : "Authorize Clinical Clearance (Gate 1)"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 10. MODAL: DISCHARGE SUCCESS & CERTIFICATE */}
       {showDischargeSuccessModal && dischargeSuccessData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-6 max-w-lg w-full border border-slate-200 shadow-2xl space-y-5 text-center">

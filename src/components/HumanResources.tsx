@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
-import { collection, onSnapshot, doc, addDoc, updateDoc, writeBatch, deleteDoc, query, where } from "firebase/firestore";
+import { collection, onSnapshot, doc, addDoc, updateDoc, writeBatch, deleteDoc, query, where, getDocs } from "firebase/firestore";
 import { Employee, PayrollRecord } from "../types";
 import { checkDuplicateEmployee } from "../lib/deduplicationService";
 import StaffOnboardingModal from "./StaffOnboardingModal";
@@ -29,7 +29,13 @@ import {
   Ban,
   Copy,
   KeyRound,
-  IdCard
+  IdCard,
+  UserCheck,
+  RefreshCw,
+  ArrowRight,
+  Stethoscope,
+  BedDouble,
+  AlertTriangle
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { toast, modernConfirm } from "../lib/promptService";
@@ -148,6 +154,15 @@ export default function HumanResources() {
   // Status flags
   const [submitting, setSubmitting] = useState(false);
   const [runningPayroll, setRunningPayroll] = useState(false);
+
+  // Clinical Handover & Reassignment Modal States
+  const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
+  const [handoverStaff, setHandoverStaff] = useState<Employee | null>(null);
+  const [successorEmpId, setSuccessorEmpId] = useState<string>("");
+  const [handoverNotes, setHandoverNotes] = useState<string>("");
+  const [activeCases, setActiveCases] = useState<Array<{ id: string; type: "encounter" | "ticket"; patientName: string; details: string; department?: string }>>([]);
+  const [loadingCases, setLoadingCases] = useState(false);
+  const [isExecutingHandover, setIsExecutingHandover] = useState(false);
 
   useEffect(() => {
     // 1. Listen to Employees
@@ -330,26 +345,148 @@ export default function HumanResources() {
     }
   };
 
-  const handleTerminateEmployee = async (id: string) => {
-    const confirmed = await modernConfirm(
-      "Are you sure you want to terminate this employee record? Their system access and payroll generation will be suspended.",
-      {
-        title: "Terminate Employee Record",
-        type: "error",
-        destructive: true,
-        confirmText: "Terminate Record",
-        cancelText: "Keep Active",
-      }
-    );
-    if (!confirmed) return;
+  const handleInitiateTermination = async (emp: Employee) => {
+    setHandoverStaff(emp);
+    setSuccessorEmpId("");
+    setHandoverNotes(`Clinical & administrative handover upon deactivation of ${emp.name} (${emp.role}).`);
+    setLoadingCases(true);
+    setIsHandoverModalOpen(true);
+
     try {
-      await updateDoc(doc(db, "employees", id), {
-        status: "terminated"
+      const foundCases: Array<{ id: string; type: "encounter" | "ticket"; patientName: string; details: string; department?: string }> = [];
+
+      // 1. Check for active Inpatient / Triage / Consult encounters
+      const encSnap = await getDocs(query(collection(db, "encounters"), where("status", "in", ["ADMITTED", "TRIAGE", "DOCTOR_CONSULT"])));
+      encSnap.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (
+          (d.attendingDoctorName && d.attendingDoctorName.toLowerCase() === emp.name.toLowerCase()) ||
+          (d.admittingDoctorName && d.admittingDoctorName.toLowerCase() === emp.name.toLowerCase()) ||
+          d.doctorId === emp.id ||
+          d.nurseId === emp.id
+        ) {
+          foundCases.push({
+            id: docSnap.id,
+            type: "encounter",
+            patientName: d.patientName || "Admitted Patient",
+            details: `Ward: ${d.wardName || "General"}, Bed: ${d.bedNumber || "Assigned"} (Encounter: ${docSnap.id.slice(-6)})`,
+            department: d.department || "Ward Inpatient",
+          });
+        }
       });
-      toast.success("Employee status updated to Terminated.", "Record Updated");
+
+      // 2. Check for active Queue tickets
+      const qSnap = await getDocs(query(collection(db, "queue"), where("status", "in", ["waiting", "in_progress", "in_consultation"])));
+      qSnap.forEach((docSnap) => {
+        const qd = docSnap.data();
+        if (
+          (qd.doctorName && qd.doctorName.toLowerCase() === emp.name.toLowerCase()) ||
+          qd.assignedSpecialistId === emp.id ||
+          (qd.assignedSpecialistName && qd.assignedSpecialistName.toLowerCase() === emp.name.toLowerCase())
+        ) {
+          foundCases.push({
+            id: docSnap.id,
+            type: "ticket",
+            patientName: qd.patientName || "Queue Patient",
+            details: `Ticket #${qd.ticketNumber || docSnap.id.slice(-4)} - ${qd.department || "Consultation Room"}`,
+            department: qd.department || "Clinical Queue",
+          });
+        }
+      });
+
+      setActiveCases(foundCases);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to terminate employee record.", "Update Error");
+      console.error("Error querying active cases for staff handover:", err);
+    } finally {
+      setLoadingCases(false);
+    }
+  };
+
+  const handleExecuteHandoverAndDeactivate = async () => {
+    if (!handoverStaff) return;
+    if (activeCases.length > 0 && !successorEmpId) {
+      toast.warning("Please select an active clinical colleague to receive the active cases.", "Successor Required");
+      return;
+    }
+
+    const targetEmp = employees.find((e) => e.id === successorEmpId);
+    setIsExecutingHandover(true);
+
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Reassign each active encounter & queue ticket to the selected colleague
+      if (targetEmp) {
+        for (const item of activeCases) {
+          if (item.type === "encounter") {
+            const encRef = doc(db, "encounters", item.id);
+            batch.update(encRef, {
+              attendingDoctorName: targetEmp.name,
+              doctorId: targetEmp.id,
+              lastHandoverAt: new Date().toISOString(),
+              handoverLog: `Duty Handover from ${handoverStaff.name} to ${targetEmp.name}. Notes: ${handoverNotes}`,
+            });
+
+            // Log nursing transition entry
+            const noteRef = doc(collection(db, "encounters", item.id, "nursing_notes"));
+            batch.set(noteRef, {
+              note: `[CLINICAL HANDOVER] Primary attending doctor reassigned from ${handoverStaff.name} to ${targetEmp.name}. Handover Brief: ${handoverNotes}`,
+              shift: "Duty Handover",
+              nurseName: "HR Administrative Desk",
+              timestamp: new Date().toISOString(),
+            });
+          } else if (item.type === "ticket") {
+            const qRef = doc(db, "queue", item.id);
+            batch.update(qRef, {
+              doctorName: targetEmp.name,
+              assignedSpecialistId: targetEmp.id,
+              assignedSpecialistName: targetEmp.name,
+              notes: `Queue case transferred from ${handoverStaff.name} to ${targetEmp.name}. Handover: ${handoverNotes}`,
+            });
+          }
+        }
+      }
+
+      // 2. Mark employee as terminated
+      const empRef = doc(db, "employees", handoverStaff.id);
+      batch.update(empRef, {
+        status: "terminated",
+        terminatedAt: new Date().toISOString(),
+        handoverTo: targetEmp ? targetEmp.name : "None",
+        handoverNotes: handoverNotes,
+      });
+
+      // 3. Suspend system user credentials if present
+      const userAccountsSnap = await getDocs(query(collection(db, "system_users"), where("email", "==", handoverStaff.email)));
+      userAccountsSnap.forEach((uDoc) => {
+        batch.update(doc(db, "system_users", uDoc.id), {
+          status: "suspended",
+        });
+      });
+
+      await batch.commit();
+
+      toast.success(
+        `Staff member ${handoverStaff.name} deactivated. ${activeCases.length} active caseload item(s) reassigned to ${targetEmp ? targetEmp.name : "N/A"}.`,
+        "Handover & Deactivation Complete"
+      );
+
+      setIsHandoverModalOpen(false);
+      setHandoverStaff(null);
+      setActiveCases([]);
+      setSuccessorEmpId("");
+    } catch (err: any) {
+      console.error("Error executing staff handover:", err);
+      toast.error(`Failed to execute handover: ${err?.message || "Check network"}`, "Handover Error");
+    } finally {
+      setIsExecutingHandover(false);
+    }
+  };
+
+  const handleTerminateEmployee = async (id: string) => {
+    const emp = employees.find((e) => e.id === id);
+    if (emp) {
+      handleInitiateTermination(emp);
     }
   };
 
@@ -1283,6 +1420,183 @@ export default function HumanResources() {
             toast.success("Staff member onboarded and credentials generated!", "Staff Onboarded");
           }}
         />
+      )}
+
+      {/* Clinical Handover & Case Reassignment Modal */}
+      {isHandoverModalOpen && handoverStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-rose-100 flex flex-col relative animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-rose-700 via-red-600 to-amber-600 p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center shadow-inner">
+                  <Stethoscope className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-base tracking-tight text-white">Clinical Handover & Staff Deactivation</h3>
+                    <span className="px-2 py-0.5 bg-rose-900/40 border border-white/30 rounded-full text-[10px] font-mono font-bold tracking-wider">
+                      Patient Safety Protocol
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-100 font-medium">
+                    Reassign active inpatients and queue consults before terminating <strong className="text-white">{handoverStaff.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsHandoverModalOpen(false);
+                  setHandoverStaff(null);
+                }}
+                className="p-1.5 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              {/* Staff Target Profile Banner */}
+              <div className="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                    {handoverStaff.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-gray-900">{handoverStaff.name}</h4>
+                    <p className="text-xs text-rose-800 font-medium">{handoverStaff.role} • Dept: {handoverStaff.department}</p>
+                    <p className="text-[10px] text-gray-500 font-mono">National ID: {handoverStaff.nationalId}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Status Change</span>
+                  <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-xs font-black rounded-lg border border-rose-200">
+                    Active → Terminated
+                  </span>
+                </div>
+              </div>
+
+              {/* Active Caseload Summary */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-gray-800 flex items-center gap-1.5 uppercase tracking-wide">
+                    <BedDouble className="w-4 h-4 text-rose-600" />
+                    <span>Active Caseloads Requiring Handover ({activeCases.length})</span>
+                  </label>
+                  {loadingCases && (
+                    <span className="text-[10px] text-gray-500 flex items-center gap-1 font-medium">
+                      <RefreshCw className="w-3 h-3 animate-spin text-rose-600" /> Scanning Firestore...
+                    </span>
+                  )}
+                </div>
+
+                {activeCases.length > 0 ? (
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {activeCases.map((c) => (
+                      <div key={c.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-900">{c.patientName}</span>
+                            <span className="px-1.5 py-0.2 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[9px] font-bold uppercase">
+                              {c.type === "encounter" ? "Inpatient Ward" : "Queue Case"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-500">{c.details}</p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-slate-400" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>No currently active inpatients or consultation tickets assigned to this staff member.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Successor Practitioner Selector */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-extrabold text-gray-800 uppercase tracking-wide">
+                  Reassign Caseload & Duties To Successor Clinician {activeCases.length > 0 && <span className="text-rose-600">*</span>}
+                </label>
+                <select
+                  value={successorEmpId}
+                  onChange={(e) => setSuccessorEmpId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-gray-900 focus:outline-rose-500"
+                >
+                  <option value="">-- Select Active Colleague to Receive Handover --</option>
+                  {employees
+                    .filter((e) => e.status === "active" && e.id !== handoverStaff.id)
+                    .map((colleague) => (
+                      <option key={colleague.id} value={colleague.id}>
+                        {colleague.name} ({colleague.role} - {colleague.department})
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[10px] text-gray-400">
+                  Active in-ward encounters and queue items will be transferred to this practitioner's active shift list.
+                </p>
+              </div>
+
+              {/* Handover Brief & Clinical Transition Notes */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-extrabold text-gray-800 uppercase tracking-wide">
+                  Handover Notes & Administrative Audit Reason
+                </label>
+                <textarea
+                  value={handoverNotes}
+                  onChange={(e) => setHandoverNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Provide handover instructions, in-flight treatments, or reasons for staffing transition..."
+                  className="w-full px-3.5 py-2 bg-white border border-gray-300 rounded-xl text-xs text-gray-800 focus:outline-rose-500"
+                />
+              </div>
+
+              {/* Safety notice banner */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-2 text-[11px] text-amber-900">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  Deactivating this staff profile will immediately terminate active system login PINs and cease payroll calculations. All clinical records will maintain historical audit attribution.
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHandoverModalOpen(false);
+                  setHandoverStaff(null);
+                }}
+                disabled={isExecutingHandover}
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteHandoverAndDeactivate}
+                disabled={isExecutingHandover || (activeCases.length > 0 && !successorEmpId)}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+              >
+                {isExecutingHandover ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Executing Handover...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="w-4 h-4" />
+                    <span>Confirm Handover & Deactivate Staff</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

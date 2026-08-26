@@ -105,15 +105,6 @@ export default function RolePortalLogin({
   const [loginMode, setLoginMode] = useState<"registered" | "email">("registered");
   const [localError, setLocalError] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
-  const [copiedDomain, setCopiedDomain] = useState(false);
-
-  const copyCurrentHost = () => {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(window.location.hostname);
-      setCopiedDomain(true);
-      setTimeout(() => setCopiedDomain(false), 2500);
-    }
-  };
 
   // 4 Primary Boxes definition (Clean White Background theme)
   const primaryBoxes: RoleCardItem[] = [
@@ -133,13 +124,13 @@ export default function RolePortalLogin({
     },
     {
       id: "admin",
-      title: "Admin",
-      subtitle: "Executive Administration",
-      description: "Master System Control, Staff Onboarding, RBAC Governance & Audit Logs.",
+      title: "Administration",
+      subtitle: "Operations & Management",
+      description: "Executive Management, Facility Operations, Governance & System Audits.",
       icon: ShieldCheck,
       defaultRole: "Super Admin",
       targetTab: "admin",
-      badge: "Super Admin Authority",
+      badge: "Station",
       accentColor: "text-slate-900",
       lightBg: "bg-slate-100",
       borderColor: "border-slate-300",
@@ -420,14 +411,14 @@ export default function RolePortalLogin({
       const expectedPin = superAdminRecord?.pin || seedProfile?.pin || "2026";
 
       if (cleanPin !== expectedPin && cleanPin !== "2026") {
-        setLocalError("Invalid Super Admin Security PIN. (Default initialization PIN is 2026)");
+        setLocalError("Invalid Security PIN.");
         return;
       }
 
       onLoginSuccess(
         {
           email: cleanEmail,
-          displayName: superAdminRecord?.name || seedProfile?.name || "Super Admin Sovereign",
+          displayName: superAdminRecord?.name || seedProfile?.name || "System Administrator",
           role: "Super Admin",
           department: "administration",
           photoURL: superAdminRecord?.photoURL || superAdminRecord?.avatarUrl,
@@ -446,7 +437,7 @@ export default function RolePortalLogin({
 
     if (!matchedEmployee) {
       setLocalError(
-        `Access Denied: Email '${cleanEmail}' is not registered in the hospital staff database. Please ask a Super Admin (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, or naisiaetext@gmail.com) to onboard you and generate your credentials.`
+        `Access Denied: Email '${cleanEmail}' is not registered in the hospital staff database. Please contact System Administration or HR to onboard your account.`
       );
       return;
     }
@@ -460,7 +451,7 @@ export default function RolePortalLogin({
     // D. Check PIN
     const expectedPin = matchedEmployee.pin || "2026";
     if (cleanPin !== expectedPin && cleanPin !== "2026") {
-      setLocalError("Invalid Security PIN. Please check the credential passcard generated during onboarding.");
+      setLocalError("Invalid Security PIN.");
       return;
     }
 
@@ -468,7 +459,7 @@ export default function RolePortalLogin({
     if (isAdminStation) {
       if (!isMasterSuperAdmin) {
         setLocalError(
-          `Access Denied: Only the listed Super Admin Gmail accounts (${SUPER_ADMIN_EMAILS.join(", ")}) are authorized to access the Hospital Executive / Admin Terminal.`
+          "Access Denied: Only authorized administrative personnel are permitted to access this workstation."
         );
         return;
       }
@@ -490,131 +481,187 @@ export default function RolePortalLogin({
   };
 
   return (
-    <div className="min-h-screen w-full bg-white flex flex-col justify-between text-slate-900 font-sans antialiased selection:bg-purple-100">
-      {/* Top Clean Minimal Header Bar */}
-      <header className="w-full bg-white border-b border-slate-100 px-6 sm:px-12 py-5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            {hospitalLogoUrl ? (
-              <img
-                src={hospitalLogoUrl}
-                alt="Hospital Logo"
-                className="w-11 h-11 object-cover rounded-2xl border border-slate-200 shadow-xs"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-11 h-11 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-sm">
-                <Hospital className="w-6 h-6 text-purple-400" />
+    <div className="min-h-screen w-full bg-slate-50/60 flex flex-col justify-between text-slate-900 font-sans antialiased selection:bg-blue-100">
+      {/* Sticky Navy Header Bar with Single Wave Curved Bottom Edge */}
+      <div className="sticky top-0 z-40 w-full shrink-0">
+        <header className="w-full bg-[#0B1528] text-white shadow-xs">
+          <div className="max-w-7xl mx-auto px-6 sm:px-12 pt-5 pb-3 flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              {hospitalLogoUrl ? (
+                <img
+                  src={hospitalLogoUrl}
+                  alt="Hospital Logo"
+                  className="w-11 h-11 object-cover rounded-2xl border border-white/20 shadow-md"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-11 h-11 bg-white/10 text-white rounded-2xl flex items-center justify-center border border-white/15 shadow-sm">
+                  <Hospital className="w-6 h-6 text-blue-400" />
+                </div>
+              )}
+              <div>
+                <h1 className="text-lg font-black text-white uppercase tracking-tight leading-none flex items-center gap-2">
+                  <span>{hospitalName}</span>
+                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] font-black rounded-md border border-blue-400/30">
+                    Role Portal
+                  </span>
+                </h1>
+                <p className="text-[11px] font-semibold text-slate-300 tracking-wider uppercase mt-1">
+                  Strict Role-Based Access Control (RBAC)
+                </p>
               </div>
-            )}
-            <div>
-              <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-none flex items-center gap-2">
-                <span>{hospitalName}</span>
-                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-black rounded-md border border-purple-200">
-                  Role Portal
-                </span>
-              </h1>
-              <p className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mt-1">
-                Strict Role-Based Access Control (RBAC) Enforced
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 bg-slate-50 text-slate-700 text-xs font-bold rounded-full border border-slate-200">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Super Admin Whitelist: <strong className="text-purple-700 font-mono">3 Sovereign Admins</strong></span>
             </div>
 
-            {onGoogleLogin && (
-              <button
-                id="btn-portal-google-login"
-                type="button"
-                onClick={onGoogleLogin}
-                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold border border-slate-200 rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer shadow-xs hover:border-slate-300"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>Google Sign In</span>
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {onGoogleLogin && (
+                <button
+                  id="btn-portal-google-login"
+                  type="button"
+                  onClick={onGoogleLogin}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold border border-white/15 rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm hover:border-white/30"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  <span>Google Sign In</span>
+                </button>
+              )}
+            </div>
           </div>
+        </header>
+
+        {/* Single Wave Design at the Bottom Edge with Yellow Animated Smoke Shadow */}
+        <div className="relative w-full overflow-hidden leading-none pointer-events-none -mt-0.5 z-20">
+          {/* Animated Yellow Smoke Shadow Layers */}
+          {/* 1. Main Billowing Golden Smoke Plume Drift */}
+          <motion.div
+            className="absolute -bottom-3 h-10 w-96 md:w-[32rem] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent blur-xl rounded-full pointer-events-none mix-blend-screen"
+            initial={{ x: "-40%", scaleY: 0.8, opacity: 0.4 }}
+            animate={{
+              x: ["-40%", "110%"],
+              scaleY: [0.8, 1.4, 0.9, 1.3, 0.8],
+              opacity: [0.3, 0.75, 0.9, 0.6, 0.3],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 6,
+              ease: "easeInOut",
+            }}
+          />
+
+          {/* 2. Counter-Drifting Amber Smoke Vapor Mist */}
+          <motion.div
+            className="absolute -bottom-4 h-12 w-80 md:w-[28rem] bg-gradient-to-r from-transparent via-yellow-300/50 to-transparent blur-2xl rounded-full pointer-events-none mix-blend-screen"
+            initial={{ x: "120%", scaleY: 1.1, opacity: 0.3 }}
+            animate={{
+              x: ["120%", "-30%"],
+              scaleY: [1.1, 0.7, 1.3, 0.9, 1.1],
+              opacity: [0.25, 0.7, 0.85, 0.5, 0.25],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 8.5,
+              ease: "easeInOut",
+            }}
+          />
+
+          {/* 3. Pulsing Ambient Yellow Edge Smoke Glow */}
+          <motion.div
+            className="absolute -bottom-2 left-0 right-0 h-6 bg-gradient-to-b from-yellow-400/40 via-amber-500/25 to-transparent blur-md pointer-events-none"
+            animate={{
+              opacity: [0.45, 0.85, 0.45],
+              scaleY: [0.9, 1.25, 0.9],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 3.2,
+              ease: "easeInOut",
+            }}
+          />
+
+          {/* 4. Swirling Micro-Smoke Accent Wisps */}
+          <motion.div
+            className="absolute -bottom-1 left-1/4 w-48 h-8 bg-yellow-400/45 blur-lg rounded-full pointer-events-none mix-blend-screen"
+            animate={{
+              x: [-30, 40, -30],
+              y: [-2, 4, -2],
+              scale: [0.9, 1.3, 0.9],
+              opacity: [0.3, 0.8, 0.3],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 4.2,
+              ease: "easeInOut",
+            }}
+          />
+          <motion.div
+            className="absolute -bottom-1 right-1/4 w-56 h-8 bg-amber-300/50 blur-lg rounded-full pointer-events-none mix-blend-screen"
+            animate={{
+              x: [40, -30, 40],
+              y: [3, -3, 3],
+              scale: [1.1, 0.85, 1.1],
+              opacity: [0.4, 0.85, 0.4],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 5,
+              ease: "easeInOut",
+            }}
+          />
+
+          <svg
+            viewBox="0 0 1440 50"
+            preserveAspectRatio="none"
+            className="block w-full h-5 sm:h-7 md:h-9 fill-[#0B1528] drop-shadow-[0_12px_24px_rgba(245,158,11,0.55)]"
+          >
+            <path d="M 0,0 C 360,55 1080,-15 1440,30 L 1440,0 L 0,0 Z" />
+          </svg>
         </div>
-      </header>
+      </div>
 
       {/* Main Presentation Area */}
-      <main className="max-w-7xl mx-auto px-6 sm:px-12 py-10 w-full flex-1 flex flex-col justify-center">
+      <main className="max-w-7xl mx-auto px-6 sm:px-12 py-8 w-full flex-1 flex flex-col justify-center">
         {/* Welcome Section */}
-        <div className="text-center max-w-2xl mx-auto mb-10 space-y-2">
-          <span className="px-3 py-1 bg-purple-100 text-purple-900 border border-purple-200 text-xs font-black rounded-full uppercase tracking-wider inline-flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 text-purple-700" />
-            <span>Strict Station Authentication</span>
+        <div className="text-center max-w-2xl mx-auto mb-8 space-y-2">
+          <span className="px-3 py-1 bg-slate-900 text-white text-xs font-black rounded-full uppercase tracking-wider inline-flex items-center gap-1.5 shadow-xs">
+            <Lock className="w-3.5 h-3.5 text-blue-400" />
+            <span>Operational Workstations</span>
           </span>
           <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
             Select Your Departmental Station
           </h2>
           <p className="text-sm text-slate-500 font-medium leading-relaxed">
-            Unauthorized access to any role is strictly blocked. Please select your operational workstation and authenticate with your assigned credentials.
+            Unauthorized access is strictly prohibited. Please select your operational workstation and authenticate with your assigned credentials.
           </p>
         </div>
 
         {authError && (
-          <div className="max-w-2xl mx-auto mb-8 p-4 sm:p-5 bg-amber-50/90 border-2 border-amber-300 rounded-3xl text-xs text-amber-900 shadow-sm animate-shake space-y-3">
+          <div className="max-w-2xl mx-auto mb-8 p-4 sm:p-5 bg-rose-50 border border-rose-200 rounded-3xl text-xs text-rose-900 shadow-sm animate-shake">
             <div className="flex items-start gap-3">
-              <BadgeAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <BadgeAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
               <div className="space-y-1 flex-1">
-                <p className="font-black text-amber-950 text-xs sm:text-sm">
-                  {authError.includes("Domain Authorization Required") ? "Firebase Domain Notice" : "Authentication Notice"}
+                <p className="font-black text-rose-950 text-xs sm:text-sm">
+                  Authentication Notice
                 </p>
-                <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                <p className="text-xs text-rose-900 font-medium leading-relaxed">
                   {authError}
                 </p>
               </div>
-            </div>
-
-            {/* Quick Actions & Guidance */}
-            <div className="pt-2 border-t border-amber-200/80 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-amber-800">Current Host:</span>
-                <code className="px-2 py-1 bg-white border border-amber-300 rounded-lg text-[11px] font-mono text-amber-950 font-bold">
-                  {typeof window !== "undefined" ? window.location.hostname : "localhost"}
-                </code>
-                <button
-                  type="button"
-                  onClick={copyCurrentHost}
-                  className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedDomain ? "Copied" : "Copy"}</span>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  handleBoxClick(primaryBoxes[1]); // Admin box
-                }}
-                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-black flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-purple-400" />
-                <span>Quick Super Admin Login (PIN 2026)</span>
-              </button>
             </div>
           </div>
         )}
@@ -671,13 +718,11 @@ export default function RolePortalLogin({
                       ? isStaffExpanded
                         ? "bg-purple-600 text-white shadow-md"
                         : "bg-purple-50 text-purple-700 hover:bg-purple-100"
-                      : box.id === "admin"
-                      ? "bg-slate-900 text-white hover:bg-slate-800 shadow-md"
                       : "bg-slate-900 text-white hover:bg-slate-800 shadow-md"
                   }`}
                 >
                   <span>
-                    {isStaff ? (isStaffExpanded ? "Close Staff Sub-Stations" : "Select Staff Sub-Roles") : `Authenticate & Enter ${box.title}`}
+                    {isStaff ? (isStaffExpanded ? "Close Staff Stations" : "View Staff Stations") : `Authenticate & Enter ${box.title}`}
                   </span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
@@ -700,10 +745,10 @@ export default function RolePortalLogin({
                 <div>
                   <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                     <Users className="w-6 h-6 text-purple-600" />
-                    <span>Select Specific Staff Sub-Role</span>
+                    <span>Select Specific Department Station</span>
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    Strict departmental workstations for specialized medical, diagnostic, financial, and operations staff.
+                    Specialized medical, diagnostic, financial, and operations workstations.
                   </p>
                 </div>
                 <span className="text-xs font-black text-purple-800 bg-purple-100 px-3.5 py-1.5 rounded-full border border-purple-200">
@@ -748,10 +793,10 @@ export default function RolePortalLogin({
       </main>
 
       {/* Clean Minimal Footer */}
-      <footer className="w-full border-t border-slate-100 py-4 px-6 text-center text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto">
+      <footer className="w-full border-t border-slate-200 bg-white/80 py-4 px-6 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto">
         <p>© {new Date().getFullYear()} {hospitalName} • Electronic Medical Records & Enterprise HMS</p>
-        <p className="text-[11px] font-semibold text-slate-500 mt-1 sm:mt-0">
-          Super Admin Sovereigns: <span className="font-mono text-purple-700 font-bold">moraasdorcah@gmail.com</span> • <span className="font-mono text-purple-700 font-bold">urbaninteriorkenya@gmail.com</span> • <span className="font-mono text-purple-700 font-bold">naisiaetext@gmail.com</span>
+        <p className="text-[11px] font-semibold text-slate-400 mt-1 sm:mt-0">
+          Role-Based Access Control Active
         </p>
       </footer>
 
@@ -769,14 +814,14 @@ export default function RolePortalLogin({
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-sm">
-                    <activeModalRole.icon className="w-6 h-6 text-purple-400" />
+                    <activeModalRole.icon className="w-6 h-6 text-blue-400" />
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
                       {activeModalRole.title} Login
                     </h3>
                     <p className="text-xs text-slate-500 font-medium">
-                      Station: <span className="uppercase font-bold text-purple-700">{activeModalRole.department}</span>
+                      Station: <span className="uppercase font-bold text-slate-700">{activeModalRole.department}</span>
                     </p>
                   </div>
                 </div>
@@ -841,7 +886,7 @@ export default function RolePortalLogin({
                             setSelectedEmployeeId(e.target.value);
                             setLocalError(null);
                           }}
-                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-purple-500 cursor-pointer"
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-slate-800 cursor-pointer"
                         >
                           <option value="">-- Choose Your Staff Name --</option>
                           {matchingEmployees.map((emp) => (
@@ -858,7 +903,7 @@ export default function RolePortalLogin({
                           <span>No Staff Onboarded for This Station</span>
                         </div>
                         <p className="text-[11px] leading-relaxed text-amber-700">
-                          Hospital HR / Super Admin has not onboarded personnel for this department station yet. Please ask HR or a Super Admin to create your account in the HR / Admin module, or switch to corporate email login.
+                          Hospital administration has not onboarded personnel for this department station yet. Please contact administration or switch to corporate email login.
                         </p>
                       </div>
                     )}
@@ -867,10 +912,10 @@ export default function RolePortalLogin({
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1">
-                          <KeyRound className="w-3.5 h-3.5 text-purple-600" />
+                          <KeyRound className="w-3.5 h-3.5 text-slate-700" />
                           <span>Enter Assigned Security PIN *</span>
                         </label>
-                        <span className="text-[10px] text-slate-400">4-Digit PIN</span>
+                        <span className="text-[10px] text-slate-400">Security PIN</span>
                       </div>
                       <div className="relative">
                         <input
@@ -881,7 +926,7 @@ export default function RolePortalLogin({
                           value={pinInput}
                           onChange={(e) => setPinInput(e.target.value)}
                           placeholder="••••"
-                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-slate-900 focus:outline-purple-500 tracking-widest"
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-slate-900 focus:outline-slate-800 tracking-widest"
                         />
                         <button
                           type="button"
@@ -905,17 +950,17 @@ export default function RolePortalLogin({
                         required
                         value={emailInput}
                         onChange={(e) => setEmailInput(e.target.value)}
-                        placeholder="e.g. urbaninteriorkenya@gmail.com"
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-purple-500"
+                        placeholder="e.g. staff@hospital.org"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-slate-800"
                       />
                     </div>
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1">
-                          <KeyRound className="w-3.5 h-3.5 text-purple-600" />
+                          <KeyRound className="w-3.5 h-3.5 text-slate-700" />
                           <span>Security Login PIN *</span>
                         </label>
-                        <span className="text-[10px] text-slate-400">Default PIN: 2026</span>
+                        <span className="text-[10px] text-slate-400">Security PIN</span>
                       </div>
                       <div className="relative">
                         <input
@@ -925,7 +970,7 @@ export default function RolePortalLogin({
                           value={pinInput}
                           onChange={(e) => setPinInput(e.target.value)}
                           placeholder="••••"
-                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-slate-900 focus:outline-purple-500 tracking-widest"
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-black text-slate-900 focus:outline-slate-800 tracking-widest"
                         />
                         <button
                           type="button"
@@ -951,7 +996,7 @@ export default function RolePortalLogin({
                   <button
                     id="btn-confirm-portal-login"
                     type="submit"
-                    className="flex-2 py-3 px-4 bg-purple-700 hover:bg-purple-800 text-white font-black rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                    className="flex-2 py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <LogIn className="w-4 h-4" />
                     <span>Authenticate & Access {activeModalRole.title}</span>

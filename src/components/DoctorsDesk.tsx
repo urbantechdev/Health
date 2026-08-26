@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, getDocs, query, where } from "firebase/firestore";
 import { MedicalRecord, Medication, QueueTicket, PrescriptionItem, ClinicalVisit } from "../types";
-import { upsertUnifiedPatientRecord, findUnifiedPatient } from "../lib/patientSyncService";
+import { upsertUnifiedPatientRecord, findUnifiedPatient, normalizeString, normalizePhone } from "../lib/patientSyncService";
 import { 
   Heart, 
   Stethoscope, 
@@ -26,10 +26,16 @@ import {
   FileCheck,
   Award,
   Activity,
-  Hospital
+  Hospital,
+  Search,
+  History,
+  CreditCard,
+  Phone,
+  User
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import KenyanHospitalFormsModal, { KenyanFormType, COMMON_ICD10_KENYA } from "./KenyanHospitalFormsModal";
+import PatientHistoryLookupModal from "./PatientHistoryLookupModal";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 
@@ -78,6 +84,10 @@ export default function DoctorsDesk({
   const [activeKenyanFormType, setActiveKenyanFormType] = useState<KenyanFormType>("sick_sheet");
   const [selectedFormVisit, setSelectedFormVisit] = useState<ClinicalVisit | null>(null);
   const [showIcdDropdown, setShowIcdDropdown] = useState(false);
+
+  // History Lookup Modal state & Patient filter
+  const [showDoctorHistoryModal, setShowDoctorHistoryModal] = useState(false);
+  const [patientSearchFilter, setPatientSearchFilter] = useState("");
 
   // Clinical inputs
   const [symptoms, setSymptoms] = useState("");
@@ -623,20 +633,81 @@ export default function DoctorsDesk({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Patient Selection & History timeline */}
         <div className="lg:col-span-4 space-y-4 border-r border-gray-100 pr-2">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-gray-500">EHR Patient Selection</label>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-gray-500">EHR Patient Selection</label>
+              <button
+                type="button"
+                onClick={() => setShowDoctorHistoryModal(true)}
+                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Instant ID Lookup</span>
+              </button>
+            </div>
+
+            {/* Quick Live Search Input */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-gray-400" />
+              <input
+                id="input-doctor-patient-search"
+                type="text"
+                value={patientSearchFilter}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPatientSearchFilter(val);
+                  if (val.trim()) {
+                    const clean = normalizeString(val);
+                    const cleanPhone = normalizePhone(val);
+                    const match = patients.find(
+                      (p) =>
+                        normalizeString(p.nationalId) === clean ||
+                        normalizeString(p.id) === clean ||
+                        (cleanPhone && normalizePhone(p.phone) === cleanPhone)
+                    );
+                    if (match) {
+                      setSelectedPatientId(match.id);
+                    }
+                  }
+                }}
+                placeholder="Type National ID, Phone or Name..."
+                className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:border-indigo-500 focus:outline-hidden"
+              />
+              {patientSearchFilter && (
+                <button
+                  type="button"
+                  onClick={() => setPatientSearchFilter("")}
+                  className="absolute right-2.5 top-2 text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
             <select
               id="select-any-patient"
               value={selectedPatientId || ""}
               onChange={(e) => setSelectedPatientId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:border-emerald-500 bg-white"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium focus:border-emerald-500 bg-white"
             >
-              <option value="">-- Search EHR Archives --</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.patientName} ({p.age}y, {p.gender})
-                </option>
-              ))}
+              <option value="">-- Choose from Patient Files ({patients.length}) --</option>
+              {patients
+                .filter((p) => {
+                  if (!patientSearchFilter.trim()) return true;
+                  const clean = normalizeString(patientSearchFilter);
+                  const cleanPhone = normalizePhone(patientSearchFilter);
+                  return (
+                    normalizeString(p.nationalId).includes(clean) ||
+                    normalizeString(p.id).includes(clean) ||
+                    normalizeString(p.patientName).includes(clean) ||
+                    (cleanPhone && normalizePhone(p.phone).includes(cleanPhone))
+                  );
+                })
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.patientName} (ID: {p.nationalId || "N/A"} • {p.age}y, {p.gender})
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -656,11 +727,22 @@ export default function DoctorsDesk({
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide">Active EHR Bio</h3>
                 <p className="text-sm font-bold text-gray-900">{selectedPatient.patientName}</p>
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mt-1">
+                  <p>National ID: <span className="font-mono font-bold text-gray-900">{selectedPatient.nationalId || "N/A"}</span></p>
                   <p>Age: <span className="font-semibold">{selectedPatient.age} years</span></p>
                   <p>Gender: <span className="font-semibold">{selectedPatient.gender}</span></p>
                   <p>Blood Type: <span className="font-semibold">{selectedPatient.bloodType}</span></p>
+                  <p>Past Visits: <span className="font-bold text-indigo-700">{selectedPatient.visits?.length || 1} on file</span></p>
                   <p>SHA Code: <span className="font-mono font-bold text-[10px]">{selectedPatient.shaId || "N/A"}</span></p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDoctorHistoryModal(true)}
+                  className="w-full mt-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <History className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Inspect Full Historical Chart & Prior Treatments</span>
+                </button>
 
                 {/* Quick Referral, Staff Chat & Kenyan Statutory Forms Hub Actions */}
                 <div className="space-y-2 pt-2 border-t border-gray-200">
@@ -1354,6 +1436,17 @@ export default function DoctorsDesk({
           initialFormType={activeKenyanFormType}
         />
       )}
+
+      {/* Instant Patient EHR History Lookup Modal */}
+      <PatientHistoryLookupModal
+        isOpen={showDoctorHistoryModal}
+        onClose={() => setShowDoctorHistoryModal(false)}
+        initialSearchId={selectedPatient?.nationalId || patientSearchFilter}
+        onSelectPatientForDoctor={(p) => {
+          setSelectedPatientId(p.id);
+          toast.success(`Loaded clinical chart for ${p.patientName}`, "Patient Record Retrieved");
+        }}
+      />
     </div>
   );
 }

@@ -232,36 +232,67 @@ app.post("/api/integrations/etims/invoice", (req, res) => {
   });
 });
 
-// 6. Safaricom M-PESA STK Push & Polling Simulation
-const pendingMpesaTxns = new Map<string, { amount: number; patientId: string; status: string }>();
+// 6. Safaricom M-PESA STK Push & Webhook Callback Handling
+interface MpesaTxnRecord {
+  checkoutRequestId: string;
+  merchantRequestId: string;
+  amount: number;
+  phoneNumber: string;
+  invoiceId: string;
+  status: "Pending" | "Success" | "Failed" | "Cancelled";
+  mpesaReceiptNumber: string | null;
+  transactionDate: string;
+  resultCode: number;
+  resultDesc: string;
+  rawCallback?: any;
+}
+
+const pendingMpesaTxns = new Map<string, MpesaTxnRecord>();
+const invoiceToMpesaTxn = new Map<string, MpesaTxnRecord>();
 
 app.post("/api/integrations/mpesa/stkpush", (req, res) => {
-  const { phoneNumber, amount, invoiceId } = req.body;
+  const { phoneNumber, amount, invoiceId, reference } = req.body;
   if (!phoneNumber || !amount) {
     return res.status(400).json({ error: "Phone number and amount are required" });
   }
 
   const checkoutRequestID = `ws_CO_${new Date().getTime()}_${Math.floor(Math.random() * 900 + 100)}`;
-  
-  // Save transaction to in-memory store for polling simulation
-  pendingMpesaTxns.set(checkoutRequestID, {
-    amount: parseFloat(amount),
-    patientId: invoiceId || "UNK",
-    status: "Pending"
-  });
+  const merchantRequestID = `22119-994321-${Math.floor(Math.random() * 1000)}`;
+  const invRef = invoiceId || reference || "UNK-INV";
 
-  // Automatically mark transaction as Success after 4 seconds
+  const txnRecord: MpesaTxnRecord = {
+    checkoutRequestId: checkoutRequestID,
+    merchantRequestId: merchantRequestID,
+    amount: parseFloat(amount),
+    phoneNumber: String(phoneNumber),
+    invoiceId: invRef,
+    status: "Pending",
+    mpesaReceiptNumber: null,
+    transactionDate: new Date().toISOString(),
+    resultCode: 0,
+    resultDesc: "STK Push Initiated. Awaiting PIN entry on device."
+  };
+
+  pendingMpesaTxns.set(checkoutRequestID, txnRecord);
+  invoiceToMpesaTxn.set(invRef, txnRecord);
+
+  // Background Webhook Callback Simulation (Safaricom Daraja sends webhook automatically when user enters PIN)
   setTimeout(() => {
     const txn = pendingMpesaTxns.get(checkoutRequestID);
-    if (txn) {
+    if (txn && txn.status === "Pending") {
+      const generatedReceipt = `T${Math.floor(Math.random() * 9).toString()}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${Math.floor(100000 + Math.random() * 900000)}`;
       txn.status = "Success";
+      txn.mpesaReceiptNumber = generatedReceipt;
+      txn.resultDesc = "The service request is processed successfully.";
       pendingMpesaTxns.set(checkoutRequestID, txn);
+      invoiceToMpesaTxn.set(invRef, txn);
+      console.log(`[Daraja Webhook Processed] M-Pesa Payment Received: ${generatedReceipt} for Invoice ${invRef} (KES ${txn.amount})`);
     }
   }, 4000);
 
   res.json({
     success: true,
-    MerchantRequestID: `22119-994321-${Math.floor(Math.random() * 1000)}`,
+    MerchantRequestID: merchantRequestID,
     CheckoutRequestID: checkoutRequestID,
     ResponseCode: "0",
     ResponseDescription: "Success. Request accepted for processing",
@@ -269,18 +300,102 @@ app.post("/api/integrations/mpesa/stkpush", (req, res) => {
   });
 });
 
+// Live Daraja Webhook Receiver (receives HTTP POST callback from Safaricom API)
+app.post("/api/integrations/mpesa/callback", (req, res) => {
+  try {
+    const callbackData = req.body?.Body?.stkCallback || req.body;
+    const checkoutRequestId = callbackData?.CheckoutRequestID || req.body?.checkoutRequestId;
+    const resultCode = callbackData?.ResultCode ?? 0;
+    const resultDesc = callbackData?.ResultDesc || "Processed";
+
+    let mpesaReceiptNumber = "";
+    let amount = 0;
+    let phoneNumber = "";
+
+    if (callbackData?.CallbackMetadata?.Item) {
+      for (const item of callbackData.CallbackMetadata.Item) {
+        if (item.Name === "MpesaReceiptNumber") mpesaReceiptNumber = item.Value;
+        if (item.Name === "Amount") amount = item.Value;
+        if (item.Name === "PhoneNumber") phoneNumber = String(item.Value);
+      }
+    }
+
+    if (!mpesaReceiptNumber && resultCode === 0) {
+      mpesaReceiptNumber = req.body?.mpesaReceiptNumber || `TK${Math.floor(10000000 + Math.random() * 90000000)}`;
+    }
+
+    const existing = checkoutRequestId ? pendingMpesaTxns.get(checkoutRequestId) : null;
+    const updatedRecord: MpesaTxnRecord = {
+      checkoutRequestId: checkoutRequestId || `ws_CO_${Date.now()}`,
+      merchantRequestId: callbackData?.MerchantRequestID || "UNK",
+      amount: amount || existing?.amount || 0,
+      phoneNumber: phoneNumber || existing?.phoneNumber || "",
+      invoiceId: existing?.invoiceId || "DIRECT_PAYMENT",
+      status: resultCode === 0 ? "Success" : "Failed",
+      mpesaReceiptNumber: resultCode === 0 ? mpesaReceiptNumber : null,
+      transactionDate: new Date().toISOString(),
+      resultCode,
+      resultDesc,
+      rawCallback: req.body
+    };
+
+    if (checkoutRequestId) {
+      pendingMpesaTxns.set(checkoutRequestId, updatedRecord);
+    }
+    if (existing?.invoiceId) {
+      invoiceToMpesaTxn.set(existing.invoiceId, updatedRecord);
+    }
+
+    console.log(`[M-Pesa Webhook Callback Handled] Status: ${updatedRecord.status}, Receipt: ${updatedRecord.mpesaReceiptNumber}`);
+    res.json({ ResultCode: 0, ResultDesc: "Accepted" });
+  } catch (err: any) {
+    console.error("Error processing M-Pesa webhook callback:", err);
+    res.status(500).json({ ResultCode: 1, ResultDesc: "Internal Server Error" });
+  }
+});
+
+// Polling & Browser Reconciliation status endpoint
 app.post("/api/integrations/mpesa/status", (req, res) => {
-  const { checkoutRequestId } = req.body;
+  const { checkoutRequestId, invoiceId } = req.body;
   
-  const txn = pendingMpesaTxns.get(checkoutRequestId);
+  let txn = checkoutRequestId ? pendingMpesaTxns.get(checkoutRequestId) : null;
+  if (!txn && invoiceId) {
+    txn = invoiceToMpesaTxn.get(invoiceId) || null;
+  }
+
   if (!txn) {
     return res.json({ status: "NotFound", message: "Transaction ID not registered." });
   }
 
   res.json({
-    status: txn.status, // "Pending" or "Success"
-    mpesaReceiptNumber: txn.status === "Success" ? `T${Math.floor(Math.random() * 9).toString()}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${Math.floor(100000 + Math.random() * 900000)}` : null,
-    message: txn.status === "Success" ? "Payment successfully captured and reconciled!" : "Waiting for user pin entry..."
+    status: txn.status, // "Pending", "Success", "Failed"
+    mpesaReceiptNumber: txn.mpesaReceiptNumber,
+    amount: txn.amount,
+    invoiceId: txn.invoiceId,
+    phoneNumber: txn.phoneNumber,
+    transactionDate: txn.transactionDate,
+    message: txn.status === "Success" 
+      ? `Payment of KES ${txn.amount.toLocaleString()} successfully confirmed via M-Pesa Receipt ${txn.mpesaReceiptNumber}!` 
+      : txn.resultDesc || "Waiting for user PIN entry on phone..."
+  });
+});
+
+// Get invoice payment status (ideal if pharmacist browser refreshed while awaiting PIN)
+app.get("/api/integrations/mpesa/invoice-status/:invoiceId", (req, res) => {
+  const { invoiceId } = req.params;
+  const txn = invoiceToMpesaTxn.get(invoiceId);
+
+  if (!txn) {
+    return res.json({ found: false, status: "UNPAID" });
+  }
+
+  res.json({
+    found: true,
+    status: txn.status,
+    mpesaReceiptNumber: txn.mpesaReceiptNumber,
+    amount: txn.amount,
+    phoneNumber: txn.phoneNumber,
+    transactionDate: txn.transactionDate
   });
 });
 

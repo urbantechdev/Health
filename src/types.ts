@@ -60,6 +60,9 @@ export interface PrescriptionItem {
 export interface MedicalRecord {
   id: string;
   patientName: string;
+  name?: string; // Compatibility alias
+  patientNumber?: string;
+  insuranceScheme?: string;
   nationalId: string;
   phone: string;
   age: number;
@@ -131,6 +134,37 @@ export type AdmissionType =
   | "DAY_SURGERY"
   | "MATERNITY";
 
+export interface BedTransferRecord {
+  id: string;
+  fromWardId?: string;
+  fromWardName: string;
+  fromBedId?: string;
+  fromBedNumber: string;
+  toWardId: string;
+  toWardName: string;
+  toBedId: string;
+  toBedNumber: string;
+  transferredAt: string;
+  transferredBy: string;
+  reason?: string;
+  dailyRate: number;
+  daysSpent?: number;
+  accumulatedCost?: number;
+}
+
+export interface DoctorDischargeClearance {
+  cleared: boolean;
+  doctorName: string;
+  doctorId?: string;
+  clearedAt: string;
+  dischargeCondition: "Recovered" | "Improved / Stable for Home Care" | "Transferred / Referred" | "Against Medical Advice (DAMA)" | "Deceased";
+  clinicalSummary: string;
+  dischargeMedications?: string;
+  followUpDate?: string;
+  followUpInstructions?: string;
+  doctorSignature?: string;
+}
+
 export interface Encounter {
   id: string; // e.g. "ENC-2026-001" or Firestore ID
   patientId: string;
@@ -154,6 +188,8 @@ export interface Encounter {
   doctorDischargeApproved?: boolean;
   doctorDischargeApprovedBy?: string;
   doctorDischargeApprovedAt?: string;
+  doctorClearance?: DoctorDischargeClearance;
+  bedTransfers?: BedTransferRecord[];
   billingCleared: boolean;
   totalBilled: number;
   totalPaid: number;
@@ -271,12 +307,17 @@ export interface Invoice {
   }[];
   total: number;
   split: SplitBilling;
-  paymentMethod: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance";
+  paymentMethod: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split";
   paymentStatus: "unpaid" | "pending_mpesa" | "paid";
   mpesaCheckoutId?: string;
+  mpesaReceiptNumber?: string;
+  transactionRef?: string;
   kraCompliantInvoiceNo?: string;
   shaClaimId?: string;
   timestamp: string;
+  encounterId?: string;
+  paidAt?: string;
+  paidAmount?: number;
 }
 
 export interface ExpenseItem {
@@ -591,6 +632,77 @@ export interface PatientTransfer {
   assignedRoomOrBed?: string;
   timestamp: string;
 }
+
+export interface SettingsAuditLog {
+  id: string;
+  timestamp: string;
+  changedBy: string;
+  userEmail: string;
+  userRole: string;
+  changeType: "KRA_PIN_MODIFIED" | "LICENSE_NO_MODIFIED" | "HOSPITAL_NAME_CHANGED" | "FACILITY_TIER_CHANGED" | "LEGAL_DETAILS_UPDATED" | "SYSTEM_SECURITY_CONFIG";
+  fieldName: string;
+  oldValue: string;
+  newValue: string;
+  reason?: string;
+  ipAddress?: string;
+}
+
+export interface MpesaTransactionRecord {
+  id: string;
+  checkoutRequestId: string;
+  merchantRequestId?: string;
+  mpesaReceiptNumber?: string;
+  phoneNumber: string;
+  amount: number;
+  invoiceId?: string;
+  patientName?: string;
+  status: "Pending" | "Success" | "Failed" | "Cancelled";
+  resultDesc?: string;
+  initiatedAt: string;
+  completedAt?: string;
+  reconciled: boolean;
+}
+
+export interface ProcedureTariffItem {
+  id: string;
+  code: string;
+  name: string;
+  category: "consultation" | "pharmacy" | "laboratory" | "radiology" | "ward_bed" | "nursing" | "procedure" | "surgery" | "other";
+  department: string;
+  standardAmount: number;
+  description?: string;
+  isTaxable?: boolean;
+  isActive: boolean;
+  updatedAt?: string;
+}
+
+export interface WardBedRateSetting {
+  id: string;
+  wardId: string;
+  wardName: string;
+  category: string;
+  dailyRate: number;
+  nursingDailyFee?: number;
+  fileOpeningFee?: number;
+  updatedAt?: string;
+}
+
+export interface BillItemDraft {
+  id: string;
+  sourceId?: string;
+  sourceType: "prescription" | "lab_order" | "bed_stay" | "consultation" | "procedure" | "tariff" | "custom";
+  description: string;
+  category: "consultation" | "pharmacy" | "laboratory" | "radiology" | "ward_bed" | "nursing" | "procedure" | "surgery" | "other";
+  department: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  notes?: string;
+  drugDosage?: string;
+  durationDays?: number;
+  addedAt: string;
+}
+
 
 
 

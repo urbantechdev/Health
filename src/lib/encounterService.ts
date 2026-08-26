@@ -583,22 +583,201 @@ export const payEncounterBill = async (
   return { success: true, newTotalPaid, billingCleared: isCleared };
 };
 
-// Doctor Clinical Discharge Signoff
+// Doctor Clinical Discharge Signoff with comprehensive clearance details
+export interface DoctorClearanceParams {
+  encounterId: string;
+  doctorName: string;
+  doctorId?: string;
+  dischargeCondition: "Recovered" | "Improved / Stable for Home Care" | "Transferred / Referred" | "Against Medical Advice (DAMA)" | "Deceased";
+  clinicalSummary: string;
+  dischargeMedications?: string;
+  followUpDate?: string;
+  followUpInstructions?: string;
+  doctorSignature?: string;
+}
+
 export const signDoctorClinicalDischarge = async (
-  encounterId: string,
-  doctorName: string,
-  dischargeSummary: string
+  params: DoctorClearanceParams | (string & { [key: string]: any }),
+  legacyDoctorName?: string,
+  legacySummary?: string
 ): Promise<void> => {
   const nowIso = new Date().toISOString();
+  let encounterId: string;
+  let doctorName: string;
+  let clearanceData: any;
+
+  if (typeof params === "string") {
+    encounterId = params;
+    doctorName = legacyDoctorName || "Attending Medical Officer";
+    clearanceData = {
+      cleared: true,
+      doctorName,
+      clearedAt: nowIso,
+      dischargeCondition: "Recovered",
+      clinicalSummary: legacySummary || "Patient cleared for discharge by attending physician.",
+      followUpInstructions: "Standard home care instructions provided.",
+      doctorSignature: `SIG-${doctorName.replace(/\s+/g, "_")}-${Date.now().toString().slice(-4)}`
+    };
+  } else {
+    encounterId = params.encounterId;
+    doctorName = params.doctorName || "Attending Medical Officer";
+    clearanceData = {
+      cleared: true,
+      doctorName: params.doctorName,
+      doctorId: params.doctorId || "",
+      clearedAt: nowIso,
+      dischargeCondition: params.dischargeCondition || "Recovered",
+      clinicalSummary: params.clinicalSummary || "Clinical discharge approved.",
+      dischargeMedications: params.dischargeMedications || "",
+      followUpDate: params.followUpDate || "",
+      followUpInstructions: params.followUpInstructions || "Follow prescribed recovery plan.",
+      doctorSignature: params.doctorSignature || `SIG-${doctorName.replace(/\s+/g, "_")}-${Date.now().toString().slice(-4)}`
+    };
+  }
+
   const encRef = doc(db, "encounters", encounterId);
 
   await updateDoc(encRef, {
     doctorDischargeApproved: true,
     doctorDischargeApprovedBy: doctorName,
     doctorDischargeApprovedAt: nowIso,
-    dischargeNotes: dischargeSummary,
+    doctorClearance: clearanceData,
+    dischargeNotes: clearanceData.clinicalSummary,
     status: "DISCHARGING",
     updatedAt: nowIso
+  });
+};
+
+/**
+ * BED TRANSFER HISTORY & ACCURATE DAILY RATE LOGGING
+ * Moves patient between wards/beds (e.g. General Ward -> ICU -> Private Room)
+ * and logs timestamped transfer records for differential daily billing.
+ */
+export interface TransferBedParams {
+  encounterId: string;
+  toWardId: string;
+  toWardName: string;
+  toBedId: string;
+  toBedNumber: string;
+  toDailyRate: number;
+  transferredBy: string;
+  reason?: string;
+}
+
+export const transferEncounterBed = async (
+  params: TransferBedParams
+): Promise<{ success: boolean; message: string; transferRecord: any }> => {
+  const encRef = doc(db, "encounters", params.encounterId);
+  const nowIso = new Date().toISOString();
+
+  return await runTransaction(db, async (transaction) => {
+    const encSnap = await transaction.get(encRef);
+    if (!encSnap.exists()) {
+      throw new Error("Encounter not found.");
+    }
+    const enc = encSnap.data() as Encounter;
+
+    // Check target bed
+    const targetBedRef = doc(db, "beds", params.toBedId);
+    const targetBedSnap = await transaction.get(targetBedRef);
+    if (!targetBedSnap.exists()) {
+      throw new Error("Target bed does not exist.");
+    }
+    const targetBedData = targetBedSnap.data() as WardBed;
+    if (targetBedData.status === "OCCUPIED" && targetBedData.currentEncounterId !== params.encounterId) {
+      throw new Error(`Target bed ${targetBedData.bedNumber} is already occupied by another patient.`);
+    }
+
+    // Previous bed details
+    const fromWardId = enc.assignedWardId;
+    const fromWardName = enc.assignedWard || "Unassigned Ward";
+    const fromBedId = enc.assignedBedId;
+    const fromBedNumber = enc.assignedBed || "Unassigned Bed";
+
+    // Calculate days spent in previous bed
+    const lastTransferTime = enc.bedTransfers && enc.bedTransfers.length > 0
+      ? new Date(enc.bedTransfers[enc.bedTransfers.length - 1].transferredAt).getTime()
+      : enc.admittedAt ? new Date(enc.admittedAt).getTime() : Date.now();
+    
+    const durationMs = Math.max(0, Date.now() - lastTransferTime);
+    const daysSpent = Math.max(1, Math.ceil(durationMs / (1000 * 60 * 60 * 24)));
+
+    // Create Transfer Record
+    const transferRecord = {
+      id: `xfer-${Date.now()}`,
+      fromWardId,
+      fromWardName,
+      fromBedId,
+      fromBedNumber,
+      toWardId: params.toWardId,
+      toWardName: params.toWardName,
+      toBedId: params.toBedId,
+      toBedNumber: params.toBedNumber,
+      transferredAt: nowIso,
+      transferredBy: params.transferredBy,
+      reason: params.reason || "Clinical bed transfer",
+      dailyRate: params.toDailyRate,
+      daysSpent,
+      accumulatedCost: daysSpent * (targetBedData.dailyRate || params.toDailyRate)
+    };
+
+    const existingTransfers = enc.bedTransfers || [];
+    const updatedTransfers = [...existingTransfers, transferRecord];
+
+    // Release old bed if existed
+    if (fromBedId && fromBedId !== params.toBedId) {
+      const oldBedRef = doc(db, "beds", fromBedId);
+      transaction.update(oldBedRef, {
+        status: "AVAILABLE",
+        currentPatientId: null,
+        currentPatientName: null,
+        currentEncounterId: null,
+        occupiedSince: null
+      });
+    }
+
+    // Occupy target bed
+    transaction.update(targetBedRef, {
+      status: "OCCUPIED",
+      currentPatientId: enc.patientId,
+      currentPatientName: enc.patientName,
+      currentEncounterId: enc.id,
+      occupiedSince: nowIso
+    });
+
+    // Add automated bill item for the bed transfer / differential rate
+    const billRef = doc(collection(db, "encounters", params.encounterId, "billItems"));
+    transaction.set(billRef, {
+      id: billRef.id,
+      description: `Bed Transfer: ${fromWardName} (${fromBedNumber}) -> ${params.toWardName} (${params.toBedNumber})`,
+      category: "accommodation",
+      department: "inpatient",
+      unitPrice: params.toDailyRate,
+      quantity: 1,
+      total: params.toDailyRate,
+      isPaid: false,
+      timestamp: nowIso
+    });
+
+    const newTotalBilled = (enc.totalBilled || 0) + params.toDailyRate;
+
+    // Update master encounter
+    transaction.update(encRef, {
+      assignedWard: params.toWardName,
+      assignedWardId: params.toWardId,
+      assignedBed: params.toBedNumber,
+      assignedBedId: params.toBedId,
+      bedTransfers: updatedTransfers,
+      totalBilled: newTotalBilled,
+      billingCleared: (enc.totalPaid || 0) >= newTotalBilled,
+      updatedAt: nowIso
+    });
+
+    return {
+      success: true,
+      message: `Patient successfully transferred to ${params.toWardName} - ${params.toBedNumber}. Daily rate: KES ${params.toDailyRate.toLocaleString()}.`,
+      transferRecord
+    };
   });
 };
 

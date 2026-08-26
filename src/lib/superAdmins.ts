@@ -8,7 +8,8 @@ import { Employee } from "../types";
 export const SUPER_ADMIN_EMAILS: readonly string[] = [
   "moraasdorcah@gmail.com",
   "urbaninteriorkenya@gmail.com",
-  "naisiaetext@gmail.com"
+  "naisiaetext@gmail.com",
+  "tassiahillhospital@gmail.com"
 ] as const;
 
 /**
@@ -66,6 +67,21 @@ export const MASTER_SUPER_ADMIN_SEEDS: Omit<Employee, "id">[] = [
     pin: "2026",
     status: "active",
     hireDate: "2024-01-20",
+    accessLevel: "Super Admin",
+    systemRole: "Super Admin"
+  },
+  {
+    name: "Tassia Hill Hospital (Super Admin)",
+    nationalId: "31849204",
+    role: "Super Admin",
+    department: "administration",
+    specialty: "Hospital Director General & System Sovereign",
+    salary: 500000,
+    phone: "+254 700 000 004",
+    email: "tassiahillhospital@gmail.com",
+    pin: "2026",
+    status: "active",
+    hireDate: "2024-01-01",
     accessLevel: "Super Admin",
     systemRole: "Super Admin"
   }
