@@ -1,4 +1,4 @@
-import { db } from "./firebase";
+import { db, cleanFirestoreData } from "./firebase";
 import {
   collection,
   doc,
@@ -562,7 +562,7 @@ export const payEncounterBill = async (
 
   // Also create a master invoice document for accounting records
   const invoiceId = `INV-${Date.now().toString().slice(-6)}`;
-  await setDoc(doc(db, "invoices", invoiceId), {
+  await setDoc(doc(db, "invoices", invoiceId), cleanFirestoreData({
     id: invoiceId,
     patientId: encounter.patientId,
     patientName: encounter.patientName,
@@ -578,7 +578,7 @@ export const payEncounterBill = async (
     kraCompliantInvoiceNo: `KRA-ETIMS-${Date.now().toString().slice(-8)}`,
     timestamp: nowIso,
     encounterId
-  });
+  }));
 
   return { success: true, newTotalPaid, billingCleared: isCleared };
 };

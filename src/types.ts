@@ -113,6 +113,17 @@ export interface SplitBilling {
   sha: number;
   insurance: number;
   outOfPocket: number;
+  insuranceCoveredAmount?: number;
+  copayAmount?: number;
+  copayPaymentMethod?: "Cash" | "M-PESA" | "Card" | "Credit Card" | "Debit Card" | string;
+  insuranceProvider?: string;
+  policyNumber?: string;
+  cardMemberNumber?: string;
+  preAuthCode?: string;
+  copayMpesaReceiptNumber?: string;
+  cashTendered?: number;
+  cashChange?: number;
+  notes?: string;
 }
 
 // -------------------------------------------------------------
@@ -307,7 +318,7 @@ export interface Invoice {
   }[];
   total: number;
   split: SplitBilling;
-  paymentMethod: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split";
+  paymentMethod: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split" | "Insurance + Copay" | "Card" | string;
   paymentStatus: "unpaid" | "pending_mpesa" | "paid";
   mpesaCheckoutId?: string;
   mpesaReceiptNumber?: string;
@@ -703,6 +714,43 @@ export interface BillItemDraft {
   addedAt: string;
 }
 
+export interface PatientCartItem {
+  id: string;
+  patientId: string;
+  patientName: string;
+  ticketNo?: string;
+  encounterId?: string;
+  stage: "Registration & Triage" | "Doctor Consultation" | "Laboratory Diagnostics" | "Radiology & Imaging" | "Pharmacy Dispensing" | "Nursing & Consumables" | "Ward & Inpatient Bed" | "Surgical & Theatre" | string;
+  department: string;
+  category: "consultation" | "pharmacy" | "laboratory" | "radiology" | "ward_bed" | "nursing" | "procedure" | "surgery" | "supplies" | "other";
+  itemCode?: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  totalPrice: number;
+  notes?: string;
+  addedBy: string;
+  addedByRole?: string;
+  addedAt: string;
+  status: "pending_checkout" | "checked_out" | "waived" | "cancelled";
+}
 
-
-
+export interface PatientCart {
+  id: string; // cart-${patientId}
+  patientId: string;
+  patientName: string;
+  nationalId: string;
+  phone?: string;
+  activeTicketNo?: string;
+  encounterId?: string;
+  items: PatientCartItem[];
+  totalAmount: number;
+  itemCount: number;
+  status: "active" | "checked_out" | "closed";
+  lastAddedStage?: string;
+  createdAt: string;
+  updatedAt: string;
+  checkedOutAt?: string;
+  checkedOutBy?: string;
+  finalInvoiceId?: string;
+}

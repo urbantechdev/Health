@@ -80,14 +80,23 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]"
-      >
-        {/* Navy Header */}
-        <div className="px-6 py-5 bg-[#0B1528] text-white flex items-center justify-between">
+      <div className="relative max-w-md w-full">
+        {/* Gemini Rainbow Halo Shadow Motion Layer */}
+        <div className="absolute -inset-2 sm:-inset-3 rounded-3xl opacity-80 blur-xl sm:blur-2xl pointer-events-none -z-10 overflow-hidden">
+          <div className="w-[220%] h-[220%] -top-[60%] -left-[60%] absolute gemini-rainbow-spin" />
+        </div>
+        <div className="absolute -inset-[2px] rounded-3xl opacity-70 pointer-events-none -z-10 overflow-hidden">
+          <div className="w-full h-full gemini-rainbow-linear" />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          className="bg-white rounded-3xl w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[90vh] relative z-10"
+        >
+          {/* Navy Header */}
+          <div className="px-6 py-5 bg-[#0B1528] text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10">
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -189,10 +198,50 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               </button>
             </form>
           </div>
+
+          {/* Direct Instant Trial Sign-In to Admin Dashboard */}
+          <div className="pt-3 border-t border-slate-100 space-y-2">
+            <button
+              id="btn-direct-trial-admin-modal"
+              type="button"
+              onClick={() => {
+                onSelectAccount(
+                  "moraasdorcah@gmail.com",
+                  "Dorcah Moraa (Super Admin Sovereign)",
+                  "Super Admin"
+                );
+                onClose();
+              }}
+              className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all shadow-md hover:shadow-lg cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+            >
+              <Shield className="w-4 h-4 text-amber-100 shrink-0" />
+              <span>Direct Trial Sign In to Admin Dashboard</span>
+              <Sparkles className="w-4 h-4 text-amber-200 shrink-0 animate-pulse" />
+            </button>
+            <p className="text-[11px] text-center text-slate-400 font-medium">
+              Instant 1-tap Super Admin trial access (Bypasses external popup domain whitelist)
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
+        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+          <button
+            id="btn-footer-trial-admin"
+            type="button"
+            onClick={() => {
+              onSelectAccount(
+                "moraasdorcah@gmail.com",
+                "Dorcah Moraa (Super Admin Sovereign)",
+                "Super Admin"
+              );
+              onClose();
+            }}
+            className="text-xs font-black text-amber-700 hover:text-amber-800 underline decoration-amber-400 underline-offset-2 cursor-pointer flex items-center gap-1.5"
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-600" />
+            <span>Direct Trial Admin Access</span>
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -203,5 +252,6 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
         </div>
       </motion.div>
     </div>
+  </div>
   );
 };

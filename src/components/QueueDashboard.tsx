@@ -46,24 +46,26 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
   };
 
   const resolveRoomName = (ticket: QueueTicket) => {
-    if (ticket.consultationRoom) return ticket.consultationRoom;
+    if (ticket.consultationRoom && ticket.consultationRoom.trim()) {
+      return ticket.consultationRoom.replace(/,\s*doctor$/i, "").replace(/\s+doctor$/i, "").trim();
+    }
     if (ticket.currentDepartment === "laboratory") return "Lab Window A";
     if (ticket.currentDepartment === "radiology") return "X-Ray Room 1";
     if (ticket.currentDepartment === "pharmacy") return "Pharmacy Dispenser B";
     if (ticket.currentDepartment === "labour_room") return "Maternity Labour Room";
     if (ticket.currentDepartment === "gyna") return "Obstetrics & Gyna Clinic";
-    return "Room 5, Doctor";
+    return "Room 5";
   };
 
   const announceTicket = async (ticket: QueueTicket, customRoom?: string) => {
     const room = customRoom || resolveRoomName(ticket);
-    const deptRole = ticket.specialistTitle || ticket.assignedSpecialistName || (ticket.currentDepartment === "doctor" ? "Doctor" : ticket.currentDepartment);
+    const deptRole = ticket.specialistTitle || ticket.assignedSpecialistName || (ticket.currentDepartment === "doctor" ? "Consultation" : ticket.currentDepartment);
 
     await voiceAnnouncer.announceTurnArrived({
       ticketNo: ticket.ticketNo,
       patientName: ticket.patientName,
       roomOrDesk: room,
-      departmentOrRole: deptRole,
+      departmentOrRole: deptRole
     });
   };
 
@@ -110,11 +112,7 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
       
       const ticket = tickets.find(t => t.id === ticketId);
       if (status === "serving" && ticket) {
-        let roomName = "Room 5, Doctor";
-        if (currentDept === "laboratory") roomName = "Lab Window A";
-        if (currentDept === "radiology") roomName = "X-Ray Room 1";
-        if (currentDept === "pharmacy") roomName = "Pharmacy Dispensing Counter";
-        if (currentDept === "doctor") roomName = "Room 5, Doctor";
+        const roomName = resolveRoomName(ticket);
         announceTicket(ticket, roomName);
       }
     } catch (err) {
@@ -384,10 +382,7 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
                         <button
                           id={`btn-reannounce-${t.id}`}
                           onClick={() => {
-                            let roomName = "Room 5, Doctor";
-                            if (t.currentDepartment === "laboratory") roomName = "Lab Window A";
-                            if (t.currentDepartment === "radiology") roomName = "X-Ray Room 1";
-                            if (t.currentDepartment === "pharmacy") roomName = "Pharmacy Counter";
+                            const roomName = resolveRoomName(t);
                             announceTicket(t, roomName);
                           }}
                           className="p-1.5 hover:bg-gray-100 text-gray-500 rounded-lg transition-colors border border-gray-200 cursor-pointer"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { db } from "../lib/firebase";
+import { db, cleanFirestoreData } from "../lib/firebase";
 import {
   collection,
   onSnapshot,
@@ -442,7 +442,7 @@ export default function PatientJourneyTracker() {
           timestamp: new Date().toISOString()
         };
 
-        await addDoc(collection(db, "invoices"), invoiceData);
+        await addDoc(collection(db, "invoices"), cleanFirestoreData(invoiceData));
         addLog(`Paperless invoice generated for KES ${itemsTotal} (SHA cover KES ${splitBilling.sha}).`);
 
         // 2. Route Queue ticket

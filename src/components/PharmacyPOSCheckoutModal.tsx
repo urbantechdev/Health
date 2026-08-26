@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { db } from "../lib/firebase";
+import { db, cleanFirestoreData } from "../lib/firebase";
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 import { Medication, Invoice } from "../types";
 import { 
@@ -186,11 +186,12 @@ export default function PharmacyPOSCheckoutModal({
         },
         paymentMethod: paymentMethod === "M-Pesa" ? "M-PESA" : "Cash",
         paymentStatus: "paid",
+        ...(paymentMethod === "M-Pesa" && mpesaReceiptCode ? { mpesaReceiptNumber: mpesaReceiptCode } : {}),
         kraCompliantInvoiceNo: kraNo,
         timestamp: new Date().toISOString(),
       };
 
-      await addDoc(collection(db, "invoices"), invoiceData);
+      await addDoc(collection(db, "invoices"), cleanFirestoreData(invoiceData));
 
       // 4. Update queue ticket
       if (ticketId) {

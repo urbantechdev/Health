@@ -24,6 +24,7 @@ import {
 import { Employee, MedicalRecord, SystemTicket, QueueTicket } from "../types";
 import { createAutoTicket, checkActivePatientEncounter, findPatientByNationalId, DuplicateEncounterCheck } from "../lib/ticketService";
 import { upsertUnifiedPatientRecord, findUnifiedPatient } from "../lib/patientSyncService";
+import { addChargeToCart } from "../lib/patientCartService";
 import { HOSPITAL_SPECIALISTS_DIRECTORY, SPECIALIST_CATEGORIES, SpecialistDefinition, getSpecialistByName } from "../constants/specialists";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
@@ -385,6 +386,26 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         assignedSpecialistName: specName || "",
         specialistTitle: specialistTitle || "",
         consultationRoom: consultationRoom || ""
+      });
+
+      // STEP 5: Automatically post initial Registration & Clinical Consultation Charge to Patient Cart
+      const standardConsultFee = specialistDef?.department === "emergency" ? 1500 : 1000;
+      await addChargeToCart({
+        patientId: resolvedPatientId,
+        patientName: cleanName,
+        nationalId: cleanId,
+        phone: phone.trim(),
+        ticketNo: ticketNo,
+        stage: "Registration & Triage",
+        department: "Reception / OPD",
+        category: "consultation",
+        itemCode: specialistDef?.department === "emergency" ? "CON-003" : "CON-001",
+        name: `${specialistDef ? specialistDef.name : "General Outpatient"} Consultation & Intake Fee`,
+        unitPrice: standardConsultFee,
+        quantity: 1,
+        notes: `Intake at Reception Kiosk • Room: ${consultationRoom || "General OPD"}`,
+        addedBy: "Reception Desk",
+        addedByRole: "Reception"
       });
 
       setSuccessTicket(ticketNo);

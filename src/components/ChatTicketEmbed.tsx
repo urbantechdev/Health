@@ -498,7 +498,7 @@ export default function ChatTicketEmbed({
         )}
 
         {/* Interactive Action Control Toolbar */}
-        <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center gap-2">
+        <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center gap-1.5 sm:gap-2">
           {/* Invoice Actions */}
           {isInvoice && ticket.status !== "paid" && (
             <>
@@ -512,10 +512,10 @@ export default function ChatTicketEmbed({
                   }
                   updateTicketStatus("paid", `Paid via Safaricom M-Pesa / Cashier POS`);
                 }}
-                className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="w-full sm:flex-1 py-2 sm:py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
                 <CreditCard className="w-3.5 h-3.5" />
-                <span>Mark Paid / Process POS ({formatKES(ticket.totalAmount)})</span>
+                <span>Mark Paid / POS ({formatKES(ticket.totalAmount)})</span>
               </button>
 
               {ticket.status === "pending" && (
@@ -539,10 +539,10 @@ export default function ChatTicketEmbed({
                 id={`btn-convert-quote-${ticket.ticketNo}`}
                 disabled={isUpdating}
                 onClick={handleConvertPreQuoteToInvoice}
-                className="flex-1 py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="w-full sm:flex-1 py-2 sm:py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Convert to Active Invoice ({formatKES(ticket.totalAmount)})</span>
+                <span>Convert to Invoice ({formatKES(ticket.totalAmount)})</span>
               </button>
 
               <button
@@ -551,7 +551,7 @@ export default function ChatTicketEmbed({
                 onClick={() => updateTicketStatus("accepted", "Pre-quote estimate approved by patient / insurance")}
                 className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
-                Approve Quote
+                Approve
               </button>
             </>
           )}
@@ -564,7 +564,7 @@ export default function ChatTicketEmbed({
                 id={`btn-accept-transfer-${ticket.ticketNo}`}
                 disabled={isUpdating}
                 onClick={() => updateTicketStatus("accepted", `Transfer accepted into ${currentUser.role} unit`)}
-                className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="w-full sm:flex-1 py-2 sm:py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Accept Transfer</span>

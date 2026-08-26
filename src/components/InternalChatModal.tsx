@@ -46,7 +46,9 @@ import {
   PlusCircle,
   Receipt,
   FileText,
-  ArrowRightLeft
+  ArrowRightLeft,
+  ChevronLeft,
+  Menu
 } from "lucide-react";
 import { toast } from "../lib/promptService";
 
@@ -122,6 +124,8 @@ export default function InternalChatModal({
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedRecipientUser, setSelectedRecipientUser] = useState<Employee | null>(null);
   const [showRaiseTicketModal, setShowRaiseTicketModal] = useState(false);
+  // Mobile app screen mode: 'list' (channels/roles) or 'chat' (active conversation thread)
+  const [mobileView, setMobileView] = useState<"list" | "chat">("chat");
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -130,6 +134,7 @@ export default function InternalChatModal({
     if (initialTargetRole) {
       setTargetType("role");
       setSelectedRole(initialTargetRole);
+      setMobileView("chat");
     }
     if (initialPatientContext) {
       setAttachedPatient({
@@ -138,6 +143,7 @@ export default function InternalChatModal({
         patientId: initialPatientContext.patientId
       });
       setNewSubject(`Patient Case ${initialPatientContext.ticketNo}: ${initialPatientContext.patientName}`);
+      setMobileView("chat");
     }
   }, [initialTargetRole, initialPatientContext, isOpen]);
 
@@ -359,49 +365,77 @@ export default function InternalChatModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/60 backdrop-blur-xs font-sans animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center sm:p-4 bg-slate-950/70 backdrop-blur-xs font-sans animate-in fade-in duration-200">
       <div 
         id="internal-chat-modal"
-        className="bg-white border border-slate-200 rounded-3xl w-full max-w-5xl h-[92vh] max-h-[850px] shadow-2xl flex flex-col overflow-hidden"
+        className="bg-white border-0 sm:border sm:border-slate-200 rounded-none sm:rounded-3xl w-full max-w-5xl h-full h-[100dvh] sm:h-[92vh] sm:max-h-[850px] shadow-2xl flex flex-col overflow-hidden"
       >
         {/* Header Bar */}
-        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md shadow-emerald-950/50">
-              <MessageSquare className="w-5 h-5" />
+        <div className="px-3 sm:px-6 py-2.5 sm:py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Mobile Back button when in chat view */}
+            {mobileView === "chat" && (
+              <button
+                type="button"
+                onClick={() => setMobileView("list")}
+                className="sm:hidden p-1.5 -ml-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors flex items-center gap-1 shrink-0"
+                title="Back to Channels"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                <span className="text-xs font-bold">Channels</span>
+              </button>
+            )}
+
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md shrink-0">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold tracking-tight">Hospital Internal Communications & Role Inbox</h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                  <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
-                  Live Sync
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h3 className="text-xs sm:text-base font-bold tracking-tight truncate">
+                  Internal Role Chat
+                </h3>
+                <span className="flex px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 items-center gap-1 shrink-0">
+                  <Radio className="w-2 h-2 text-emerald-400 animate-pulse" />
+                  Live
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                Connected as <span className="text-white font-semibold">{currentUser.name}</span> ({currentUser.role})
+              <p className="text-[10px] sm:text-[11px] text-slate-400 truncate">
+                <span className="text-white font-semibold">{currentUser.name}</span> ({currentUser.role})
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Mobile Channel Switcher button when in chat view */}
+            {mobileView === "chat" && (
+              <button
+                type="button"
+                onClick={() => setMobileView("list")}
+                className="sm:hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                title="Switch Channel"
+              >
+                <Menu className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={onClose}
               id="btn-close-internal-chat"
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
               title="Close Chat"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
-        {/* Main Body: 2 Columns */}
-        <div className="flex-1 flex overflow-hidden">
+        {/* Main Body: Mobile Responsive (Single View on Mobile, 2 Columns on Desktop) */}
+        <div className="flex-1 flex overflow-hidden relative">
           {/* Left Navigation: Channels & Role Targets */}
-          <div className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
+          <div className={`w-full sm:w-72 md:w-80 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 ${
+            mobileView === "list" ? "flex" : "hidden sm:flex"
+          }`}>
             {/* Target Type Selector */}
-            <div className="p-3 border-b border-slate-200">
+            <div className="p-2.5 sm:p-3 border-b border-slate-200">
               <div className="grid grid-cols-3 gap-1 bg-slate-200 p-1 rounded-xl text-xs font-bold">
                 <button
                   type="button"
@@ -434,7 +468,7 @@ export default function InternalChatModal({
             </div>
 
             {/* List based on target type */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+            <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-1.5">
               {targetType === "channel" && (
                 <>
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2 py-1">
@@ -448,7 +482,10 @@ export default function InternalChatModal({
                     return (
                       <button
                         key={chan.id}
-                        onClick={() => setActiveChannel(chan.id)}
+                        onClick={() => {
+                          setActiveChannel(chan.id);
+                          setMobileView("chat");
+                        }}
                         className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left text-xs font-semibold transition-all cursor-pointer ${
                           isActive
                             ? "bg-emerald-600 text-white shadow-sm"
@@ -493,7 +530,10 @@ export default function InternalChatModal({
                     return (
                       <button
                         key={role}
-                        onClick={() => setSelectedRole(role)}
+                        onClick={() => {
+                          setSelectedRole(role);
+                          setMobileView("chat");
+                        }}
                         className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left text-xs font-semibold transition-all cursor-pointer ${
                           isActive
                             ? "bg-slate-900 text-white shadow-sm"
@@ -538,7 +578,10 @@ export default function InternalChatModal({
                     return (
                       <button
                         key={emp.id}
-                        onClick={() => setSelectedRecipientUser(emp)}
+                        onClick={() => {
+                          setSelectedRecipientUser(emp);
+                          setMobileView("chat");
+                        }}
                         className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left text-xs font-semibold transition-all cursor-pointer ${
                           isActive
                             ? "bg-indigo-600 text-white shadow-sm"
@@ -572,7 +615,7 @@ export default function InternalChatModal({
                     onClose();
                     onOpenTransferModal();
                   }}
-                  className="w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer hover:shadow-md"
+                  className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer hover:shadow-md"
                 >
                   <Activity className="w-3.5 h-3.5" />
                   Refer / Transfer Patient
@@ -582,55 +625,68 @@ export default function InternalChatModal({
           </div>
 
           {/* Right Area: Messages Thread & Composer */}
-          <div className="flex-1 flex flex-col bg-white overflow-hidden">
+          <div className={`w-full flex-1 flex flex-col bg-white overflow-hidden ${
+            mobileView === "chat" ? "flex" : "hidden sm:flex"
+          }`}>
             {/* Thread Header with Search & Filter */}
-            <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-slate-200 text-slate-700">
-                  {targetType === "channel" ? (
-                    <Users className="w-4 h-4 text-emerald-600" />
-                  ) : targetType === "role" ? (
-                    <Shield className="w-4 h-4 text-purple-600" />
-                  ) : (
-                    <User className="w-4 h-4 text-indigo-600" />
-                  )}
+            <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shrink-0">
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-slate-200 text-slate-700 shrink-0">
+                    {targetType === "channel" ? (
+                      <Users className="w-4 h-4 text-emerald-600" />
+                    ) : targetType === "role" ? (
+                      <Shield className="w-4 h-4 text-purple-600" />
+                    ) : (
+                      <User className="w-4 h-4 text-indigo-600" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate">
+                      {targetType === "channel"
+                        ? CHAT_CHANNELS.find((c) => c.id === activeChannel)?.name
+                        : targetType === "role"
+                          ? `Role Inbox: ${selectedRole}`
+                          : selectedRecipientUser
+                            ? `Direct Message: ${selectedRecipientUser.name}`
+                            : "Select a Staff Member"}
+                    </h4>
+                    <p className="text-[10px] sm:text-[11px] text-slate-500 truncate">
+                      {filteredMessages.length} message{filteredMessages.length !== 1 ? "s" : ""} in thread
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-extrabold text-slate-900">
-                    {targetType === "channel"
-                      ? CHAT_CHANNELS.find((c) => c.id === activeChannel)?.name
-                      : targetType === "role"
-                        ? `Role Inbox: ${selectedRole}`
-                        : selectedRecipientUser
-                          ? `Direct Message: ${selectedRecipientUser.name}`
-                          : "Select a Staff Member"}
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    {filteredMessages.length} message{filteredMessages.length !== 1 ? "s" : ""} in thread
-                  </p>
-                </div>
+
+                {/* Mobile switch channel shortcut */}
+                <button
+                  type="button"
+                  onClick={() => setMobileView("list")}
+                  className="sm:hidden px-2.5 py-1 text-[11px] font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg shrink-0"
+                >
+                  Change
+                </button>
               </div>
 
               {/* Filters and Raise Ticket Action */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                 <button
                   type="button"
                   id="btn-raise-ticket-chat-header"
                   onClick={() => setShowRaiseTicketModal(true)}
-                  className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xs transition-all cursor-pointer hover:shadow-md active:scale-95"
+                  className="px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-[11px] sm:text-xs font-black flex items-center gap-1.5 shadow-xs transition-all cursor-pointer hover:shadow-md active:scale-95 shrink-0"
                 >
                   <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Raise Ticket / Transfer</span>
+                  <span className="whitespace-nowrap">Raise Ticket</span>
                 </button>
 
-                <div className="relative">
+                <div className="relative flex-1 sm:flex-initial min-w-[110px]">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search thread..."
-                    className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 w-36 sm:w-44"
+                    placeholder="Search..."
+                    className="w-full pl-8 pr-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 sm:w-36 md:w-44"
                   />
                   {searchQuery && (
                     <button
@@ -645,25 +701,25 @@ export default function InternalChatModal({
                 <select
                   value={priorityFilter}
                   onChange={(e) => setPriorityFilter(e.target.value)}
-                  className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                  className="bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] sm:text-xs font-semibold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer shrink-0"
                 >
-                  <option value="all">All Priorities</option>
+                  <option value="all">All</option>
                   <option value="normal">Normal</option>
-                  <option value="urgent">Urgent Only</option>
-                  <option value="stat_emergency">🚨 STAT Code Red</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="stat_emergency">🚨 STAT</option>
                 </select>
               </div>
             </div>
 
             {/* Messages Scroll Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4 bg-slate-50/30">
               {filteredMessages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400">
-                  <div className="w-14 h-14 rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
-                    <MessageSquare className="w-7 h-7" />
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 sm:p-8 text-slate-400">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                    <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7" />
                   </div>
-                  <p className="text-sm font-bold text-slate-700">No messages in this thread yet</p>
-                  <p className="text-xs max-w-sm mt-1">
+                  <p className="text-xs sm:text-sm font-bold text-slate-700">No messages in this thread yet</p>
+                  <p className="text-[11px] sm:text-xs max-w-sm mt-1">
                     Send clinical handoffs, lab notifications, prescription queries, or general hospital memos to keep departments aligned.
                   </p>
                 </div>
@@ -685,7 +741,7 @@ export default function InternalChatModal({
                       className={`flex flex-col ${isCurrentUser ? "items-end" : "items-start"}`}
                     >
                       {/* Sender Info */}
-                      <div className="flex items-center gap-2 mb-1 px-1">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1 px-1 flex-wrap">
                         <span className="text-[11px] font-bold text-slate-700">
                           {isCurrentUser ? "You" : msg.senderName}
                         </span>
@@ -708,7 +764,7 @@ export default function InternalChatModal({
 
                       {/* Bubble */}
                       <div
-                        className={`max-w-xl rounded-2xl p-4 shadow-xs text-sm ${
+                        className={`w-full max-w-[92vw] sm:max-w-xl rounded-2xl p-3 sm:p-4 shadow-xs text-xs sm:text-sm break-words overflow-hidden ${
                           isStat
                             ? "bg-red-50 border-2 border-red-500 text-red-950 ring-2 ring-red-300"
                             : isUrgent
@@ -726,7 +782,7 @@ export default function InternalChatModal({
                           </h5>
                         )}
 
-                        <p className="whitespace-pre-wrap leading-relaxed">{msg.message}</p>
+                        <p className="whitespace-pre-wrap leading-relaxed break-words">{msg.message}</p>
 
                         {/* Embedded Actionable Chat Ticket (Invoice / Pre-Quote / Transfer / Order) */}
                         {msg.ticketAttachment && (
@@ -810,10 +866,10 @@ export default function InternalChatModal({
             </div>
 
             {/* Quick Response Templates */}
-            <div className="px-6 py-2 bg-slate-100/70 border-t border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0 scrollbar-none">
+            <div className="px-3 sm:px-6 py-1.5 sm:py-2 bg-slate-100/70 border-t border-slate-200 flex items-center gap-1.5 sm:gap-2 overflow-x-auto shrink-0 scrollbar-none">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-amber-500" />
-                Quick Memos:
+                <span className="hidden xs:inline">Quick Memos:</span>
               </span>
               {QUICK_TEMPLATES.map((tmpl, idx) => (
                 <button
@@ -824,7 +880,7 @@ export default function InternalChatModal({
                     setNewSubject(tmpl.label);
                     setNewPriority(tmpl.priority);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-200 border border-slate-200 text-[11px] font-semibold text-slate-700 whitespace-nowrap transition-colors cursor-pointer shrink-0 shadow-2xs"
+                  className="px-2 sm:px-2.5 py-1 rounded-lg bg-white hover:bg-slate-200 border border-slate-200 text-[10px] sm:text-[11px] font-semibold text-slate-700 whitespace-nowrap transition-colors cursor-pointer shrink-0 shadow-2xs"
                 >
                   {tmpl.label}
                 </button>
@@ -832,20 +888,20 @@ export default function InternalChatModal({
             </div>
 
             {/* Composer Box */}
-            <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-200 bg-white space-y-3 shrink-0">
+            <form onSubmit={handleSendMessage} className="p-2.5 sm:p-4 border-t border-slate-200 bg-white space-y-2 sm:space-y-3 shrink-0">
               {/* Linked Patient Pill (if any) */}
               {attachedPatient && (
-                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5 text-xs text-emerald-900">
-                  <div className="flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-emerald-600" />
-                    <span>
-                      Attached Case: <strong className="font-mono">{attachedPatient.ticketNo}</strong> — {attachedPatient.name}
+                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs text-emerald-900">
+                  <div className="flex items-center gap-1.5 sm:gap-2 truncate">
+                    <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="truncate">
+                      Case: <strong className="font-mono">{attachedPatient.ticketNo}</strong> — {attachedPatient.name}
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setAttachedPatient(null)}
-                    className="text-emerald-700 hover:text-emerald-950 font-bold"
+                    className="text-emerald-700 hover:text-emerald-950 font-bold p-1 shrink-0"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -853,86 +909,88 @@ export default function InternalChatModal({
               )}
 
               {/* Subject & Controls Row */}
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <input
                   type="text"
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
-                  placeholder="Subject / Summary (e.g. STAT Lab Request, Shift Handover)"
-                  className="flex-1 min-w-[200px] px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Subject / Summary (e.g. STAT Lab Request)"
+                  className="w-full sm:flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                 />
 
-                {/* Priority Selector */}
-                <select
-                  value={newPriority}
-                  onChange={(e) => setNewPriority(e.target.value as any)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border focus:outline-hidden cursor-pointer ${
-                    newPriority === "stat_emergency"
-                      ? "bg-red-100 text-red-800 border-red-300 font-extrabold ring-2 ring-red-400"
-                      : newPriority === "urgent"
-                        ? "bg-amber-100 text-amber-800 border-amber-300"
-                        : "bg-slate-50 text-slate-700 border-slate-200"
-                  }`}
-                >
-                  <option value="normal">Priority: Normal</option>
-                  <option value="urgent">Priority: Urgent ⚠️</option>
-                  <option value="stat_emergency">Priority: 🚨 STAT CODE RED</option>
-                </select>
+                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-0.5 sm:pb-0 scrollbar-none">
+                  {/* Priority Selector */}
+                  <select
+                    value={newPriority}
+                    onChange={(e) => setNewPriority(e.target.value as any)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold border focus:outline-hidden cursor-pointer shrink-0 ${
+                      newPriority === "stat_emergency"
+                        ? "bg-red-100 text-red-800 border-red-300 font-extrabold ring-2 ring-red-400"
+                        : newPriority === "urgent"
+                          ? "bg-amber-100 text-amber-800 border-amber-300"
+                          : "bg-slate-50 text-slate-700 border-slate-200"
+                    }`}
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="urgent">Urgent ⚠️</option>
+                    <option value="stat_emergency">🚨 STAT RED</option>
+                  </select>
 
-                {/* Raise Structured Ticket in Chat */}
-                <button
-                  type="button"
-                  id="btn-raise-ticket-composer"
-                  onClick={() => setShowRaiseTicketModal(true)}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Receipt className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Raise Invoice / Transfer</span>
-                </button>
-
-                {/* Attach Patient Button */}
-                <div className="relative">
+                  {/* Raise Structured Ticket in Chat */}
                   <button
                     type="button"
-                    onClick={() => setShowPatientPicker(!showPatientPicker)}
-                    className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                    id="btn-raise-ticket-composer"
+                    onClick={() => setShowRaiseTicketModal(true)}
+                    className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                   >
-                    <Paperclip className="w-3.5 h-3.5 text-slate-500" />
-                    Attach Patient Case
-                    <ChevronDown className="w-3 h-3 text-slate-400" />
+                    <Receipt className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Invoice/Transfer</span>
                   </button>
 
-                  {/* Patient Picker Dropdown */}
-                  {showPatientPicker && (
-                    <div className="absolute right-0 bottom-full mb-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-20 max-h-56 overflow-y-auto space-y-1">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2 py-1">
-                        Active Hospital Tickets
-                      </p>
-                      {activeTickets.length === 0 ? (
-                        <p className="text-xs text-slate-400 p-2 text-center">No active queue tickets</p>
-                      ) : (
-                        activeTickets.map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => {
-                              setAttachedPatient({ name: t.patientName, ticketNo: t.ticketNo, patientId: t.id });
-                              setShowPatientPicker(false);
-                            }}
-                            className="w-full flex items-center justify-between p-2 rounded-xl text-left hover:bg-slate-100 text-xs transition-colors cursor-pointer"
-                          >
-                            <div>
-                              <p className="font-bold text-slate-800">{t.patientName}</p>
-                              <p className="text-[10px] text-slate-500 capitalize">{t.currentDepartment} visit</p>
-                            </div>
-                            <span className="font-mono text-emerald-700 font-bold text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded-md">
-                              {t.ticketNo}
-                            </span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
+                  {/* Attach Patient Button */}
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowPatientPicker(!showPatientPicker)}
+                      className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] sm:text-xs font-bold text-slate-700 flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <Paperclip className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Attach Case</span>
+                      <ChevronDown className="w-3 h-3 text-slate-400" />
+                    </button>
+
+                    {/* Patient Picker Dropdown */}
+                    {showPatientPicker && (
+                      <div className="absolute right-0 bottom-full mb-2 w-72 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-20 max-h-56 overflow-y-auto space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2 py-1">
+                          Active Hospital Tickets
+                        </p>
+                        {activeTickets.length === 0 ? (
+                          <p className="text-xs text-slate-400 p-2 text-center">No active queue tickets</p>
+                        ) : (
+                          activeTickets.map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => {
+                                setAttachedPatient({ name: t.patientName, ticketNo: t.ticketNo, patientId: t.id });
+                                setShowPatientPicker(false);
+                              }}
+                              className="w-full flex items-center justify-between p-2 rounded-xl text-left hover:bg-slate-100 text-xs transition-colors cursor-pointer"
+                            >
+                              <div>
+                                <p className="font-bold text-slate-800">{t.patientName}</p>
+                                <p className="text-[10px] text-slate-500 capitalize">{t.currentDepartment} visit</p>
+                              </div>
+                              <span className="font-mono text-emerald-700 font-bold text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                                {t.ticketNo}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -948,22 +1006,22 @@ export default function InternalChatModal({
                     }
                   }}
                   rows={2}
-                  placeholder={`Type internal message to ${
+                  placeholder={`Message ${
                     targetType === "channel"
                       ? `#${activeChannel}`
                       : targetType === "role"
-                        ? `all ${selectedRole} staff`
-                        : selectedRecipientUser?.name || "recipient"
-                  }... (Press Enter to send)`}
-                  className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 resize-none"
+                        ? `all ${selectedRole}`
+                        : selectedRecipientUser?.name || "staff"
+                  }...`}
+                  className="flex-1 p-2.5 sm:p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 resize-none"
                 />
 
                 <button
                   type="submit"
                   disabled={!newMessage.trim()}
-                  className="p-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl shadow-md shadow-emerald-950/30 transition-all active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
+                  className="p-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
                 >
-                  <Send className="w-5 h-5" />
+                  <Send className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
             </form>

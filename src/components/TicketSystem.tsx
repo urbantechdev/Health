@@ -164,22 +164,42 @@ export default function TicketSystem() {
 
   const handleTestVoiceCall = async () => {
     voiceAnnouncer.resumeAudioContext();
-    toast.info("Testing Voice Queue Announcement: Ticket 52TC ➔ Room 5, Doctor", "Voice PA System");
+    toast.info("Testing Voice Queue Announcement: Ticket 52TC ➔ Room 5", "Voice PA System");
     await voiceAnnouncer.announceTurnArrived({
       ticketNo: "52TC",
       patientName: "Mwangi Karanja",
       roomOrDesk: voiceConfig.defaultRoom || "Room 5",
-      departmentOrRole: "Doctor",
+      departmentOrRole: "Consultation",
       repeatCount: 1
     });
+  };
+
+  const resolveTicketDestination = (ticket: SystemTicket, fallbackRoom?: string) => {
+    if (fallbackRoom && fallbackRoom.trim()) {
+      return fallbackRoom.replace(/,\s*doctor$/i, "").replace(/\s+doctor$/i, "").trim() || "Room 5";
+    }
+    if (ticket.consultationRoom && ticket.consultationRoom.trim()) {
+      return ticket.consultationRoom.replace(/,\s*doctor$/i, "").replace(/\s+doctor$/i, "").trim();
+    }
+    const dept = (ticket.department || "").toLowerCase();
+    if (dept === "laboratory" || dept === "lab") return "Laboratory Window A";
+    if (dept === "radiology" || dept === "xray") return "X-Ray Room 1";
+    if (dept === "pharmacy") return "Pharmacy Dispensing Counter";
+    if (dept === "reception" || dept === "triage") return "Triage & Vitals Station";
+    if (dept === "billing" || dept === "cashier") return "Cashier & Billing Desk";
+    if (dept === "labour_room" || dept === "maternity") return "Maternity Labour Room";
+    if (dept === "gyna") return "Obstetrics & Gyna Clinic";
+    if (dept === "dental") return "Dental Clinic";
+    if (dept === "optical" || dept === "eye") return "Eye Clinic";
+    return voiceConfig.defaultRoom || "Room 5";
   };
 
   const handleVoiceCallTicket = async (ticket: SystemTicket, destinationRoom?: string) => {
     setIsCallingVoice(true);
     voiceAnnouncer.resumeAudioContext();
 
-    const room = destinationRoom || ticket.consultationRoom || voiceConfig.defaultRoom || "Room 5, Doctor";
-    const deptRole = ticket.specialistTitle || ticket.assignedSpecialistName || (ticket.department === "reception" ? "Triage Desk" : `${ticket.department} Counter`);
+    const room = resolveTicketDestination(ticket, destinationRoom);
+    const deptRole = ticket.specialistTitle || ticket.assignedSpecialistName || (ticket.department === "reception" ? "Triage Desk" : `${ticket.department} Station`);
 
     try {
       // 1. Trigger Voice Announcement with Banking Chime
@@ -732,7 +752,7 @@ export default function TicketSystem() {
               </span>
             </div>
             <p className="text-[11px] text-slate-300 mt-0.5">
-              Live automated broadcast for ticket creation & queue turn call-outs (e.g. <span className="font-mono text-emerald-300 font-bold">"Ticket No 52TC, please go to Room 5, Doctor"</span>)
+              Live automated broadcast for ticket creation & queue turn call-outs (e.g. <span className="font-mono text-emerald-300 font-bold">"Ticket No 52TC, please go to Room 5"</span>)
             </p>
           </div>
         </div>
@@ -1059,13 +1079,13 @@ export default function TicketSystem() {
                         {ticket.status !== "closed" && (
                           <button
                             onClick={() => {
-                              const defaultR = ticket.consultationRoom || (ticket.department === "reception" ? "Room 5, Doctor" : `${ticket.department.toUpperCase()} Counter`);
+                              const defaultR = resolveTicketDestination(ticket);
                               setCallingTicketModal({
                                 ticket,
                                 selectedRoom: defaultR
                               });
                             }}
-                            title="Call Patient Turn via PA Voice Broadcast (e.g. Ticket No 52TC, please go to Room 5, Doctor)"
+                            title="Call Patient Turn via PA Voice Broadcast (e.g. Ticket No 52TC, please go to Room 5)"
                             className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-1 shadow-xs animate-pulse"
                           >
                             <Volume2 className="w-3 h-3 text-indigo-200" />
@@ -1741,7 +1761,7 @@ export default function TicketSystem() {
                   Vocal Broadcast Preview:
                 </p>
                 <p className="text-sm font-black text-indigo-950 font-mono">
-                  "Ticket No {callingTicketModal.ticket.ticketNumber}, please go to {callingTicketModal.selectedRoom || "Room 5, Doctor"}"
+                  "Ticket No {callingTicketModal.ticket.ticketNumber}, please go to {callingTicketModal.selectedRoom || "Room 5"}"
                 </p>
               </div>
 
@@ -1750,14 +1770,14 @@ export default function TicketSystem() {
                 <label className="block font-bold text-slate-700">Select Destination Room / Station *</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    "Room 5, Doctor",
+                    "Room 5",
                     "Room 1, Consultation",
-                    "Room 2, Pediatrician",
+                    "Room 2, Pediatric Clinic",
                     "Room 3, Specialist Clinic",
                     "Room 4, Gynaecology",
                     "Triage & Vitals Station",
                     "Laboratory Window A",
-                    "Pharmacy Dispensing B",
+                    "Pharmacy Dispensing Counter",
                     "X-Ray Radiology Room",
                     "Cashier & Billing Desk"
                   ].map((room) => (
@@ -1782,7 +1802,7 @@ export default function TicketSystem() {
                     type="text"
                     value={callingTicketModal.selectedRoom}
                     onChange={(e) => setCallingTicketModal({ ...callingTicketModal, selectedRoom: e.target.value })}
-                    placeholder="e.g. Room 5, Doctor"
+                    placeholder="e.g. Room 5 or Laboratory Window A"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-indigo-600"
                   />
                 </div>
@@ -1903,7 +1923,7 @@ export default function TicketSystem() {
                   <label className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70">
                     <div>
                       <span className="font-bold text-slate-800 block">Announce Queue Calls & Turn Arrival</span>
-                      <span className="text-[10px] text-slate-500">Vocalizes: "Ticket No 52TC, please go to Room 5, Doctor"</span>
+                      <span className="text-[10px] text-slate-500">Vocalizes: "Ticket No 52TC, please go to Room 5"</span>
                     </div>
                     <input
                       type="checkbox"
@@ -1982,7 +2002,7 @@ export default function TicketSystem() {
                   type="text"
                   value={voiceConfig.defaultRoom}
                   onChange={(e) => updateVoiceSettings({ defaultRoom: e.target.value })}
-                  placeholder="e.g. Room 5, Doctor"
+                  placeholder="e.g. Room 5 or Consultation Room 1"
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-indigo-600"
                 />
               </div>

@@ -113,6 +113,85 @@ body,
   animation: neonBorderRun 3s linear infinite;
 }
 
+@keyframes textGradientCycle {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-text-flow {
+  background: linear-gradient(
+    90deg,
+    #60a5fa,
+    #34d399,
+    #fbbf24,
+    #f472b6,
+    #a78bfa,
+    #38bdf8,
+    #60a5fa
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: textGradientCycle 6s ease infinite;
+}
+
+@keyframes colorCycleShifting {
+  0% {
+    color: #047857; /* Emerald 700 */
+    text-shadow: 0 0 10px rgba(52, 211, 153, 0.4);
+  }
+  20% {
+    color: #0284c7; /* Sky 600 */
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
+  }
+  40% {
+    color: #4f46e5; /* Indigo 600 */
+    text-shadow: 0 0 10px rgba(129, 140, 248, 0.45);
+  }
+  60% {
+    color: #9333ea; /* Purple 600 */
+    text-shadow: 0 0 10px rgba(216, 180, 254, 0.45);
+  }
+  80% {
+    color: #e11d48; /* Rose 600 */
+    text-shadow: 0 0 10px rgba(251, 113, 133, 0.45);
+  }
+  100% {
+    color: #047857; /* Emerald 700 */
+    text-shadow: 0 0 10px rgba(52, 211, 153, 0.4);
+  }
+}
+
+.animate-header-subtext-color {
+  animation: colorCycleShifting 5s ease-in-out infinite;
+  display: inline-block;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+@keyframes colorShiftGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.4));
+  }
+  33% {
+    filter: drop-shadow(0 0 8px rgba(52, 211, 153, 0.4));
+  }
+  66% {
+    filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.4));
+  }
+}
+
+.animate-text-glow-shift {
+  animation: colorShiftGlow 6s ease infinite;
+}
+
 /* 
  * Global Block & Card Enhancements
  * Adds a subtle, faded, silent accent edge on the right side of primary cards/blocks,
@@ -358,4 +437,75 @@ a[role="button"]:active,
 
 .animate-green-ray-sweep {
   animation: greenRaySweep 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Gemini Searchbar Inspired Rainbow Shadow Motion Effect */
+@keyframes geminiRainbowSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes geminiRainbowShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes geminiPulse {
+  0%, 100% {
+    opacity: 0.6;
+    filter: blur(14px);
+    transform: scale(0.985);
+  }
+  50% {
+    opacity: 0.92;
+    filter: blur(20px);
+    transform: scale(1.02);
+  }
+}
+
+.gemini-rainbow-spin {
+  background: conic-gradient(
+    from 0deg,
+    #4285F4 0deg,
+    #9B72CB 60deg,
+    #D96570 120deg,
+    #F4B400 180deg,
+    #0F9D58 240deg,
+    #24C6DC 300deg,
+    #8B5CF6 330deg,
+    #4285F4 360deg
+  );
+  animation: geminiRainbowSpin 7s linear infinite;
+}
+
+.gemini-rainbow-linear {
+  background: linear-gradient(
+    90deg,
+    #4285F4,
+    #9B72CB,
+    #D96570,
+    #F4B400,
+    #0F9D58,
+    #24C6DC,
+    #8B5CF6,
+    #EC4899,
+    #4285F4
+  );
+  background-size: 300% 300%;
+  animation: geminiRainbowShift 4.5s ease infinite;
+}
+
+.gemini-rainbow-pulse {
+  animation: geminiPulse 4s ease-in-out infinite;
 }

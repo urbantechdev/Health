@@ -31,11 +31,14 @@ import {
   History,
   CreditCard,
   Phone,
-  User
+  User,
+  ShoppingCart
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import KenyanHospitalFormsModal, { KenyanFormType, COMMON_ICD10_KENYA } from "./KenyanHospitalFormsModal";
 import PatientHistoryLookupModal from "./PatientHistoryLookupModal";
+import PatientCartPOSModal from "./PatientCartPOSModal";
+import { syncDoctorConsultationToCart } from "../lib/patientCartService";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 
@@ -74,6 +77,9 @@ export default function DoctorsDesk({
   
   // Audio-visual routing modal state
   const [routingCue, setRoutingCue] = useState<RoutingCueInfo | null>(null);
+
+  // Patient Cart & POS Folio Modal State
+  const [showCartModal, setShowCartModal] = useState(false);
 
   // Printing digital prescription states
   const [printOpen, setPrintOpen] = useState(false);
@@ -257,12 +263,13 @@ export default function DoctorsDesk({
       setIncomingPatientPrompt(null);
       
       // PA Voice Queue Announcement with Banking/Hospital Chime
-      const room = ticket.consultationRoom || "Room 5, Doctor";
+      const rawRoom = (ticket.consultationRoom || "Room 5").trim();
+      const room = rawRoom.replace(/,\s*doctor$/i, "").replace(/\s+doctor$/i, "").trim() || "Room 5";
       voiceAnnouncer.announceTurnArrived({
         ticketNo: ticket.ticketNo,
         patientName: ticket.patientName,
         roomOrDesk: room,
-        departmentOrRole: "Doctor"
+        departmentOrRole: "Consultation"
       }).catch(err => console.warn("Voice broadcast error:", err));
     } catch (e) {
       console.error("Error accepting incoming patient:", e);
@@ -410,6 +417,30 @@ export default function DoctorsDesk({
         referrals: compiledReferrals,
         sourceStation: "Doctor's Desk"
       });
+
+      // 2. Synchronize Consultation Fee, Prescriptions, and Diagnostic Referrals to Patient's Live Cart
+      try {
+        await syncDoctorConsultationToCart({
+          patientId: selectedPatientId,
+          patientName: selectedPatient.patientName,
+          nationalId: selectedPatient.nationalId,
+          phone: selectedPatient.phone,
+          ticketNo: selectedPatient.activeTicketNo,
+          doctorName: "Doctor on Duty",
+          prescriptions: draftPrescriptions.map(p => ({
+            drugName: p.drugName,
+            quantity: p.quantity,
+            dosage: p.dosage,
+            unitPrice: p.price
+          })),
+          referrals: compiledReferrals.map(r => ({
+            testName: r.testName,
+            department: r.department
+          }))
+        });
+      } catch (cartErr) {
+        console.warn("Patient cart auto-sync notice:", cartErr);
+      }
 
       // 3. Automated Routing logic
       // Find active queue ticket for this patient (serving in doctor)
@@ -781,6 +812,16 @@ export default function DoctorsDesk({
                         <span>Staff Chat</span>
                       </button>
                     )}
+                    <button
+                      id="btn-open-patient-cart"
+                      type="button"
+                      onClick={() => setShowCartModal(true)}
+                      className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-emerald-200 transition-colors cursor-pointer"
+                      title="View & Add Live Charges to Patient Cart"
+                    >
+                      <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Patient Cart</span>
+                    </button>
                   </div>
 
                   {/* Primary Kenyan Medical Forms Trigger Button */}
@@ -1447,6 +1488,21 @@ export default function DoctorsDesk({
           toast.success(`Loaded clinical chart for ${p.patientName}`, "Patient Record Retrieved");
         }}
       />
+
+      {/* Patient Live Cart & Charges Modal */}
+      {selectedPatient && (
+        <PatientCartPOSModal
+          isOpen={showCartModal}
+          onClose={() => setShowCartModal(false)}
+          patientId={selectedPatient.id}
+          patientName={selectedPatient.patientName}
+          nationalId={selectedPatient.nationalId}
+          phone={selectedPatient.phone}
+          ticketNo={selectedPatient.activeTicketNo}
+          currentUser={{ name: "Dr. Attending Physician", role: "Doctor" }}
+          medications={medications}
+        />
+      )}
     </div>
   );
 }

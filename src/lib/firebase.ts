@@ -31,3 +31,23 @@ export const db = initializeFirestore(
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
+/**
+ * Recursively removes all `undefined` fields from an object to ensure Firestore compatibility,
+ * preventing 'Unsupported field value: undefined' errors in setDoc, addDoc, and updateDoc.
+ */
+export function cleanFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined || typeof obj !== "object") {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => cleanFirestoreData(item)) as unknown as T;
+  }
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj as Record<string, any>)) {
+    if (value !== undefined) {
+      result[key] = typeof value === "object" && value !== null ? cleanFirestoreData(value) : value;
+    }
+  }
+  return result as T;
+}
+

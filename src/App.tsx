@@ -1329,7 +1329,7 @@ export default function App() {
                     Tier {tenant.type}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-slate-900 font-bold truncate hidden sm:block mt-0.5 tracking-wide">
+                <p className="text-xs sm:text-sm font-bold truncate hidden sm:block mt-0.5 tracking-wide animate-header-subtext-color">
                   Hospital ERP Management System
                 </p>
               </div>

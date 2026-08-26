@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { db } from "../lib/firebase";
+import { db, cleanFirestoreData } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
 import { Medication, QueueTicket, PrescriptionItem, Invoice, MedicalRecord } from "../types";
 import { findUnifiedPatient } from "../lib/patientSyncService";
@@ -249,7 +249,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
         timestamp: new Date().toISOString(),
       };
 
-      await addDoc(collection(db, "invoices"), invoiceData);
+      await addDoc(collection(db, "invoices"), cleanFirestoreData(invoiceData));
 
       // 3. Update queue ticket -> route to billing
       if (ticketId) {

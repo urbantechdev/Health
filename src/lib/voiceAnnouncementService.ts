@@ -36,7 +36,7 @@ const DEFAULT_CONFIG: VoiceAnnouncementConfig = {
   rate: 0.92,
   pitch: 1.04,
   chimeType: "banking_ding_dong",
-  defaultRoom: "Room 5, Doctor"
+  defaultRoom: "Room 5"
 };
 
 type Listener = (active: ActiveAnnouncement | null) => void;
@@ -62,7 +62,11 @@ class VoiceAnnouncementService {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+        const parsed = JSON.parse(raw);
+        if (parsed.defaultRoom) {
+          parsed.defaultRoom = parsed.defaultRoom.replace(/,\s*doctor$/i, "").replace(/\s+doctor$/i, "").trim() || "Room 5";
+        }
+        return { ...DEFAULT_CONFIG, ...parsed };
       }
     } catch (e) {
       console.warn("Failed to load voice config from localStorage:", e);
@@ -215,7 +219,8 @@ class VoiceAnnouncementService {
 
   /**
    * Announce when a ticket's turn has arrived in the queue (Banking / Hospital Counter style)
-   * Example: "Ticket number 5 2 T C, please go to Room 5, Doctor"
+   * Example: "Ticket number 5 2 T C, please go to Room 5"
+   * Example: "Ticket number 5 2 T C, please go to Laboratory Window A"
    */
   public async announceTurnArrived(params: {
     ticketNo: string;
@@ -226,22 +231,35 @@ class VoiceAnnouncementService {
   }): Promise<void> {
     if (!this.config.enabled || !this.config.announceOnTurnArrived) return;
 
-    const room = (params.roomOrDesk || this.config.defaultRoom || "Room 5, Doctor").trim();
+    // Resolve destination specified from ticket and remove any trailing doctor word
+    let rawRoom = (params.roomOrDesk || this.config.defaultRoom || "Room 5").trim();
+    let cleanRoom = rawRoom
+      .replace(/,\s*doctor$/i, "")
+      .replace(/-\s*doctor$/i, "")
+      .replace(/\s+doctor$/i, "")
+      .trim();
+
+    if (!cleanRoom) {
+      if (params.departmentOrRole && !/^doctor$/i.test(params.departmentOrRole.trim())) {
+        cleanRoom = params.departmentOrRole.trim();
+      } else {
+        cleanRoom = "Room 5";
+      }
+    }
+
     const spokenTicket = this.formatTicketForSpeech(params.ticketNo);
 
-    // Standard banking / hospital announcement template
-    // "Ticket number 5 2 T C, please go to Room 5, Doctor"
-    let spokenText = `Ticket number ${spokenTicket}, please go to ${room}`;
-    if (params.departmentOrRole && !room.toLowerCase().includes(params.departmentOrRole.toLowerCase())) {
-      spokenText += `, ${params.departmentOrRole}`;
-    }
+    // Standard announcement template using the exact destination specified from the ticket
+    // e.g. "Ticket number 5 2 T C, please go to Room 5"
+    // e.g. "Ticket number T C K, 8 4 9 2, please go to Laboratory Window A"
+    const spokenText = `Ticket number ${spokenTicket}, please go to ${cleanRoom}`;
 
     const item: ActiveAnnouncement = {
       id: `ann-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       ticketNo: params.ticketNo,
       patientName: params.patientName,
-      roomOrDesk: room,
-      departmentOrRole: params.departmentOrRole || "Doctor",
+      roomOrDesk: cleanRoom,
+      departmentOrRole: params.departmentOrRole || "Consultation",
       announcementType: "turn_arrived",
       formattedText: spokenText,
       timestamp: Date.now()
