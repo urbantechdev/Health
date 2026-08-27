@@ -20,7 +20,8 @@ import {
   CircleDot,
   ArrowRightLeft,
   MessageSquare,
-  Bed
+  Bed,
+  HeartPulse
 } from "lucide-react";
 import { SystemRole, getRoleConfig } from "../constants/roles";
 
@@ -67,6 +68,12 @@ export default function DesktopBottomNav({
       label: "Reception",
       icon: UserPlus,
       shortcut: "Alt+2",
+    },
+    {
+      id: "triage",
+      label: "Nurse Triage",
+      icon: HeartPulse,
+      shortcut: "Alt+N",
     },
     {
       id: "admissions",

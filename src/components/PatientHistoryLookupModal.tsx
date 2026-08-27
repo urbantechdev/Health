@@ -448,7 +448,14 @@ export default function PatientHistoryLookupModal({
                         </span>
                         <span>•</span>
                         <span>
-                          Blood Type: <strong className="text-rose-700 font-bold">{selectedPatient.bloodType || "O+"}</strong>
+                          Blood Type:{" "}
+                          {selectedPatient.bloodType === "Not Sure" || !selectedPatient.bloodType ? (
+                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                              Not Sure (Lab Pending)
+                            </span>
+                          ) : (
+                            <strong className="text-rose-700 font-bold">{selectedPatient.bloodType}</strong>
+                          )}
                         </span>
                       </div>
                     </div>

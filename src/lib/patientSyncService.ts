@@ -220,7 +220,7 @@ export const upsertUnifiedPatientRecord = async (
         phone: cleanPhone || "N/A",
         age: numericAge,
         gender: input.gender || "Male",
-        bloodType: input.bloodType || "O+",
+        bloodType: input.bloodType || "Not Sure",
         shaEligible: input.shaEligible || "not_eligible",
         shaId: input.shaId || "",
         visits: newVisit ? [newVisit] : [{

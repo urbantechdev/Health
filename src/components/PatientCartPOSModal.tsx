@@ -83,6 +83,17 @@ export default function PatientCartPOSModal({
   const [mpesaSuccess, setMpesaSuccess] = useState(false);
   const [mpesaReceiptNo, setMpesaReceiptNo] = useState("");
 
+  // Insurance Card & Co-pay specifics
+  const [insuranceProvider, setInsuranceProvider] = useState("Jubilee Health Insurance");
+  const [cardMemberNumber, setCardMemberNumber] = useState("JUB-882910-01");
+  const [preAuthCode, setPreAuthCode] = useState("AUTH-" + Math.floor(10000 + Math.random() * 90000));
+  const [copayMethod, setCopayMethod] = useState<"M-PESA" | "Cash" | "Card">("M-PESA");
+  const [copayMpesaPhone, setCopayMpesaPhone] = useState(phone || "07" + Math.floor(10000000 + Math.random() * 90000000));
+  const [copayMpesaTriggering, setCopayMpesaTriggering] = useState(false);
+  const [copayMpesaSuccess, setCopayMpesaSuccess] = useState(false);
+  const [copayMpesaReceiptNo, setCopayMpesaReceiptNo] = useState("");
+  const [cashTendered, setCashTendered] = useState<number | "">("");
+
   // Splits & Discounts
   const [shaCover, setShaCover] = useState(0);
   const [insuranceCover, setInsuranceCover] = useState(0);
@@ -163,7 +174,25 @@ export default function PatientCartPOSModal({
       const generatedReceipt = `Q${new Date().getFullYear().toString().slice(-2)}${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       setMpesaReceiptNo(generatedReceipt);
       toast.success(`M-Pesa payment received! Receipt No: ${generatedReceipt}`, "Payment Confirmed");
-    }, 2200);
+    }, 1800);
+  };
+
+  const handleCopayMpesaStkPush = () => {
+    if (!copayMpesaPhone || copayMpesaPhone.length < 9) {
+      toast.warning("Please enter a valid Kenyan Safaricom phone number (e.g. 0712345678).", "Phone Required");
+      return;
+    }
+    setCopayMpesaTriggering(true);
+    toast.info(`STK Push prompt dispatched to ${copayMpesaPhone} for Balance KES ${netPayable.toLocaleString()}...`, "M-Pesa Co-Pay Express");
+    
+    // Simulate real-time Safaricom callback
+    setTimeout(() => {
+      setCopayMpesaTriggering(false);
+      setCopayMpesaSuccess(true);
+      const generatedReceipt = `QK${new Date().getFullYear().toString().slice(-2)}${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      setCopayMpesaReceiptNo(generatedReceipt);
+      toast.success(`Co-pay balance of KES ${netPayable.toLocaleString()} received via M-Pesa! Receipt: ${generatedReceipt}`, "Co-Pay Confirmed");
+    }, 1800);
   };
 
   const handleFinalCheckout = async () => {
@@ -172,11 +201,18 @@ export default function PatientCartPOSModal({
       return;
     }
 
+    const isSplitInsurance = (paymentMethod === "Insurance" || paymentMethod === "Split") && insuranceCover > 0 && netPayable > 0;
+    const finalMethodLabel = isSplitInsurance
+      ? `Insurance Card (KES ${insuranceCover.toLocaleString()}) + ${copayMethod} (KES ${netPayable.toLocaleString()})`
+      : paymentMethod;
+
     const confirmed = await modernConfirm(
-      `Finalize checkout for ${patientName} totaling KES ${netPayable.toLocaleString()} via ${paymentMethod}?`,
+      isSplitInsurance
+        ? `Finalize split checkout for ${patientName}? Pay KES ${insuranceCover.toLocaleString()} with Insurance Card (${insuranceProvider}) and remaining balance of KES ${netPayable.toLocaleString()} via ${copayMethod}?`
+        : `Finalize checkout for ${patientName} totaling KES ${netPayable.toLocaleString()} via ${paymentMethod}?`,
       {
-        title: "Confirm Patient Cart Checkout",
-        confirmText: "Complete & Issue Invoice",
+        title: "Confirm Patient Cart Settlement",
+        confirmText: "Complete & Issue Tax Invoice",
         cancelText: "Cancel"
       }
     );
@@ -185,24 +221,37 @@ export default function PatientCartPOSModal({
 
     setCheckoutSubmitting(true);
     try {
+      const activeReceipt = copayMpesaReceiptNo || mpesaReceiptNo || (paymentMethod === "M-PESA" ? `Q${Math.random().toString(36).substring(2, 9).toUpperCase()}` : undefined);
+      const calculatedChange = typeof cashTendered === "number" && cashTendered > netPayable ? cashTendered - netPayable : 0;
+
       const { invoice } = await checkoutPatientCart({
         patientId,
         patientName,
         nationalId,
-        phone: mpesaPhone || phone,
-        paymentMethod,
+        phone: copayMpesaPhone || mpesaPhone || phone,
+        paymentMethod: finalMethodLabel,
         splitBreakdown: {
           sha: shaCover,
           insurance: insuranceCover,
-          outOfPocket: paymentMethod === "Split" ? Math.max(0, netPayable) : netPayable,
+          outOfPocket: isSplitInsurance ? netPayable : (paymentMethod === "Split" ? Math.max(0, netPayable) : netPayable),
+          insuranceCoveredAmount: insuranceCover,
+          copayAmount: netPayable,
+          copayPaymentMethod: isSplitInsurance ? copayMethod : (paymentMethod === "Insurance" ? "Insurance" : paymentMethod),
+          insuranceProvider,
+          policyNumber: cardMemberNumber,
+          cardMemberNumber,
+          preAuthCode,
+          copayMpesaReceiptNumber: activeReceipt,
+          cashTendered: typeof cashTendered === "number" ? cashTendered : undefined,
+          cashChange: calculatedChange,
           discount: discountAmount
         },
-        mpesaReceiptNumber: mpesaReceiptNo || (paymentMethod === "M-PESA" ? `Q${Math.random().toString(36).substring(2, 9).toUpperCase()}` : undefined),
+        mpesaReceiptNumber: activeReceipt,
         transactionRef: `POS-${Date.now().toString().slice(-6)}`,
         cashierName: currentUser.name,
         cashierRole: currentUser.role,
         discountAmount,
-        notes: checkoutNotes
+        notes: checkoutNotes || (isSplitInsurance ? `Card Cover: KES ${insuranceCover}, Balance paid via ${copayMethod}` : undefined)
       });
 
       toast.success(`Checkout completed! Tax Invoice ${invoice.id} generated and queue cleared.`, "Patient Cleared");
@@ -575,13 +624,13 @@ export default function PatientCartPOSModal({
                   {/* Payment Method Selector */}
                   <div className="space-y-1.5 mb-4">
                     <label className="text-xs font-bold text-slate-700">Select Settlement Mode:</label>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                       {[
-                        { id: "M-PESA", label: "Safaricom M-Pesa", icon: Smartphone, color: "text-emerald-600" },
+                        { id: "M-PESA", label: "M-Pesa Express", icon: Smartphone, color: "text-emerald-600" },
                         { id: "Cash", label: "Cash / POS", icon: DollarSign, color: "text-amber-600" },
-                        { id: "SHA/NHIF", label: "SHA / Taifa Care", icon: ShieldCheck, color: "text-blue-600" },
-                        { id: "Insurance", label: "Private Insurance", icon: CreditCard, color: "text-indigo-600" },
-                        { id: "Split", label: "Split Multi-Pay", icon: Tag, color: "text-purple-600" }
+                        { id: "Insurance", label: "Insurance Card", icon: CreditCard, color: "text-indigo-600" },
+                        { id: "Split", label: "Card + M-Pesa / Cash", icon: Tag, color: "text-purple-600" },
+                        { id: "SHA/NHIF", label: "SHA / Taifa Care", icon: ShieldCheck, color: "text-blue-600" }
                       ].map((mode) => {
                         const Icon = mode.icon;
                         const active = paymentMethod === mode.id;
@@ -589,28 +638,37 @@ export default function PatientCartPOSModal({
                           <button
                             key={mode.id}
                             type="button"
-                            onClick={() => setPaymentMethod(mode.id as any)}
-                            className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                            onClick={() => {
+                              setPaymentMethod(mode.id as any);
+                              if (mode.id === "Insurance" && insuranceCover === 0) {
+                                // Default to partial or full cover
+                                setInsuranceCover(Math.min(5000, subtotal));
+                              }
+                              if (mode.id === "Split" && insuranceCover === 0) {
+                                setInsuranceCover(Math.floor(subtotal / 2));
+                              }
+                            }}
+                            className={`p-2 rounded-xl border text-left flex items-center gap-1.5 transition-all cursor-pointer ${
                               active
                                 ? "bg-slate-900 text-white border-slate-900 shadow-sm"
                                 : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
                             }`}
                           >
-                            <Icon className={`w-4 h-4 ${active ? "text-emerald-400" : mode.color}`} />
-                            <span className="text-xs font-bold">{mode.label}</span>
+                            <Icon className={`w-3.5 h-3.5 ${active ? "text-emerald-400" : mode.color}`} />
+                            <span className="text-[11px] font-bold">{mode.label}</span>
                           </button>
                         );
                       })}
                     </div>
                   </div>
 
-                  {/* M-PESA STK Push Panel */}
+                  {/* Standalone M-PESA STK Push Panel */}
                   {paymentMethod === "M-PESA" && (
                     <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2 mb-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
                           <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                          M-Pesa STK Express Push
+                          Safaricom M-Pesa Direct Checkout
                         </span>
                         {mpesaSuccess && (
                           <span className="text-[10px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full">
@@ -632,7 +690,7 @@ export default function PatientCartPOSModal({
                           disabled={mpesaTriggering}
                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                         >
-                          {mpesaTriggering ? "Sending Prompt..." : "Send STK Push"}
+                          {mpesaTriggering ? "Sending Prompt..." : `Send STK Push (KES ${netPayable.toLocaleString()})`}
                         </button>
                       </div>
                       {mpesaReceiptNo && (
@@ -640,6 +698,36 @@ export default function PatientCartPOSModal({
                           Receipt: {mpesaReceiptNo}
                         </p>
                       )}
+                    </div>
+                  )}
+
+                  {/* Cash Mode with Tendered & Change */}
+                  {paymentMethod === "Cash" && (
+                    <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2 mb-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                          <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                          Cash Settlement & Change Calculator
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-amber-800 uppercase block mb-1">Cash Received (KES)</label>
+                          <input
+                            type="number"
+                            value={cashTendered}
+                            onChange={(e) => setCashTendered(e.target.value ? Number(e.target.value) : "")}
+                            placeholder={netPayable.toString()}
+                            className="w-full px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-bold font-mono text-slate-800 focus:outline-hidden"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-amber-800 uppercase block mb-1">Change to Return</label>
+                          <div className="px-2.5 py-1.5 bg-amber-100/70 border border-amber-300 rounded-xl text-xs font-bold font-mono text-amber-950">
+                            KES {typeof cashTendered === "number" && cashTendered > netPayable ? (cashTendered - netPayable).toLocaleString() : 0}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -671,29 +759,208 @@ export default function PatientCartPOSModal({
                     </div>
                   )}
 
-                  {/* Private Insurance Deduction */}
+                  {/* Private Insurance Card Panel & Co-Pay Split Workflow */}
                   {(paymentMethod === "Insurance" || paymentMethod === "Split") && (
-                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl space-y-2 mb-3">
-                      <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                        <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
-                        Private Insurance Pre-Auth Coverage (KES):
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={insuranceCover || ""}
-                          onChange={(e) => setInsuranceCover(Math.max(0, Number(e.target.value)))}
-                          placeholder="Covered Amount"
-                          className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 rounded-xl text-xs font-bold font-mono text-slate-800 focus:outline-hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setInsuranceCover(subtotal)}
-                          className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer"
-                        >
-                          Cover 100%
-                        </button>
+                    <div className="p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-2xl space-y-3 mb-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
+                          Insurance Card Pre-Auth & Coverage
+                        </span>
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                          Card Claim
+                        </span>
                       </div>
+
+                      {/* Insurance Scheme & Policy Details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <label className="text-[10px] font-bold text-indigo-800 uppercase block mb-1">Insurance Provider</label>
+                          <select
+                            value={insuranceProvider}
+                            onChange={(e) => setInsuranceProvider(e.target.value)}
+                            className="w-full px-2 py-1.5 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-800"
+                          >
+                            <option value="Jubilee Health Insurance">Jubilee Health Insurance</option>
+                            <option value="AAR Insurance Kenya">AAR Insurance Kenya</option>
+                            <option value="CIC General Insurance">CIC General Insurance</option>
+                            <option value="Britam Medishield">Britam Medishield</option>
+                            <option value="APA Insurance Ltd">APA Insurance Ltd</option>
+                            <option value="Madison Insurance">Madison Insurance</option>
+                            <option value="UAP Old Mutual Health">UAP Old Mutual Health</option>
+                            <option value="Minet Kenya (Teachers/Police)">Minet Kenya (TSC/NPS)</option>
+                            <option value="First Assurance">First Assurance</option>
+                            <option value="Heritage Insurance">Heritage Insurance</option>
+                            <option value="KCB / Equity Staff Scheme">Bank Staff Scheme</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-indigo-800 uppercase block mb-1">Card / Member No.</label>
+                          <input
+                            type="text"
+                            value={cardMemberNumber}
+                            onChange={(e) => setCardMemberNumber(e.target.value)}
+                            placeholder="e.g. JUB-90123-01"
+                            className="w-full px-2.5 py-1.5 bg-white border border-indigo-200 rounded-xl text-xs font-mono font-bold text-slate-800"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Card Cover Amount with Quick Split Buttons */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-indigo-900">
+                          <span>CARD COVERAGE AMOUNT (KES):</span>
+                          <span>Bill Total: KES {subtotal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            max={subtotal}
+                            value={insuranceCover || ""}
+                            onChange={(e) => setInsuranceCover(Math.min(subtotal, Math.max(0, Number(e.target.value))))}
+                            placeholder="e.g. 5000"
+                            className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 rounded-xl text-xs font-bold font-mono text-slate-800 focus:outline-hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setInsuranceCover(Math.min(5000, subtotal))}
+                            className="px-2 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded-xl text-[10px] font-bold cursor-pointer"
+                          >
+                            5,000/-
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInsuranceCover(Math.floor(subtotal / 2))}
+                            className="px-2 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded-xl text-[10px] font-bold cursor-pointer"
+                          >
+                            50% Split
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInsuranceCover(subtotal)}
+                            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-bold cursor-pointer"
+                          >
+                            100% Full
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* PARTIAL CARD COVERAGE -> CO-PAY BALANCE SETTLEMENT SECTION */}
+                      {insuranceCover > 0 && netPayable > 0 && (
+                        <div className="p-3 bg-white border-2 border-dashed border-indigo-300 rounded-2xl space-y-2.5 mt-2">
+                          <div className="flex items-center justify-between pb-1 border-b border-indigo-100">
+                            <div>
+                              <p className="text-[11px] font-extrabold text-indigo-950">
+                                Partial Card Cover Active
+                              </p>
+                              <p className="text-[10px] text-slate-500">
+                                Card pays <span className="font-mono font-bold text-indigo-700">KES {insuranceCover.toLocaleString()}</span>. Balance due: <span className="font-mono font-bold text-emerald-700">KES {netPayable.toLocaleString()}</span>
+                              </p>
+                            </div>
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-lg">
+                              CO-PAY BALANCE
+                            </span>
+                          </div>
+
+                          {/* How to pay the remaining balance */}
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-700 uppercase block mb-1">
+                              Pay Balance (KES {netPayable.toLocaleString()}) via:
+                            </label>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {[
+                                { id: "M-PESA", label: "📱 M-Pesa", color: "text-emerald-700" },
+                                { id: "Cash", label: "💵 Cash", color: "text-amber-700" },
+                                { id: "Card", label: "💳 Debit Card", color: "text-indigo-700" }
+                              ].map((opt) => (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => setCopayMethod(opt.id as any)}
+                                  className={`py-1.5 px-2 rounded-xl text-center text-xs font-bold border transition-all cursor-pointer ${
+                                    copayMethod === opt.id
+                                      ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Co-Pay via M-PESA STK Push */}
+                          {copayMethod === "M-PESA" && (
+                            <div className="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-1.5">
+                              <div className="flex justify-between items-center text-[10px] text-emerald-900 font-bold">
+                                <span>M-Pesa Phone for Co-Pay Balance:</span>
+                                {copayMpesaSuccess && (
+                                  <span className="text-emerald-700 font-black bg-emerald-200 px-1.5 py-0.2 rounded">✓ CONFIRMED</span>
+                                )}
+                              </div>
+                              <div className="flex gap-1.5">
+                                <input
+                                  type="text"
+                                  value={copayMpesaPhone}
+                                  onChange={(e) => setCopayMpesaPhone(e.target.value)}
+                                  placeholder="0712345678"
+                                  className="flex-1 px-2.5 py-1 bg-white border border-emerald-300 rounded-lg text-xs font-mono font-bold text-slate-800"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={handleCopayMpesaStkPush}
+                                  disabled={copayMpesaTriggering}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                                >
+                                  {copayMpesaTriggering ? "Sending..." : `STK Push KES ${netPayable.toLocaleString()}`}
+                                </button>
+                              </div>
+                              {copayMpesaReceiptNo && (
+                                <p className="text-[10px] text-emerald-800 font-mono font-bold">
+                                  Receipt: {copayMpesaReceiptNo}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Co-Pay via Cash */}
+                          {copayMethod === "Cash" && (
+                            <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1.5">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[9px] font-bold text-amber-800 uppercase block">Cash Given (KES)</label>
+                                  <input
+                                    type="number"
+                                    value={cashTendered}
+                                    onChange={(e) => setCashTendered(e.target.value ? Number(e.target.value) : "")}
+                                    placeholder={netPayable.toString()}
+                                    className="w-full px-2 py-1 bg-white border border-amber-300 rounded-lg text-xs font-bold font-mono"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-bold text-amber-800 uppercase block">Change to Return</label>
+                                  <div className="px-2 py-1 bg-amber-100 border border-amber-300 rounded-lg text-xs font-bold font-mono text-amber-950">
+                                    KES {typeof cashTendered === "number" && cashTendered > netPayable ? (cashTendered - netPayable).toLocaleString() : 0}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Co-Pay via Debit/Credit Card */}
+                          {copayMethod === "Card" && (
+                            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                              <label className="text-[9px] font-bold text-slate-600 uppercase block">Bank POS Terminal Ref / Auth No</label>
+                              <input
+                                type="text"
+                                defaultValue={`POS-${Date.now().toString().slice(-4)}`}
+                                className="w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -713,7 +980,7 @@ export default function PatientCartPOSModal({
                   </div>
 
                   {/* Financial Breakdown Receipt Block */}
-                  <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                  <div className="mt-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
                     <div className="flex justify-between text-xs text-slate-600">
                       <span>Gross Folio Subtotal:</span>
                       <span className="font-mono font-bold">KES {subtotal.toLocaleString()}</span>
@@ -721,14 +988,14 @@ export default function PatientCartPOSModal({
 
                     {shaCover > 0 && (
                       <div className="flex justify-between text-xs text-blue-700">
-                        <span>SHA / NHIF Taifa Care:</span>
+                        <span>SHA / NHIF Claim Share:</span>
                         <span className="font-mono font-bold">- KES {shaCover.toLocaleString()}</span>
                       </div>
                     )}
 
                     {insuranceCover > 0 && (
                       <div className="flex justify-between text-xs text-indigo-700">
-                        <span>Private Insurance Copay:</span>
+                        <span>Insurance Card Claim ({insuranceProvider.split(" ")[0]}):</span>
                         <span className="font-mono font-bold">- KES {insuranceCover.toLocaleString()}</span>
                       </div>
                     )}
@@ -741,11 +1008,22 @@ export default function PatientCartPOSModal({
                     )}
 
                     <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline">
-                      <span className="text-sm font-black text-slate-900">Net Balance Payable:</span>
+                      <span className="text-sm font-black text-slate-900">
+                        {insuranceCover > 0 && netPayable > 0 ? "Patient Co-Pay Balance:" : "Net Payable:"}
+                      </span>
                       <span className="text-lg font-black font-mono text-emerald-600">
                         KES {netPayable.toLocaleString()}
                       </span>
                     </div>
+
+                    {insuranceCover > 0 && netPayable > 0 && (
+                      <div className="text-[10px] text-slate-500 font-medium flex justify-between pt-1 border-t border-slate-150">
+                        <span>Settlement Breakdown:</span>
+                        <span className="font-bold text-slate-700">
+                          KES {insuranceCover.toLocaleString()} Card + KES {netPayable.toLocaleString()} {copayMethod}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

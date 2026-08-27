@@ -36,6 +36,7 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
       "admin",
       "admissions",
       "reception",
+      "triage",
       "queue",
       "doctor",
       "transfers",
@@ -55,6 +56,7 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
       "admin",
       "admissions",
       "reception",
+      "triage",
       "queue",
       "doctor",
       "transfers",
@@ -94,6 +96,7 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
       "admin",
       "admissions",
       "reception",
+      "triage",
       "queue",
       "doctor",
       "transfers",
@@ -113,6 +116,7 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
       "admin",
       "admissions",
       "reception",
+      "triage",
       "queue",
       "doctor",
       "transfers",
@@ -146,9 +150,9 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
     role: "Reception",
     title: "Reception (Front Desk & Patient Registration)",
     category: "Administrative",
-    description: "Registers incoming patients, verifies SHA/NHIF eligibility, issues digital queue tickets, and assigns patients to specialist clinics.",
-    allowedTabs: ["reception", "admissions", "queue", "journey", "tickets", "transfers", "dashboard"],
-    allowedModules: ["reception", "admissions", "queue", "journey", "tickets", "transfers", "dashboard"],
+    description: "Registers incoming patients, verifies SHA/NHIF eligibility, issues digital queue tickets, and assigns patients to specialist clinics or nurse triage.",
+    allowedTabs: ["reception", "triage", "admissions", "queue", "journey", "tickets", "transfers", "dashboard"],
+    allowedModules: ["reception", "triage", "admissions", "queue", "journey", "tickets", "transfers", "dashboard"],
     department: "reception",
     colorClass: {
       bg: "bg-emerald-50",
@@ -163,14 +167,36 @@ export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
     canProcessPayroll: false,
     canApproveProcurement: false,
   },
+  "Nurse": {
+    id: "Nurse",
+    role: "Nurse",
+    title: "Nurse / Triage Officer (Clinical Intake & Vitals)",
+    category: "Clinical",
+    description: "Performs patient triage assessment (TEWS / Kenya Triage Score), records complete vital signs (BP, Pulse, Temp, SpO2, RBS, Weight/Height/BMI), and manages nursing care plans.",
+    allowedTabs: ["triage", "admissions", "doctor", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
+    allowedModules: ["triage", "admissions", "doctor", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
+    department: "nursing",
+    colorClass: {
+      bg: "bg-rose-50",
+      text: "text-rose-900",
+      border: "border-rose-300",
+      badge: "bg-rose-700 text-white",
+    },
+    canManageUsers: false,
+    canManageInventory: false,
+    canPerformClinicalActions: true,
+    canDispenseAndCheckout: false,
+    canProcessPayroll: false,
+    canApproveProcurement: false,
+  },
   "Doctor": {
     id: "Doctor",
     role: "Doctor",
     title: "Doctor (Clinical Consultation)",
     category: "Clinical",
-    description: "Conducts outpatient and inpatient clinical consultations, captures vital signs, creates digital prescriptions, and triggers automated triage routing.",
-    allowedTabs: ["doctor", "admissions", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
-    allowedModules: ["doctor", "admissions", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
+    description: "Conducts outpatient and inpatient clinical consultations, reviews nurse triage vitals, creates digital prescriptions, and triggers automated diagnostic routing.",
+    allowedTabs: ["doctor", "triage", "admissions", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
+    allowedModules: ["doctor", "triage", "admissions", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
     department: "medical",
     colorClass: {
       bg: "bg-cyan-50",
@@ -347,6 +373,7 @@ export const ALL_SYSTEM_ROLES: SystemRole[] = [
   "Super Admin",
   "Admin",
   "Reception",
+  "Nurse",
   "Doctor",
   "Pharmacy",
   "Lab",
@@ -367,6 +394,8 @@ export function getRoleConfig(roleName?: string): RoleDefinition {
   const lower = trimmed.toLowerCase();
   if (lower.includes("super admin")) return SYSTEM_ROLES_MAP["Super Admin"];
   if (lower.includes("admin")) return SYSTEM_ROLES_MAP["Admin"];
+  if (lower.includes("nurse") || lower.includes("triage") || lower.includes("matron") || lower.includes("nursing")) return SYSTEM_ROLES_MAP["Nurse"];
+  if (lower.includes("reception")) return SYSTEM_ROLES_MAP["Reception"];
   if (lower.includes("reception")) return SYSTEM_ROLES_MAP["Reception"];
   if (lower.includes("doc") || lower.includes("physician") || lower.includes("surgeon") || lower.includes("med") || lower.includes("cardiologist") || lower.includes("pulmonologist")) return SYSTEM_ROLES_MAP["Doctor"];
   if (lower.includes("pharm")) return SYSTEM_ROLES_MAP["Pharmacy"];
