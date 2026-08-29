@@ -1328,20 +1328,29 @@ export default function App() {
               title="Click to upload, change or configure Hospital Logo"
               className="flex items-center gap-3 sm:gap-4 group cursor-pointer min-w-0"
             >
-              <div className="relative p-1 sm:p-1.5 bg-yellow-300 text-white rounded-full shadow-lg border-2 border-yellow-500 ring-2 ring-yellow-400/50 flex items-center justify-center shrink-0 w-16 h-16 sm:w-20 sm:h-20 lg:w-22 lg:h-22 group-hover:scale-105 group-hover:bg-yellow-200 transition-all duration-300 overflow-hidden">
-                {brandLogoUrl ? (
-                  <img
-                    src={brandLogoUrl}
-                    alt="HMIS Hospital Logo"
-                    className="w-full h-full object-cover rounded-full shadow-inner transition-transform duration-300 group-hover:scale-105"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <Building2 className="w-9 h-9 sm:w-12 sm:h-12 text-slate-900 animate-pulse group-hover:animate-none" />
-                )}
-                {/* Upload indicator pill on hover */}
-                <div className="absolute bottom-0 right-0 bg-yellow-500 text-white p-1 rounded-full border border-yellow-600 text-[8px] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs">
-                  <Sparkles className="w-3 h-3 text-white" />
+              <div className="relative group/logo shrink-0">
+                {/* Main Circular Container Frame (Stable, Round & Big) */}
+                <div className="relative p-1 sm:p-1.5 bg-yellow-300 text-white rounded-full shadow-lg border-2 border-yellow-500 ring-2 ring-yellow-400/60 flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 lg:w-22 lg:h-22 group-hover:bg-yellow-200 transition-colors duration-300 overflow-hidden">
+                  {brandLogoUrl ? (
+                    <img
+                      src={brandLogoUrl}
+                      alt="HMIS Hospital Logo"
+                      className="w-full h-full object-cover rounded-full shadow-inner animate-logo-image-alive transition-transform duration-300 group-hover:scale-110"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <Building2 className="w-9 h-9 sm:w-12 sm:h-12 text-slate-900 animate-logo-image-alive transition-transform duration-300 group-hover:scale-110" />
+                  )}
+
+                  {/* Specular Light Gleam Sweep Passing Directly Across Logo */}
+                  <div className="absolute inset-0 rounded-full overflow-hidden pointer-events-none z-10">
+                    <div className="w-full h-full bg-gradient-to-r from-transparent via-white/50 to-transparent animate-logo-gleam" />
+                  </div>
+
+                  {/* Upload indicator pill on hover */}
+                  <div className="absolute bottom-0 right-0 bg-yellow-500 text-white p-1 rounded-full border border-yellow-600 text-[8px] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs z-20">
+                    <Sparkles className="w-3 h-3 text-white" />
+                  </div>
                 </div>
               </div>
               <div className="min-w-0">
@@ -2722,7 +2731,7 @@ export default function App() {
       }}
     />
 
-    {/* Quick Hospital Logo Upload Modal */}
+    {/* Quick Hospital Logo & Favicon Customizer Modal */}
     <LogoUploadModal
       isOpen={showLogoModal}
       onClose={() => setShowLogoModal(false)}
@@ -2730,7 +2739,15 @@ export default function App() {
       onSaveLogo={(url) => {
         setBrandLogoUrl(url);
         localStorage.setItem("platform_logo_url", url);
+        window.dispatchEvent(new Event("platform_branding_changed"));
       }}
+      currentFavicon={brandFaviconUrl}
+      onSaveFavicon={(url) => {
+        setBrandFaviconUrl(url);
+        localStorage.setItem("platform_favicon_url", url);
+        window.dispatchEvent(new Event("platform_branding_changed"));
+      }}
+      hospitalName={brandCustomName || tenant.name || "AfyaCare Hospital HMS"}
     />
 
     {/* User Account Profile & Credentials Management Modal */}

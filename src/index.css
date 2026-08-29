@@ -527,3 +527,51 @@ a[role="button"]:active,
 .gemini-rainbow-pulse {
   animation: geminiPulse 4s ease-in-out infinite;
 }
+
+/* Premium Hospital Logo-Only Animations */
+@keyframes logoImageAlive {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.15)) brightness(1);
+  }
+  25% {
+    transform: scale(1.06) rotate(1.5deg);
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.22)) brightness(1.05);
+  }
+  50% {
+    transform: scale(1.02) rotate(0deg);
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.16)) brightness(1.02);
+  }
+  75% {
+    transform: scale(1.07) rotate(-1.5deg);
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.22)) brightness(1.05);
+  }
+}
+
+.animate-logo-image-alive {
+  animation: logoImageAlive 4.5s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform, filter;
+}
+
+@keyframes logoGleamSweep {
+  0% {
+    transform: translateX(-150%) translateY(-150%) rotate(45deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.75;
+  }
+  45% {
+    transform: translateX(150%) translateY(150%) rotate(45deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(150%) translateY(150%) rotate(45deg);
+    opacity: 0;
+  }
+}
+
+.animate-logo-gleam {
+  animation: logoGleamSweep 3.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

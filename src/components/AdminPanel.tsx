@@ -48,6 +48,7 @@ import {
   Crown,
   Award,
   Copy,
+  Globe,
   Printer,
   IdCard
 } from "lucide-react";
@@ -1741,24 +1742,124 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
               <p className="text-[9px] text-gray-400">Click "Browse Image File" to upload from your computer or paste an image URL.</p>
             </div>
 
-            {/* Favicon URL Input */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                <Link2 className="w-3.5 h-3.5 text-slate-400" />
-                <span>Custom Favicon URL (Tab Icon Link)</span>
-              </label>
-              <input
-                type="url"
-                value={faviconUrlInput}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setFaviconUrlInput(val);
-                  updateBrandingSettings("platform_favicon_url", val);
-                }}
-                placeholder="https://example.com/favicon.ico"
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-emerald-500"
-              />
-              <p className="text-[9px] text-gray-400">Updates the browser's shortcut tab icon dynamically.</p>
+            {/* Favicon Customizer */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Browser Favicon (Tab Icon)</span>
+                </label>
+                {logoUrlInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFaviconUrlInput(logoUrlInput);
+                      updateBrandingSettings("platform_favicon_url", logoUrlInput);
+                    }}
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Copy className="w-2.5 h-2.5" />
+                    <span>Sync from Logo</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Live Mini Tab Preview & Upload Actions */}
+              <div className="flex items-center gap-3 p-2.5 bg-slate-900 text-white rounded-xl border border-slate-700 shadow-inner">
+                <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
+                  {faviconUrlInput ? (
+                    <img
+                      src={faviconUrlInput}
+                      alt="Favicon preview"
+                      className="w-5 h-5 object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <Globe className="w-4 h-4 text-slate-400" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-bold text-slate-200 truncate">
+                    {customBrandNameInput || tenant.name || "HMS Portal"}
+                  </p>
+                  <p className="text-[9px] text-slate-400">
+                    {faviconUrlInput ? "Custom favicon active on tab" : "Default browser tab icon"}
+                  </p>
+                </div>
+                <label className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg cursor-pointer transition-colors shadow-xs shrink-0 flex items-center gap-1">
+                  <Upload className="w-3 h-3" />
+                  <span>Browse Favicon</span>
+                  <input
+                    type="file"
+                    accept="image/x-icon, image/png, image/svg+xml, image/webp, image/jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const res = ev.target?.result as string;
+                          if (res) {
+                            setFaviconUrlInput(res);
+                            updateBrandingSettings("platform_favicon_url", res);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={faviconUrlInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFaviconUrlInput(val);
+                    updateBrandingSettings("platform_favicon_url", val);
+                  }}
+                  placeholder="Paste favicon image URL (https://...)"
+                  className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-emerald-500"
+                />
+                {faviconUrlInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFaviconUrlInput("");
+                      updateBrandingSettings("platform_favicon_url", "");
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl border border-rose-200"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Preset Favicon Pills */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[9px] font-bold text-slate-400 uppercase">Presets:</span>
+                {[
+                  { name: "Red Cross", url: "https://cdn-icons-png.flaticon.com/512/3004/3004458.png" },
+                  { name: "Heartbeat", url: "https://cdn-icons-png.flaticon.com/512/2966/2966327.png" },
+                  { name: "Blue Badge", url: "https://cdn-icons-png.flaticon.com/512/4320/4320371.png" },
+                  { name: "Rx Pill", url: "https://cdn-icons-png.flaticon.com/512/822/822143.png" },
+                ].map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setFaviconUrlInput(preset.url);
+                      updateBrandingSettings("platform_favicon_url", preset.url);
+                    }}
+                    className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 rounded-md text-[10px] font-medium transition-colors cursor-pointer"
+                  >
+                    <img src={preset.url} alt={preset.name} className="w-3 h-3 object-contain" referrerPolicy="no-referrer" />
+                    <span>{preset.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

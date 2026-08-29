@@ -533,18 +533,28 @@ export default function RolePortalLogin({
 
           <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-12 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4 sm:gap-6">
-              {hospitalLogoUrl ? (
-                <img
-                  src={hospitalLogoUrl}
-                  alt="Hospital Logo"
-                  className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 object-cover rounded-full border-4 border-white/40 shadow-2xl ring-4 ring-blue-400/30 shrink-0"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 bg-white/10 text-white rounded-full flex items-center justify-center border-4 border-white/30 shadow-2xl ring-4 ring-blue-400/30 shrink-0">
-                  <Hospital className="w-10 h-10 sm:w-14 sm:h-14 text-blue-400" />
+              <div className="relative group/loginlogo shrink-0">
+                {/* Main Logo Frame (Stable Round Big Frame) */}
+                <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full border-4 border-white/80 shadow-2xl ring-4 ring-blue-400/40 overflow-hidden flex items-center justify-center bg-slate-900/40">
+                  {hospitalLogoUrl ? (
+                    <img
+                      src={hospitalLogoUrl}
+                      alt="Hospital Logo"
+                      className="w-full h-full object-cover rounded-full animate-logo-image-alive transition-transform duration-300 group-hover:scale-110"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-white/10 text-white rounded-full flex items-center justify-center animate-logo-image-alive">
+                      <Hospital className="w-10 h-10 sm:w-14 sm:h-14 text-blue-400" />
+                    </div>
+                  )}
+
+                  {/* Specular Gleam Sweep Directly Across Logo */}
+                  <div className="absolute inset-0 rounded-full overflow-hidden pointer-events-none z-10">
+                    <div className="w-full h-full bg-gradient-to-r from-transparent via-white/50 to-transparent animate-logo-gleam" />
+                  </div>
                 </div>
-              )}
+              </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight leading-none flex flex-wrap items-center gap-2 sm:gap-3">
                   <span>{hospitalName}</span>
