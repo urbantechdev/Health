@@ -7,7 +7,6 @@ import { Tenant, DepartmentToggles, Employee } from "./types";
 import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "./constants/roles";
 import AdminPanel from "./components/AdminPanel";
 import ReceptionKiosk from "./components/ReceptionKiosk";
-import NurseTriageStation from "./components/NurseTriageStation";
 import QueueDashboard from "./components/QueueDashboard";
 import DoctorsDesk from "./components/DoctorsDesk";
 import SmartPharmacy from "./components/SmartPharmacy";
@@ -90,8 +89,7 @@ import {
   Hospital,
   FileCheck,
   Bed,
-  History,
-  HeartPulse
+  History
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -983,9 +981,7 @@ export default function App() {
           setActiveTab("hr");
         } else if (dept === "security") {
           setActiveTab("security");
-        } else if (dept === "nursing" || dept === "triage") {
-          setActiveTab("triage");
-        } else if (dept === "reception") {
+        } else if (dept === "reception" || dept === "nursing") {
           setActiveTab("reception");
         }
       }
@@ -1085,7 +1081,6 @@ export default function App() {
   // Live badge counts per tab/menu item
   const openTicketsCount = systemTicketsList.filter((t) => t.status === "open" || t.status === "in_progress").length;
   const pendingQueueCount = queueItems.filter((q) => q.status === "pending" || q.status === "serving").length;
-  const triageWaitingCount = queueItems.filter((q) => (q.currentDepartment === "triage" || q.currentDepartment === "reception") && q.status === "pending").length;
   const doctorWaitingCount = queueItems.filter((q) => (q.currentDepartment === "doctor" || !q.currentDepartment) && q.status === "pending").length;
   const diagnosticsWaitingCount = queueItems.filter((q) => (q.currentDepartment === "laboratory" || q.currentDepartment === "radiology") && q.status === "pending").length;
   const pharmacyWaitingCount = queueItems.filter((q) => q.currentDepartment === "pharmacy" && q.status === "pending").length;
@@ -1099,8 +1094,6 @@ export default function App() {
         return openTicketsCount;
       case "queue":
         return pendingQueueCount;
-      case "triage":
-        return triageWaitingCount;
       case "doctor":
         return doctorWaitingCount;
       case "transfers":

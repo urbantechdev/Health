@@ -21,37 +21,20 @@ export interface QueueTicket {
   id: string;
   ticketNo: string; // e.g., GEN-002, LAB-045, RAD-012, PHA-089
   patientName: string;
-  patientId?: string;
   nationalId: string;
   biometricStatus: "verified" | "not_verified";
   service: string; // e.g., "General Doctor", "Laboratory", "Pharmacy", "Radiology"
-  currentDepartment: "reception" | "queue" | "doctor" | "laboratory" | "radiology" | "pharmacy" | "billing" | "labour_room" | "gyna" | "inpatient_ward" | string;
+  currentDepartment: "reception" | "queue" | "doctor" | "laboratory" | "radiology" | "pharmacy" | "billing" | "labour_room" | "gyna" | string;
   status: "pending" | "serving" | "completed" | "skipped";
   notes?: string;
   timestamp: string;
   phone?: string;
   age?: number;
-  gender?: string;
   issue?: string;
   assignedSpecialistId?: string;
   assignedSpecialistName?: string;
   specialistTitle?: string;
   consultationRoom?: string;
-  // Modern Kenyan Journey Extensions
-  isResultsReview?: boolean;
-  resultsReady?: boolean;
-  labSummary?: string;
-  originDoctorName?: string;
-  encounterId?: string;
-  mohCategory?: "MOH 705A (Under 5)" | "MOH 705B (Over 5)" | string;
-  billingStatus?: "PAY_BEFORE_SERVICE" | "RENDER_THEN_CLAIM" | "PAID" | "PENDING";
-  paymentMode?: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split";
-  gatePassIssued?: boolean;
-  gatePassCode?: string;
-  gatePassTimestamp?: string;
-  admissionRequired?: boolean;
-  assignedWardName?: string;
-  assignedBedNumber?: string;
 }
 
 export interface Medication {
@@ -115,11 +98,6 @@ export interface ClinicalVisit {
   };
   symptoms: string;
   diagnosis: string;
-  mohCategory?: "MOH 705A (Under 5)" | "MOH 705B (Over 5)" | string;
-  icd10Code?: string;
-  icd10Title?: string;
-  encounterId?: string;
-  admittedToWard?: string;
   prescriptions: PrescriptionItem[];
     referrals: {
       id: string;
@@ -158,9 +136,7 @@ export type EncounterStatus =
   | "DOCTOR_CONSULT"
   | "ADMITTED"
   | "DISCHARGING"
-  | "DISCHARGED"
-  | "MORGUE"
-  | "DECEASED";
+  | "DISCHARGED";
 
 export type AdmissionType =
   | "OUTPATIENT"
@@ -168,36 +144,6 @@ export type AdmissionType =
   | "EMERGENCY"
   | "DAY_SURGERY"
   | "MATERNITY";
-
-export interface MorgueAdmissionRecord {
-  id: string;
-  encounterId: string;
-  patientId: string;
-  patientName: string;
-  nationalId: string;
-  age?: number;
-  gender?: string;
-  fromWardId?: string;
-  fromWardName: string;
-  fromBedNumber?: string;
-  timeOfDeath: string;
-  certifiedByDoctor: string;
-  doctorLicenseNo?: string;
-  causeOfDeathImmediate: string;
-  causeOfDeathUnderlying?: string;
-  mohDeathNoticeNo?: string; // MOH 214 Death Notification No
-  admittedToMorgueAt: string;
-  morgueUnitName: string; // e.g. "Hospital Mortuary & Cold Room A", "Cabinet C-04"
-  cabinetOrBayNumber: string; // e.g. "Bay 04", "Cabinet 12"
-  morgueAttendantName: string;
-  nurseHandoverName: string;
-  nextOfKinName: string;
-  nextOfKinPhone: string;
-  nextOfKinRelationship: string;
-  belongingsInventory?: string;
-  tagsVerified: boolean;
-  notes?: string;
-}
 
 export interface BedTransferRecord {
   id: string;
@@ -255,8 +201,6 @@ export interface Encounter {
   doctorDischargeApprovedAt?: string;
   doctorClearance?: DoctorDischargeClearance;
   bedTransfers?: BedTransferRecord[];
-  morgueAdmission?: MorgueAdmissionRecord;
-  morgueTransferredAt?: string;
   billingCleared: boolean;
   totalBilled: number;
   totalPaid: number;
@@ -400,7 +344,6 @@ export type SystemRole =
   | "Super Admin"
   | "Admin"
   | "Reception"
-  | "Nurse"
   | "Doctor"
   | "Pharmacy"
   | "Lab"

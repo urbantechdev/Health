@@ -192,12 +192,12 @@ export default function RolePortalLogin({
     },
     {
       id: "nurse",
-      title: "Nurse / Triage Officer",
-      role: "Nurse",
+      title: "Nurse / Inpatient Care",
+      role: "Reception",
       department: "nursing",
-      targetTab: "triage",
+      targetTab: "queue",
       icon: HeartPulse,
-      description: "Patient Triage (TEWS / Emergency Score), Vitals Recording & Consultation Forwarding",
+      description: "Patient Triage, Vital Signs Monitoring & Ward Rounds",
       color: "text-rose-600",
       bg: "bg-rose-50"
     },
@@ -288,8 +288,7 @@ export default function RolePortalLogin({
           (targetDept === "medical" && (d === "medical" || r.includes("doctor") || r.includes("practitioner") || r.includes("surgeon") || r.includes("clinician"))) ||
           (targetDept === "laboratory" && (d === "laboratory" || d === "diagnostics" || r.includes("lab"))) ||
           (targetDept === "pharmacy" && (d === "pharmacy" || r.includes("pharm"))) ||
-          (targetDept === "nursing" && (d === "nursing" || d === "triage" || r.includes("nurse") || r.includes("triage") || r.includes("matron"))) ||
-          (targetDept === "reception" && (d === "reception" || r.includes("reception") || r.includes("front desk"))) ||
+          (targetDept === "reception" && (d === "reception" || d === "nursing" || r.includes("reception") || r.includes("nurse") || r.includes("triage"))) ||
           (targetDept === "billing" && (d === "billing" || d === "finance" || r.includes("billing") || r.includes("cashier") || r.includes("accounts"))) ||
           (targetDept === "finance" && (d === "finance" || r.includes("finance") || r.includes("accountant"))) ||
           (targetDept === "hr" && (d === "hr" || r.includes("hr") || r.includes("human resources"))) ||

@@ -40,7 +40,7 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   const [phone, setPhone] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("Male");
-  const [bloodType, setBloodType] = useState("Not Sure");
+  const [bloodType, setBloodType] = useState("O+");
   const [service, setService] = useState("General Doctor");
   const [issue, setIssue] = useState("");
 
@@ -49,7 +49,6 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   const [historySearchId, setHistorySearchId] = useState("");
 
   // Triage & Vitals
-  const [fastTrackDirectVitals, setFastTrackDirectVitals] = useState(false);
   const [triageTemp, setTriageTemp] = useState("36.8");
   const [triageBp, setTriageBp] = useState("120/80");
   const [triagePulse, setTriagePulse] = useState("72");
@@ -323,13 +322,6 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
           prefix = "GYN";
           currentDept = "gyna";
         }
-      }
-
-      // Standard Hospital Care Protocol: Outpatient consultations route through Nurse Triage Station first
-      const isDirectAncillary = service === "Laboratory" || service === "Radiology" || service === "Pharmacy";
-      if (!isDirectAncillary && !fastTrackDirectVitals) {
-        currentDept = "triage";
-        prefix = "TRI";
       }
 
       const ticketNo = `${prefix}-${Math.floor(Math.random() * 900 + 100)}`;
@@ -715,128 +707,121 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-600">Blood Type (ABO / Rh)</label>
+              <label className="block text-xs font-semibold text-gray-600">Blood Type</label>
               <select
                 id="select-blood-type"
                 value={bloodType}
                 onChange={(e) => setBloodType(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:border-emerald-500 focus:outline-hidden bg-white"
               >
-                <option value="Not Sure">Not Sure / Unknown (Lab Confirmation Required)</option>
-                <option value="O+">O+ (O Positive)</option>
-                <option value="O-">O- (O Negative)</option>
-                <option value="A+">A+ (A Positive)</option>
-                <option value="A-">A- (A Negative)</option>
-                <option value="B+">B+ (B Positive)</option>
-                <option value="B-">B- (B Negative)</option>
-                <option value="AB+">AB+ (AB Positive)</option>
-                <option value="AB-">AB- (AB Negative)</option>
+                <option>O+</option>
+                <option>A+</option>
+                <option>B+</option>
+                <option>AB+</option>
+                <option>O-</option>
               </select>
             </div>
           </div>
 
-          {/* Dedicated Nurse Triage & Vitals Routing Flow Banner */}
-          <div className="p-4 bg-rose-50/60 rounded-2xl border border-rose-200/80 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold">
-                  <Activity className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-rose-950 uppercase tracking-wide flex items-center gap-2">
-                    <span>Clinical Intake Protocol: Nurse Triage & Vitals Desk</span>
-                    <span className="px-2 py-0.2 bg-rose-200 text-rose-800 text-[9px] font-black rounded-full uppercase">Standard OPD Care</span>
-                  </h3>
-                  <p className="text-[11px] text-rose-800">
-                    Patient will be issued ticket and queued for the <strong>Nurse Station</strong> to record full vital signs (BP, Pulse, Temp, SpO2, RBS, BMI) & triage urgency before doctor consultation.
-                  </p>
-                </div>
+          {/* Triage Vitals, Biometrics & Clinical Safety Intake */}
+          <div className="p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                  Triage & Vitals Recording (TEWS / Kenya Clinical Standard)
+                </h3>
+              </div>
+              {(() => {
+                const hM = (parseFloat(triageHeight) || 170) / 100;
+                const wKg = parseFloat(triageWeight) || 68;
+                const bmi = hM > 0 ? (wKg / (hM * hM)).toFixed(1) : "22.5";
+                const numBmi = parseFloat(bmi);
+                let badgeClass = "bg-emerald-100 text-emerald-800 border-emerald-200";
+                let status = "Normal Weight";
+                if (numBmi < 18.5) {
+                  badgeClass = "bg-blue-100 text-blue-800 border-blue-200";
+                  status = "Underweight";
+                } else if (numBmi >= 25 && numBmi < 30) {
+                  badgeClass = "bg-amber-100 text-amber-800 border-amber-200";
+                  status = "Overweight";
+                } else if (numBmi >= 30) {
+                  badgeClass = "bg-rose-100 text-rose-800 border-rose-200";
+                  status = "Obese";
+                }
+                return (
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${badgeClass}`}>
+                    BMI: {bmi} kg/m² ({status})
+                  </span>
+                );
+              })()}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">BP (mmHg)</label>
+                <input
+                  id="input-triage-bp"
+                  type="text"
+                  value={triageBp}
+                  onChange={(e) => setTriageBp(e.target.value)}
+                  placeholder="120/80"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFastTrackDirectVitals(!fastTrackDirectVitals)}
-                  className="px-2.5 py-1 bg-white hover:bg-rose-100/80 border border-rose-300 text-rose-900 rounded-lg text-[10px] font-bold transition-all cursor-pointer shadow-2xs"
-                >
-                  {fastTrackDirectVitals ? "Hide Direct Vitals" : "⚡ Emergency Fast-Track Entry"}
-                </button>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Temp (°C)</label>
+                <input
+                  id="input-triage-temp"
+                  type="text"
+                  value={triageTemp}
+                  onChange={(e) => setTriageTemp(e.target.value)}
+                  placeholder="36.8"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Pulse (bpm)</label>
+                <input
+                  id="input-triage-pulse"
+                  type="text"
+                  value={triagePulse}
+                  onChange={(e) => setTriagePulse(e.target.value)}
+                  placeholder="72"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Weight (kg)</label>
+                <input
+                  id="input-triage-weight"
+                  type="text"
+                  value={triageWeight}
+                  onChange={(e) => setTriageWeight(e.target.value)}
+                  placeholder="68"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Height (cm)</label>
+                <input
+                  id="input-triage-height"
+                  type="text"
+                  value={triageHeight}
+                  onChange={(e) => setTriageHeight(e.target.value)}
+                  placeholder="170"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
+                />
               </div>
             </div>
 
-            {/* Optional Collapsible Fast-Track Vitals Entry (For Night Shift or Immediate Resuscitation) */}
-            {fastTrackDirectVitals && (
-              <div className="pt-3 border-t border-rose-200/60 space-y-3 animate-fade-in">
-                <p className="text-[10px] font-bold text-rose-700 uppercase">
-                  Direct Front-Desk Vitals Override (Optional):
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-600 uppercase">BP (mmHg)</label>
-                    <input
-                      id="input-triage-bp"
-                      type="text"
-                      value={triageBp}
-                      onChange={(e) => setTriageBp(e.target.value)}
-                      placeholder="120/80"
-                      className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-600 uppercase">Temp (°C)</label>
-                    <input
-                      id="input-triage-temp"
-                      type="text"
-                      value={triageTemp}
-                      onChange={(e) => setTriageTemp(e.target.value)}
-                      placeholder="36.8"
-                      className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-600 uppercase">Pulse (bpm)</label>
-                    <input
-                      id="input-triage-pulse"
-                      type="text"
-                      value={triagePulse}
-                      onChange={(e) => setTriagePulse(e.target.value)}
-                      placeholder="72"
-                      className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-600 uppercase">Weight (kg)</label>
-                    <input
-                      id="input-triage-weight"
-                      type="text"
-                      value={triageWeight}
-                      onChange={(e) => setTriageWeight(e.target.value)}
-                      placeholder="68"
-                      className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-600 uppercase">Height (cm)</label>
-                    <input
-                      id="input-triage-height"
-                      type="text"
-                      value={triageHeight}
-                      onChange={(e) => setTriageHeight(e.target.value)}
-                      placeholder="170"
-                      className="w-full px-2.5 py-1.5 border border-gray-200 bg-white rounded-lg text-xs font-mono font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-600 uppercase">Known Allergies / Intolerances</label>
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Known Allergies / Intolerances</label>
                 <input
                   id="input-triage-allergies"
                   type="text"
@@ -847,7 +832,7 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-600 uppercase">Chronic Conditions / Health Alerts</label>
+                <label className="text-[10px] font-bold text-gray-500 uppercase">Chronic Conditions / Alerts</label>
                 <input
                   id="input-triage-chronic"
                   type="text"

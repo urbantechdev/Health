@@ -376,35 +376,20 @@ export default function PrintDocument({
 
                       {/* Revenue Ledger Breakdown */}
                       <div className="space-y-1.5 text-xs text-slate-700">
-                        {Boolean(receiptData.split?.sha) && (
-                          <div className="flex justify-between font-mono">
-                            <span>SHA / NHIF Claim Share:</span>
-                            <span className="font-bold">KES {receiptData.split?.sha?.toLocaleString()}.00</span>
-                          </div>
-                        )}
-                        {Boolean(receiptData.split?.insurance) && (
-                          <div className="flex justify-between font-mono">
-                            <span>
-                              Insurance Card Claim {receiptData.split?.insuranceProvider ? `(${receiptData.split.insuranceProvider})` : ""}:
-                            </span>
-                            <span className="font-bold">KES {receiptData.split?.insurance?.toLocaleString()}.00</span>
-                          </div>
-                        )}
-                        {Boolean(receiptData.split?.outOfPocket) && (
-                          <div className="flex justify-between font-mono text-emerald-800">
-                            <span>
-                              Patient Co-Pay ({receiptData.split?.copayPaymentMethod || "M-PESA/Cash"}):
-                            </span>
-                            <span className="font-bold">KES {receiptData.split?.outOfPocket?.toLocaleString()}.00</span>
-                          </div>
-                        )}
-                        {receiptData.split?.copayMpesaReceiptNumber && (
-                          <div className="text-[10px] text-right font-mono text-emerald-700">
-                            M-PESA Ref: {receiptData.split.copayMpesaReceiptNumber}
-                          </div>
-                        )}
+                        <div className="flex justify-between font-mono">
+                          <span>SHA Claim Share (Government):</span>
+                          <span className="font-bold">KES {receiptData.split?.sha?.toLocaleString() || "0"}.00</span>
+                        </div>
+                        <div className="flex justify-between font-mono">
+                          <span>Private Insurance Cover:</span>
+                          <span className="font-bold">KES {receiptData.split?.insurance?.toLocaleString() || "0"}.00</span>
+                        </div>
+                        <div className="flex justify-between font-mono">
+                          <span>Patient Out-of-Pocket Share:</span>
+                          <span className="font-bold">KES {receiptData.split?.outOfPocket?.toLocaleString() || receiptData.total?.toLocaleString()}.00</span>
+                        </div>
                         <div className="border-t border-slate-300 my-1 pt-1.5 flex justify-between text-slate-950 font-extrabold">
-                          <span className="text-sm">Total Folio Settled:</span>
+                          <span className="text-sm">Paid Total Receipts:</span>
                           <span className="text-sm font-mono">KES {receiptData.total.toLocaleString()}.00</span>
                         </div>
                       </div>

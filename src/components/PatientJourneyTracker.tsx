@@ -359,21 +359,18 @@ export default function PatientJourneyTracker() {
           }
         }
 
-        // Route back to Doctor Desk for Results Review (Kenyan Loop standard)
+        // Route to pharmacy since there are prescriptions now
         const ticketNoParts = selectedTicket.ticketNo.split("-");
-        const nextTicketNo = `REV-${ticketNoParts[1] || Math.floor(Math.random() * 900 + 100)}`;
+        const nextTicketNo = `PHA-${ticketNoParts[1] || Math.floor(Math.random() * 900 + 100)}`;
 
         await updateDoc(doc(db, "queue", ticketId), {
-          currentDepartment: "doctor",
+          currentDepartment: "pharmacy",
           ticketNo: nextTicketNo,
           status: "pending",
-          isResultsReview: true,
-          resultsReady: true,
-          labSummary: "HB: 12.8 g/dL (Normal), WBC: 8.9 x10^9/L, Malaria: POSITIVE (+ve).",
-          notes: "Diagnostics completed. Patient routed back to Doctor Desk for Results Review (No secondary fee)."
+          notes: "Diagnostics completed. Prescriptions ready for dispensing."
         });
 
-        addLog(`Patient automatically routed to DOCTOR DESK for Results Review with Ticket ${nextTicketNo}.`);
+        addLog(`Patient automatically routed to PHARMACY queue with Ticket ${nextTicketNo}.`);
 
       } else if (stepKey === "pharmacy") {
         addLog(`Initiating Pharmacy Stock Match & POS simulation...`);
@@ -486,19 +483,14 @@ export default function PatientJourneyTracker() {
           addLog(`SHA Claim Dispatched: ${shaClaim}`);
         }
 
-        // Close queue ticket and generate Digital Security Gate Pass
-        const gatePassCode = `PASS-${Math.floor(100000 + Math.random() * 900000)}`;
+        // Close queue ticket
         await updateDoc(doc(db, "queue", ticketId), {
           status: "completed",
-          gatePassIssued: true,
-          gatePassCode,
-          gatePassTimestamp: new Date().toISOString(),
-          notes: `Cleared and discharged. Security Gate Pass #${gatePassCode} issued.`
+          notes: "Cleared and discharged from facility. Process complete."
         });
 
-        addLog(`Digital Security Gate Pass ${gatePassCode} issued.`);
         addLog(`Patient cleared by security and officially DISCHARGED from clinic.`);
-        addLog(`Journey successfully completed across Kenyan standard facility milestones!`);
+        addLog(`Journey successfully completed in 5/5 steps!`);
       }
     } catch (err) {
       console.error(err);

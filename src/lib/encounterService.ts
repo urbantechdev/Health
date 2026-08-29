@@ -26,8 +26,7 @@ import {
   WardBed,
   AdmissionType,
   EncounterStatus,
-  MedicalRecord,
-  MorgueAdmissionRecord
+  MedicalRecord
 } from "../types";
 
 /**
@@ -135,7 +134,7 @@ export const createHospitalEncounter = async (
     phone: params.phone || "",
     age: params.age || 30,
     gender: params.gender || "Male",
-    bloodType: params.bloodType || "Not Sure",
+    bloodType: params.bloodType || "O+",
     status,
     admissionType: params.admissionType,
     assignedWard: params.assignedWardName || undefined,
@@ -218,7 +217,7 @@ export const createHospitalEncounter = async (
         phone: params.phone || "",
         age: params.age || 30,
         gender: params.gender || "Male",
-        bloodType: params.bloodType || "Not Sure",
+        bloodType: params.bloodType || "O+",
         activeEncounterId: encounterId,
         status: isAdmitted ? "INPATIENT" : "OUTPATIENT",
         createdAt: nowIso,
@@ -869,173 +868,6 @@ export const executeAtomicDischarge = async (
     return {
       success: true,
       message: `Encounter ${encounterId} successfully discharged. Patient discharged, bed released, and final clearance certificate generated.`
-    };
-  });
-};
-
-/**
- * 3B. ATOMIC MORGUE / MORTUARY ADMISSION FROM WARD
- * Handles transition of a deceased patient directly from ward/ICU/casualty to the Hospital Mortuary.
- * Creates MOH 214 Death Notification record, logs mortuary custody, frees the ward bed,
- * adds mortuary preservation bill items, and updates the encounter status to MORGUE.
- */
-export interface MorgueAdmissionParams {
-  encounterId: string;
-  timeOfDeath: string;
-  certifiedByDoctor: string;
-  doctorLicenseNo?: string;
-  causeOfDeathImmediate: string;
-  causeOfDeathUnderlying?: string;
-  mohDeathNoticeNo?: string;
-  morgueUnitName: string;
-  cabinetOrBayNumber: string;
-  morgueAttendantName: string;
-  nurseHandoverName: string;
-  nextOfKinName: string;
-  nextOfKinPhone: string;
-  nextOfKinRelationship: string;
-  belongingsInventory?: string;
-  tagsVerified: boolean;
-  notes?: string;
-  initialMorgueDailyFee?: number; // Default daily mortuary fee KES 1,000
-}
-
-export const executeMorgueAdmission = async (
-  params: MorgueAdmissionParams
-): Promise<{ success: boolean; message: string; morgueRecord: MorgueAdmissionRecord }> => {
-  const encRef = doc(db, "encounters", params.encounterId);
-  const nowIso = new Date().toISOString();
-  const morgueRecordId = `MRG-${Date.now().toString().slice(-6)}`;
-
-  return await runTransaction(db, async (transaction) => {
-    const encSnap = await transaction.get(encRef);
-    if (!encSnap.exists()) {
-      throw new Error("Encounter not found.");
-    }
-
-    const encounter = encSnap.data() as Encounter;
-
-    if (encounter.status === "MORGUE" || encounter.status === "DECEASED") {
-      throw new Error("Patient has already been admitted to the morgue.");
-    }
-
-    // Build the Morgue Admission Record
-    const morgueRecord: MorgueAdmissionRecord = {
-      id: morgueRecordId,
-      encounterId: encounter.id,
-      patientId: encounter.patientId,
-      patientName: encounter.patientName,
-      nationalId: encounter.nationalId,
-      age: encounter.age,
-      gender: encounter.gender,
-      fromWardId: encounter.assignedWardId,
-      fromWardName: encounter.assignedWard || "Inpatient Ward",
-      fromBedNumber: encounter.assignedBed || "N/A",
-      timeOfDeath: params.timeOfDeath || nowIso,
-      certifiedByDoctor: params.certifiedByDoctor,
-      doctorLicenseNo: params.doctorLicenseNo || "KMPDC-REG",
-      causeOfDeathImmediate: params.causeOfDeathImmediate,
-      causeOfDeathUnderlying: params.causeOfDeathUnderlying || "",
-      mohDeathNoticeNo: params.mohDeathNoticeNo || `MOH214-${Date.now().toString().slice(-5)}`,
-      admittedToMorgueAt: nowIso,
-      morgueUnitName: params.morgueUnitName || "Hospital Mortuary & Cold Room Unit",
-      cabinetOrBayNumber: params.cabinetOrBayNumber || "Bay 01",
-      morgueAttendantName: params.morgueAttendantName || "Mortuary Superintendent",
-      nurseHandoverName: params.nurseHandoverName || "Ward Nurse in Charge",
-      nextOfKinName: params.nextOfKinName,
-      nextOfKinPhone: params.nextOfKinPhone,
-      nextOfKinRelationship: params.nextOfKinRelationship,
-      belongingsInventory: params.belongingsInventory || "All personal items inventoried and tagged with nursing staff.",
-      tagsVerified: params.tagsVerified,
-      notes: params.notes || "Transferred with dual wrist & toe identification tags intact."
-    };
-
-    // 1. Release the Inpatient Ward Bed immediately back to AVAILABLE
-    if (encounter.assignedBedId) {
-      const bedRef = doc(db, "beds", encounter.assignedBedId);
-      transaction.update(bedRef, {
-        status: "AVAILABLE",
-        currentPatientId: null,
-        currentPatientName: null,
-        currentEncounterId: null,
-        occupiedSince: null
-      });
-    }
-
-    // 2. Add Morgue Preservation & Handling item to encounter bill ledger
-    const morgueFee = params.initialMorgueDailyFee ?? 1000;
-    const billRef = doc(collection(db, "encounters", params.encounterId, "billItems"));
-    transaction.set(billRef, {
-      id: billRef.id,
-      description: `Morgue Cold Storage Admission & Body Handling (Bay: ${morgueRecord.cabinetOrBayNumber})`,
-      category: "ward_bed",
-      department: "mortuary",
-      unitPrice: morgueFee,
-      quantity: 1,
-      total: morgueFee,
-      isPaid: false,
-      timestamp: nowIso
-    });
-
-    const newTotalBilled = (encounter.totalBilled || 0) + morgueFee;
-
-    // 3. Update Encounter document status to MORGUE
-    transaction.update(encRef, {
-      status: "MORGUE",
-      morgueAdmission: morgueRecord,
-      morgueTransferredAt: nowIso,
-      doctorDischargeApproved: true,
-      doctorDischargeApprovedBy: params.certifiedByDoctor,
-      doctorDischargeApprovedAt: nowIso,
-      doctorClearance: {
-        cleared: true,
-        doctorName: params.certifiedByDoctor,
-        clearedAt: nowIso,
-        dischargeCondition: "Deceased",
-        clinicalSummary: `Patient certified deceased. Cause: ${params.causeOfDeathImmediate}. MOH Notice: ${morgueRecord.mohDeathNoticeNo}. Admitted to Mortuary.`,
-        doctorSignature: `SIG-${params.certifiedByDoctor.replace(/\s+/g, "_")}-${Date.now().toString().slice(-4)}`
-      },
-      dischargeReason: `Deceased - Admitted to Morgue (${morgueRecord.morgueUnitName} - ${morgueRecord.cabinetOrBayNumber})`,
-      dischargeNotes: `Certified by ${params.certifiedByDoctor}. Immediate cause: ${params.causeOfDeathImmediate}. Transferred to Morgue by ${params.nurseHandoverName}.`,
-      dischargedAt: nowIso,
-      dischargedBy: params.nurseHandoverName,
-      totalBilled: newTotalBilled,
-      billingCleared: (encounter.totalPaid || 0) >= newTotalBilled,
-      updatedAt: nowIso
-    });
-
-    // 4. Update Patient master record
-    if (encounter.patientId) {
-      const patRef = doc(db, "patients", encounter.patientId);
-      transaction.update(patRef, {
-        status: "DECEASED",
-        currentDepartment: "mortuary",
-        updatedAt: nowIso
-      });
-    }
-
-    // 5. Store dedicated Morgue Admission document in /morgue_records collection for pathology & mortuary tracking
-    const morgueDocRef = doc(db, "morgue_records", morgueRecordId);
-    transaction.set(morgueDocRef, cleanFirestoreData({
-      ...morgueRecord,
-      totalBilled: newTotalBilled,
-      totalPaid: encounter.totalPaid || 0,
-      createdAt: nowIso
-    }));
-
-    // 6. Complete linked Queue ticket if any
-    if (encounter.activeQueueTicketId) {
-      const queueRef = doc(db, "queue", encounter.activeQueueTicketId);
-      transaction.update(queueRef, {
-        status: "completed",
-        currentDepartment: "mortuary"
-      });
-    }
-
-    return {
-      success: true,
-      message: `Patient ${encounter.patientName} successfully admitted to Morgue (${morgueRecord.cabinetOrBayNumber}). Ward bed released and MOH 214 notice generated.`,
-      morgueRecord
     };
   });
 };

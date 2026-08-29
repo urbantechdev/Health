@@ -35,7 +35,6 @@ import {
   signDoctorClinicalDischarge,
   transferEncounterBed,
   executeAtomicDischarge,
-  executeMorgueAdmission,
   subscribeEncounters,
   subscribeHospitalBeds,
   subscribeEncounterSubcollections
@@ -112,32 +111,10 @@ export default function AdmissionDischargeManager() {
   const [showDoctorSignoffModal, setShowDoctorSignoffModal] = useState<boolean>(false);
   const [showBedTransferModal, setShowBedTransferModal] = useState<boolean>(false);
   const [showDischargeSuccessModal, setShowDischargeSuccessModal] = useState<boolean>(false);
-  const [showMorgueAdmissionModal, setShowMorgueAdmissionModal] = useState<boolean>(false);
-  const [showMorgueSuccessModal, setShowMorgueSuccessModal] = useState<boolean>(false);
-  const [morgueSuccessData, setMorgueSuccessData] = useState<any>(null);
   const [dischargeSuccessData, setDischargeSuccessData] = useState<any>(null);
 
   // Action loaders
   const [actionLoading, setActionLoading] = useState<boolean>(false);
-
-  // Form states for Morgue Admission from Ward
-  const [mrgTimeOfDeath, setMrgTimeOfDeath] = useState(() => new Date().toISOString().slice(0, 16));
-  const [mrgDoctorName, setMrgDoctorName] = useState("Dr. Beatrice Omwamba (Consultant Surgeon)");
-  const [mrgDoctorLicense, setMrgDoctorLicense] = useState("KMPDC-A.48921");
-  const [mrgImmediateCause, setMrgImmediateCause] = useState("Septic Shock secondary to Perforated Viscus");
-  const [mrgUnderlyingCause, setMrgUnderlyingCause] = useState("Advanced Peritonitis & Multi-organ Failure");
-  const [mrgMohDeathNotice, setMrgMohDeathNotice] = useState(() => `MOH214-${Date.now().toString().slice(-6)}`);
-  const [mrgUnitName, setMrgUnitName] = useState("Main Facility Mortuary & Pathology Cold Unit");
-  const [mrgCabinetNumber, setMrgCabinetNumber] = useState("Cold Bay 04 - Cabinet B");
-  const [mrgAttendantName, setMrgAttendantName] = useState("Kipchumba Bett (Mortuary Superintendent)");
-  const [mrgNurseName, setMrgNurseName] = useState("Sister Faith Wambui (Ward Charge Nurse)");
-  const [mrgKinName, setMrgKinName] = useState("");
-  const [mrgKinPhone, setMrgKinPhone] = useState("");
-  const [mrgKinRelationship, setMrgKinRelationship] = useState("Spouse");
-  const [mrgBelongings, setMrgBelongings] = useState("Wristwatch, phone, wallet with ID, clothes inventoried in mortuary custody bag #849");
-  const [mrgTagsVerified, setMrgTagsVerified] = useState(true);
-  const [mrgNotes, setMrgNotes] = useState("Patient body tagged with dual waterproof wrist and toe identifiers. NOK notified.");
-  const [mrgDailyFee, setMrgDailyFee] = useState(1000);
 
   // Form states for Bed Transfer
   const [xferTargetBedId, setXferTargetBedId] = useState("");
@@ -165,7 +142,7 @@ export default function AdmissionDischargeManager() {
   const [admPhone, setAdmPhone] = useState("");
   const [admAge, setAdmAge] = useState(32);
   const [admGender, setAdmGender] = useState("Male");
-  const [admBloodType, setAdmBloodType] = useState("Not Sure");
+  const [admBloodType, setAdmBloodType] = useState("O+");
   const [admType, setAdmType] = useState<AdmissionType>("INPATIENT");
   const [admBedId, setAdmBedId] = useState("");
   const [admSymptoms, setAdmSymptoms] = useState("Severe acute abdominal pain and pyrexia");
@@ -257,21 +234,19 @@ export default function AdmissionDischargeManager() {
 
     if (!matchesSearch) return false;
 
-    if (filterStatus === "ALL_ACTIVE") return enc.status !== "DISCHARGED" && enc.status !== "MORGUE" && enc.status !== "DECEASED";
+    if (filterStatus === "ALL_ACTIVE") return enc.status !== "DISCHARGED";
     if (filterStatus === "ADMITTED") return enc.status === "ADMITTED";
     if (filterStatus === "DISCHARGING") return enc.status === "DISCHARGING";
-    if (filterStatus === "MORGUE") return enc.status === "MORGUE" || enc.status === "DECEASED";
     if (filterStatus === "DISCHARGED") return enc.status === "DISCHARGED";
-    if (filterStatus === "OUTPATIENT") return enc.admissionType === "OUTPATIENT" && enc.status !== "DISCHARGED" && enc.status !== "MORGUE";
+    if (filterStatus === "OUTPATIENT") return enc.admissionType === "OUTPATIENT" && enc.status !== "DISCHARGED";
 
     return true;
   });
 
   // Calculate metrics
-  const totalActive = encounters.filter((e) => e.status !== "DISCHARGED" && e.status !== "MORGUE" && e.status !== "DECEASED").length;
+  const totalActive = encounters.filter((e) => e.status !== "DISCHARGED").length;
   const totalInpatients = encounters.filter((e) => e.status === "ADMITTED").length;
   const totalDischarging = encounters.filter((e) => e.status === "DISCHARGING").length;
-  const totalMorgue = encounters.filter((e) => e.status === "MORGUE" || e.status === "DECEASED").length;
   const availableBedsCount = beds.filter((b) => b.status === "AVAILABLE").length;
   const occupiedBedsCount = beds.filter((b) => b.status === "OCCUPIED").length;
 
@@ -513,48 +488,6 @@ export default function AdmissionDischargeManager() {
     }
   };
 
-  // Handle MORGUE ADMISSION FROM WARD EXECUTION
-  const handleExecuteMorgueAdmission = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedEncounterId || !selectedEncounter) return;
-    setActionLoading(true);
-    try {
-      const result = await executeMorgueAdmission({
-        encounterId: selectedEncounterId,
-        timeOfDeath: mrgTimeOfDeath,
-        certifiedByDoctor: mrgDoctorName,
-        doctorLicenseNo: mrgDoctorLicense,
-        causeOfDeathImmediate: mrgImmediateCause,
-        causeOfDeathUnderlying: mrgUnderlyingCause,
-        mohDeathNoticeNo: mrgMohDeathNotice,
-        morgueUnitName: mrgUnitName,
-        cabinetOrBayNumber: mrgCabinetNumber,
-        morgueAttendantName: mrgAttendantName,
-        nurseHandoverName: mrgNurseName,
-        nextOfKinName: mrgKinName || "Next of Kin",
-        nextOfKinPhone: mrgKinPhone || selectedEncounter.phone || "N/A",
-        nextOfKinRelationship: mrgKinRelationship,
-        belongingsInventory: mrgBelongings,
-        tagsVerified: mrgTagsVerified,
-        notes: mrgNotes,
-        initialMorgueDailyFee: Number(mrgDailyFee) || 1000
-      });
-
-      setMorgueSuccessData({
-        encounter: selectedEncounter,
-        morgueRecord: result.morgueRecord,
-        admittedAt: new Date().toLocaleString()
-      });
-      setShowMorgueAdmissionModal(false);
-      setShowMorgueSuccessModal(true);
-      toast.success(result.message, "Morgue Admission Logged");
-    } catch (err: any) {
-      toast.error(err.message || "Morgue admission failed.", "Action Blocked");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* 1. Header & Live Metrics Bar */}
@@ -590,60 +523,49 @@ export default function AdmissionDischargeManager() {
           </div>
         </div>
 
-        {/* 5 Stat Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 pt-6">
+        {/* 4 Stat Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-6">
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60">
             <div className="flex items-center justify-between text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
-              <span>Active</span>
+              <span>Active Encounters</span>
               <Activity className="w-4 h-4 text-emerald-600" />
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-black text-slate-900">{totalActive}</span>
-              <span className="text-[10px] text-slate-500">Encounters</span>
+              <span className="text-xs text-slate-500">across hospital</span>
             </div>
           </div>
 
           <div className="bg-blue-50/70 rounded-2xl p-4 border border-blue-200/60">
             <div className="flex items-center justify-between text-blue-700 text-xs font-bold uppercase tracking-wider mb-2">
-              <span>Inpatient</span>
+              <span>Inpatient Wards</span>
               <Bed className="w-4 h-4 text-blue-600" />
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-blue-900">{totalInpatients}</span>
-              <span className="text-[10px] text-blue-600 font-bold">({occupiedBedsCount} Beds)</span>
+              <span className="text-2xl font-black text-blue-900">{totalInpatients} Admitted</span>
+              <span className="text-xs text-blue-600 font-bold">({occupiedBedsCount} Beds Occupied)</span>
             </div>
           </div>
 
           <div className="bg-amber-50/70 rounded-2xl p-4 border border-amber-200/60">
             <div className="flex items-center justify-between text-amber-700 text-xs font-bold uppercase tracking-wider mb-2">
-              <span>Discharge</span>
+              <span>Discharge Pipeline</span>
               <ShieldCheck className="w-4 h-4 text-amber-600" />
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-black text-amber-900">{totalDischarging}</span>
-              <span className="text-[10px] text-amber-700 font-bold">Gates</span>
-            </div>
-          </div>
-
-          <div className="bg-stone-100/90 rounded-2xl p-4 border border-stone-300">
-            <div className="flex items-center justify-between text-stone-700 text-xs font-bold uppercase tracking-wider mb-2">
-              <span>Mortuary / Morgue</span>
-              <Building className="w-4 h-4 text-stone-800" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-stone-900">{totalMorgue}</span>
-              <span className="text-[10px] text-stone-600 font-bold">In Custody</span>
+              <span className="text-xs text-amber-700 font-bold">Awaiting Final Gates</span>
             </div>
           </div>
 
           <div className="bg-emerald-50/70 rounded-2xl p-4 border border-emerald-200/60">
             <div className="flex items-center justify-between text-emerald-700 text-xs font-bold uppercase tracking-wider mb-2">
-              <span>Available Beds</span>
+              <span>Available Ward Beds</span>
               <Building className="w-4 h-4 text-emerald-600" />
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-emerald-900">{availableBedsCount}</span>
-              <span className="text-[10px] text-emerald-700 font-bold">Free Beds</span>
+              <span className="text-2xl font-black text-emerald-900">{availableBedsCount} Beds</span>
+              <span className="text-xs text-emerald-700 font-bold">Ready for Admission</span>
             </div>
           </div>
         </div>
@@ -681,7 +603,6 @@ export default function AdmissionDischargeManager() {
                   { id: "ADMITTED", label: "Inpatients" },
                   { id: "DISCHARGING", label: "Discharging" },
                   { id: "OUTPATIENT", label: "Outpatient" },
-                  { id: "MORGUE", label: "Morgue / Mortuary" },
                   { id: "DISCHARGED", label: "Discharged" },
                 ].map((f) => (
                   <button
@@ -744,8 +665,6 @@ export default function AdmissionDischargeManager() {
                               ? "bg-blue-100 text-blue-800 border border-blue-200"
                               : enc.status === "DISCHARGING"
                               ? "bg-amber-100 text-amber-800 border border-amber-200 animate-pulse"
-                              : enc.status === "MORGUE" || enc.status === "DECEASED"
-                              ? "bg-stone-800 text-stone-100 border border-stone-700"
                               : enc.status === "DISCHARGED"
                               ? "bg-slate-100 text-slate-600 border border-slate-200"
                               : "bg-emerald-100 text-emerald-800 border border-emerald-200"
@@ -1055,97 +974,39 @@ export default function AdmissionDischargeManager() {
                         Discharged by {selectedEncounter.dischargedBy || "Discharge Officer"} on {new Date(selectedEncounter.dischargedAt || "").toLocaleString()}
                       </p>
                     </div>
-                  ) : selectedEncounter.status === "MORGUE" || selectedEncounter.status === "DECEASED" ? (
-                    <div className="p-5 bg-stone-900 text-white rounded-2xl border border-stone-800 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-stone-300 font-extrabold text-xs uppercase tracking-wider">
-                          <Building className="w-4 h-4 text-amber-400" />
-                          <span>Patient Admitted to Hospital Mortuary</span>
-                        </div>
-                        <span className="px-2.5 py-0.5 text-[10px] font-black uppercase rounded-full bg-stone-800 text-amber-300 border border-stone-700 font-mono">
-                          MOH 214 Logged
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-stone-800/80 p-3.5 rounded-xl border border-stone-700 font-mono">
-                        <div>
-                          <span className="text-[10px] text-stone-400 block uppercase">Mortuary Unit</span>
-                          <span className="font-bold text-stone-100">{selectedEncounter.morgueAdmission?.morgueUnitName || "Hospital Mortuary"}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-stone-400 block uppercase">Cold Bay / Cabinet</span>
-                          <span className="font-bold text-amber-400">{selectedEncounter.morgueAdmission?.cabinetOrBayNumber || "Bay Storage"}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-stone-400 block uppercase">Certified By</span>
-                          <span className="font-bold text-stone-100">{selectedEncounter.morgueAdmission?.certifiedByDoctor || "Doctor Signed"}</span>
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-stone-400">
-                        Ward bed has been released back to circulation. MOH 214 Death Notification No: <strong className="text-stone-200">{selectedEncounter.morgueAdmission?.mohDeathNoticeNo || "MOH-214"}</strong>.
-                      </p>
-                    </div>
                   ) : (
-                    <div className="space-y-4 pt-4 border-t border-slate-100">
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div className="text-xs text-slate-500">
-                          {selectedEncounter.doctorDischargeApproved && (selectedEncounter.pendingLabOrders || 0) === 0 && balanceDue === 0 ? (
-                            <span className="text-emerald-700 font-black flex items-center gap-1.5">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                              All 3 clearance gates validated. Ready for routine discharge execution.
-                            </span>
-                          ) : (
-                            <span className="text-amber-700 font-bold flex items-center gap-1.5">
-                              <AlertCircle className="w-4 h-4 text-amber-600" />
-                              Routine discharge button is locked until all 3 gates pass.
-                            </span>
-                          )}
-                        </div>
-
-                        <button
-                          disabled={
-                            !selectedEncounter.doctorDischargeApproved ||
-                            (selectedEncounter.pendingLabOrders || 0) > 0 ||
-                            balanceDue > 0 ||
-                            actionLoading
-                          }
-                          onClick={handleExecuteDischarge}
-                          className={`px-8 py-3.5 rounded-2xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-lg ${
-                            selectedEncounter.doctorDischargeApproved && (selectedEncounter.pendingLabOrders || 0) === 0 && balanceDue === 0
-                              ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-600/30 active:scale-95 cursor-pointer"
-                              : "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300"
-                          }`}
-                        >
-                          <ShieldCheck className="w-5 h-5" />
-                          <span>{actionLoading ? "Executing Atomic Discharge..." : "Execute Routine Discharge"}</span>
-                        </button>
+                    <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="text-xs text-slate-500">
+                        {selectedEncounter.doctorDischargeApproved && (selectedEncounter.pendingLabOrders || 0) === 0 && balanceDue === 0 ? (
+                          <span className="text-emerald-700 font-black flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            All 3 clearance gates validated. Ready for final discharge execution.
+                          </span>
+                        ) : (
+                          <span className="text-amber-700 font-bold flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 text-amber-600" />
+                            Discharge button is locked until all 3 gates pass.
+                          </span>
+                        )}
                       </div>
 
-                      {/* Special Ward-to-Morgue Admission Option */}
-                      <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded-md bg-stone-800 text-stone-100">
-                              Clinical Protocol
-                            </span>
-                            <h4 className="text-xs font-extrabold text-stone-900">Inpatient Deceased / Morgue Transfer</h4>
-                          </div>
-                          <p className="text-[11px] text-stone-600 mt-0.5">
-                            If patient has passed away in ward/ICU, initiate immediate Morgue Admission to release ward bed, log MOH 214, and transfer body custody.
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setMrgTimeOfDeath(new Date().toISOString().slice(0, 16));
-                            setMrgKinName(selectedEncounter.patientName ? `Family of ${selectedEncounter.patientName}` : "");
-                            setMrgKinPhone(selectedEncounter.phone || "");
-                            setShowMorgueAdmissionModal(true);
-                          }}
-                          className="px-4 py-2.5 bg-stone-800 hover:bg-stone-900 text-white rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
-                        >
-                          <Building className="w-4 h-4 text-amber-400" />
-                          <span>Admit Patient to Morgue</span>
-                        </button>
-                      </div>
+                      <button
+                        disabled={
+                          !selectedEncounter.doctorDischargeApproved ||
+                          (selectedEncounter.pendingLabOrders || 0) > 0 ||
+                          balanceDue > 0 ||
+                          actionLoading
+                        }
+                        onClick={handleExecuteDischarge}
+                        className={`px-8 py-3.5 rounded-2xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer shadow-lg ${
+                          selectedEncounter.doctorDischargeApproved && (selectedEncounter.pendingLabOrders || 0) === 0 && balanceDue === 0
+                            ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-600/30 active:scale-95 cursor-pointer"
+                            : "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300"
+                        }`}
+                      >
+                        <ShieldCheck className="w-5 h-5" />
+                        <span>{actionLoading ? "Executing Atomic Discharge..." : "Execute Atomic Discharge"}</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1611,7 +1472,7 @@ export default function AdmissionDischargeManager() {
                         setAdmPhone(matched.phone || "");
                         setAdmAge(matched.age || 32);
                         setAdmGender(matched.gender || "Male");
-                        setAdmBloodType(matched.bloodType || "Not Sure");
+                        setAdmBloodType(matched.bloodType || "O+");
                       }
                     }}
                     placeholder="Search by Name, National ID, or Phone..."
@@ -1675,13 +1536,12 @@ export default function AdmissionDischargeManager() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-700">Blood Type (ABO/Rh)</label>
+                  <label className="text-[11px] font-bold text-slate-700">Blood Type</label>
                   <select
                     value={admBloodType}
                     onChange={(e) => setAdmBloodType(e.target.value)}
                     className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold focus:bg-white focus:outline-none"
                   >
-                    <option value="Not Sure">Not Sure / Unknown (Unverified)</option>
                     {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((b) => (
                       <option key={b} value={b}>{b}</option>
                     ))}
@@ -2413,342 +2273,6 @@ export default function AdmissionDischargeManager() {
               <button
                 onClick={() => setShowDischargeSuccessModal(false)}
                 className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black cursor-pointer shadow-md"
-              >
-                Close & Return
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 11. MODAL: MORGUE / MORTUARY ADMISSION FROM WARD */}
-      {showMorgueAdmissionModal && selectedEncounter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl p-6 max-w-2xl w-full border border-stone-300 shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-stone-200">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 bg-stone-900 text-amber-400 rounded-xl">
-                  <Building className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">Inpatient Morgue Admission & Custody Transfer</h3>
-                  <p className="text-[11px] text-slate-500">
-                    Patient: <strong className="text-slate-800">{selectedEncounter.patientName}</strong> ({selectedEncounter.nationalId}) • Current Bed: <strong className="text-blue-700">{selectedEncounter.assignedWard} ({selectedEncounter.assignedBed || "N/A"})</strong>
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowMorgueAdmissionModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900 space-y-1">
-              <div className="flex items-center gap-1.5 font-black text-[11px] text-amber-950 uppercase">
-                <AlertCircle className="w-4 h-4 text-amber-700" />
-                <span>Kenyan Health Facility Mortuary Protocol (MOH 214 Standard)</span>
-              </div>
-              <p className="text-[11px] leading-relaxed">
-                Confirming this will release ward bed <strong>{selectedEncounter.assignedBed}</strong> immediately back to available status, transition the encounter status to <strong>MORGUE</strong>, log an MOH 214 death notification, and append daily mortuary storage preservation billing.
-              </p>
-            </div>
-
-            <form onSubmit={handleExecuteMorgueAdmission} className="space-y-4 text-xs">
-              
-              {/* Clinical Certification Section */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Stethoscope className="w-3.5 h-3.5 text-emerald-600" />
-                  1. Clinical Death Certification & MOH Notice
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Time & Date of Death</label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={mrgTimeOfDeath}
-                      onChange={(e) => setMrgTimeOfDeath(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">MOH 214 Death Notice No</label>
-                    <input
-                      type="text"
-                      required
-                      value={mrgMohDeathNotice}
-                      onChange={(e) => setMrgMohDeathNotice(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-mono font-bold text-slate-800"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Certifying Medical Doctor</label>
-                    <input
-                      type="text"
-                      required
-                      value={mrgDoctorName}
-                      onChange={(e) => setMrgDoctorName(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Doctor KMPDC License / Reg No</label>
-                    <input
-                      type="text"
-                      required
-                      value={mrgDoctorLicense}
-                      onChange={(e) => setMrgDoctorLicense(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-mono text-slate-700"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Immediate Cause of Death</label>
-                    <input
-                      type="text"
-                      required
-                      value={mrgImmediateCause}
-                      onChange={(e) => setMrgImmediateCause(e.target.value)}
-                      placeholder="e.g. Cardiorespiratory Arrest, Septic Shock"
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-semibold text-rose-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Underlying / Contributing Cause</label>
-                    <input
-                      type="text"
-                      value={mrgUnderlyingCause}
-                      onChange={(e) => setMrgUnderlyingCause(e.target.value)}
-                      placeholder="e.g. Stage IV Gastric Carcinoma, Severe Sepsis"
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-semibold"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Mortuary Unit & Bay Assignment */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Building className="w-3.5 h-3.5 text-blue-600" />
-                  2. Mortuary Unit & Cold Cabinet Allocation
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Mortuary Unit Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={mrgUnitName}
-                      onChange={(e) => setMrgUnitName(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Cold Bay / Cabinet / Vault Slot</label>
-                    <select
-                      value={mrgCabinetNumber}
-                      onChange={(e) => setMrgCabinetNumber(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold text-blue-900"
-                    >
-                      <option value="Cold Bay 01 - Vault A">Cold Bay 01 - Vault A (Preserved)</option>
-                      <option value="Cold Bay 02 - Vault B">Cold Bay 02 - Vault B (Preserved)</option>
-                      <option value="Cold Bay 03 - Cabinet A">Cold Bay 03 - Cabinet A (General)</option>
-                      <option value="Cold Bay 04 - Cabinet B">Cold Bay 04 - Cabinet B (General)</option>
-                      <option value="Executive Suite 01">Executive Private Cold Suite 01</option>
-                      <option value="Post-Mortem Hold Room">Pathology / Post-Mortem Hold Room</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Mortuary Superintendent / Attendant</label>
-                    <input
-                      type="text"
-                      required
-                      value={mrgAttendantName}
-                      onChange={(e) => setMrgAttendantName(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Ward Nurse Handover Lead</label>
-                    <input
-                      type="text"
-                      required
-                      value={mrgNurseName}
-                      onChange={(e) => setMrgNurseName(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Daily Cold Storage Fee (KES / Day)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={mrgDailyFee}
-                      onChange={(e) => setMrgDailyFee(Number(e.target.value))}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-mono font-bold text-slate-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Dual Body Tag Verification</label>
-                    <label className="flex items-center gap-2 pt-2 cursor-pointer font-bold text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={mrgTagsVerified}
-                        onChange={(e) => setMrgTagsVerified(e.target.checked)}
-                        className="rounded text-stone-900 w-4 h-4"
-                      />
-                      <span>Wrist & Toe ID Tags Verified & Sealed</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Next of Kin & Belongings Section */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <UserCheck className="w-3.5 h-3.5 text-purple-600" />
-                  3. Next of Kin Notification & Belongings Custody
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Next of Kin Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={mrgKinName}
-                      onChange={(e) => setMrgKinName(e.target.value)}
-                      placeholder="e.g. Mary Muthoni"
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Next of Kin Phone</label>
-                    <input
-                      type="tel"
-                      required
-                      value={mrgKinPhone}
-                      onChange={(e) => setMrgKinPhone(e.target.value)}
-                      placeholder="07XXXXXXXX"
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-mono font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Relationship</label>
-                    <select
-                      value={mrgKinRelationship}
-                      onChange={(e) => setMrgKinRelationship(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-bold"
-                    >
-                      <option value="Spouse">Spouse / Partner</option>
-                      <option value="Parent">Parent / Guardian</option>
-                      <option value="Child">Son / Daughter</option>
-                      <option value="Sibling">Brother / Sister</option>
-                      <option value="Next of Kin">Relative / Other</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">Patient Personal Belongings Inventory</label>
-                  <input
-                    type="text"
-                    value={mrgBelongings}
-                    onChange={(e) => setMrgBelongings(e.target.value)}
-                    placeholder="List all jewellery, phones, wallet, clothing logged in mortuary safe..."
-                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowMorgueAdmissionModal(false)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={actionLoading || !mrgTagsVerified}
-                  className="px-6 py-2.5 bg-stone-900 hover:bg-black text-amber-400 rounded-xl font-black cursor-pointer shadow-md shadow-stone-900/20 disabled:opacity-50 flex items-center gap-2"
-                >
-                  <Building className="w-4 h-4" />
-                  <span>{actionLoading ? "Processing Custody Transfer..." : "Confirm & Admit to Morgue"}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 12. MODAL: MORGUE ADMISSION SUCCESS RECEIPT */}
-      {showMorgueSuccessModal && morgueSuccessData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full border border-stone-300 shadow-2xl space-y-5 text-center">
-            <div className="w-14 h-14 bg-stone-900 text-amber-400 rounded-full flex items-center justify-center mx-auto shadow-sm">
-              <Building className="w-7 h-7" />
-            </div>
-
-            <div>
-              <h3 className="text-lg font-black text-slate-900">Morgue Admission Logged</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Patient <strong className="text-slate-800">{morgueSuccessData.encounter?.patientName}</strong> has been transferred to the Hospital Mortuary.
-              </p>
-            </div>
-
-            <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 text-left text-xs space-y-2 font-mono text-stone-800">
-              <div className="flex justify-between">
-                <span className="text-stone-500">MOH 214 Notice No:</span>
-                <strong className="text-slate-900">{morgueSuccessData.morgueRecord?.mohDeathNoticeNo}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">Mortuary Unit / Bay:</span>
-                <strong className="text-amber-700">{morgueSuccessData.morgueRecord?.cabinetOrBayNumber}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">Ward Bed Released:</span>
-                <span className="text-emerald-700 font-bold">{morgueSuccessData.morgueRecord?.fromWardName} ({morgueSuccessData.morgueRecord?.fromBedNumber}) ➔ AVAILABLE</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">Doctor Certified:</span>
-                <span className="text-slate-900 font-bold">{morgueSuccessData.morgueRecord?.certifiedByDoctor}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">Next of Kin:</span>
-                <span className="text-slate-900 font-bold">{morgueSuccessData.morgueRecord?.nextOfKinName} ({morgueSuccessData.morgueRecord?.nextOfKinPhone})</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={() => setShowMorgueSuccessModal(false)}
-                className="px-6 py-2.5 bg-stone-900 hover:bg-black text-amber-400 rounded-xl text-xs font-black cursor-pointer shadow-md"
               >
                 Close & Return
               </button>
