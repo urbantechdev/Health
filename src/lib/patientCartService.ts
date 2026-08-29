@@ -462,7 +462,15 @@ export async function checkoutPatientCart(
   // 4. Update encounter billing clearance if encounterId exists
   if (currentCart.encounterId) {
     try {
-      await payEncounterBill(currentCart.encounterId, finalPayable, params.paymentMethod, `Cart Checkout POS ${invoiceNo}`);
+      const normalizedMethod: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split" = 
+        params.paymentMethod.includes("M-PESA") && params.paymentMethod.includes("Insurance")
+          ? "Split"
+          : params.paymentMethod.includes("Cash") && params.paymentMethod.includes("Insurance")
+          ? "Split"
+          : params.paymentMethod === "M-PESA" || params.paymentMethod === "Cash" || params.paymentMethod === "SHA/NHIF" || params.paymentMethod === "Insurance" || params.paymentMethod === "Split"
+          ? params.paymentMethod
+          : "Split";
+      await payEncounterBill(currentCart.encounterId, finalPayable, normalizedMethod, `Cart Checkout POS ${invoiceNo}`);
     } catch (e) {
       console.warn("[PatientCartService] Encounter bill settlement notice:", e);
     }
@@ -494,29 +502,32 @@ export async function syncDoctorConsultationToCart(params: {
   ticketNo?: string;
   encounterId?: string;
   doctorName: string;
+  isResultsReview?: boolean;
   prescriptions: { drugName: string; quantity: number; dosage: string; unitPrice?: number }[];
   referrals: { testName: string; department: string; standardAmount?: number }[];
   procedures?: { name: string; category?: PatientCartItem["category"]; amount: number }[];
 }): Promise<void> {
-  // 1. Add Consultation Fee
-  await addChargeToCart({
-    patientId: params.patientId,
-    patientName: params.patientName,
-    nationalId: params.nationalId,
-    phone: params.phone,
-    ticketNo: params.ticketNo,
-    encounterId: params.encounterId,
-    stage: "Doctor Consultation",
-    department: "Clinical Services / OPD",
-    category: "consultation",
-    itemCode: "CON-001",
-    name: "Doctor Consultation & Clinical Assessment Fee",
-    unitPrice: 1000,
-    quantity: 1,
-    notes: `Attending Doctor: ${params.doctorName}`,
-    addedBy: params.doctorName,
-    addedByRole: "Doctor"
-  });
+  // 1. Add Consultation Fee only if this is NOT a lab results review visit
+  if (!params.isResultsReview) {
+    await addChargeToCart({
+      patientId: params.patientId,
+      patientName: params.patientName,
+      nationalId: params.nationalId,
+      phone: params.phone,
+      ticketNo: params.ticketNo,
+      encounterId: params.encounterId,
+      stage: "Doctor Consultation",
+      department: "Clinical Services / OPD",
+      category: "consultation",
+      itemCode: "CON-001",
+      name: "Doctor Consultation & Clinical Assessment Fee",
+      unitPrice: 1000,
+      quantity: 1,
+      notes: `Attending Doctor: ${params.doctorName}`,
+      addedBy: params.doctorName,
+      addedByRole: "Doctor"
+    });
+  }
 
   // 2. Add Prescriptions
   for (const rx of params.prescriptions) {

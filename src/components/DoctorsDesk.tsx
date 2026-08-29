@@ -32,13 +32,17 @@ import {
   CreditCard,
   Phone,
   User,
-  ShoppingCart
+  ShoppingCart,
+  Bed,
+  FlaskRound,
+  FilePlus
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import KenyanHospitalFormsModal, { KenyanFormType, COMMON_ICD10_KENYA } from "./KenyanHospitalFormsModal";
 import PatientHistoryLookupModal from "./PatientHistoryLookupModal";
 import PatientCartPOSModal from "./PatientCartPOSModal";
 import { syncDoctorConsultationToCart } from "../lib/patientCartService";
+import { DEFAULT_HOSPITAL_WARDS, createHospitalEncounter } from "../lib/encounterService";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 
@@ -80,6 +84,12 @@ export default function DoctorsDesk({
 
   // Patient Cart & POS Folio Modal State
   const [showCartModal, setShowCartModal] = useState(false);
+
+  // Inpatient Direct Admission Modal State (Kenyan OPD -> IPD Handshake)
+  const [showAdmissionModal, setShowAdmissionModal] = useState(false);
+  const [admissionWardId, setAdmissionWardId] = useState("ward-general-male");
+  const [admissionNotes, setAdmissionNotes] = useState("");
+  const [isAdmitting, setIsAdmitting] = useState(false);
 
   // Printing digital prescription states
   const [printOpen, setPrintOpen] = useState(false);
@@ -297,6 +307,117 @@ export default function DoctorsDesk({
 
   const selectedPatient = patients.find(p => p.id === selectedPatientId);
 
+  // Determine if this is a Diagnostic Results Review consultation (Loopback from Lab/Rad)
+  const activeServingTicket = queueTickets.find(t => 
+    (selectedPatient && t.patientName === selectedPatient.patientName) || 
+    t.id === incomingPatientPrompt?.id
+  );
+  
+  const isResultsReview = Boolean(
+    activeServingTicket?.isResultsReview || 
+    activeServingTicket?.resultsReady || 
+    activeServingTicket?.ticketNo?.startsWith("REV-") ||
+    selectedPatient?.visits?.some(v => v.referrals?.some(r => r.status === "completed" && r.results))
+  );
+
+  // Extract all returned diagnostic findings for fast clinical review
+  const latestDiagnosticResults = useMemo(() => {
+    if (!selectedPatient) return [];
+    const list: { dept: string; test: string; findings: string; date: string }[] = [];
+    selectedPatient.visits?.forEach(v => {
+      v.referrals?.forEach(r => {
+        if (r.status === "completed" && r.results) {
+          list.push({
+            dept: r.department,
+            test: r.testName,
+            findings: r.results,
+            date: v.date
+          });
+        }
+      });
+    });
+    return list;
+  }, [selectedPatient]);
+
+  // MOH 705 Category Determination
+  const mohCategory = (selectedPatient?.age || 0) < 5 
+    ? "MOH 705A (Under 5 Morbidity)" 
+    : "MOH 705B (Over 5 Morbidity)";
+
+  // Direct Inpatient Admission Handler (Seamless OPD -> IPD Handshake)
+  const handleDirectInpatientAdmission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPatient) {
+      toast.warning("Please select a patient first.", "No Patient Selected");
+      return;
+    }
+
+    setIsAdmitting(true);
+    try {
+      const selectedWard = DEFAULT_HOSPITAL_WARDS.find(w => w.id === admissionWardId) || DEFAULT_HOSPITAL_WARDS[0];
+      
+      // Auto assign a bed number
+      const bedNumber = `Bed ${Math.floor(1 + Math.random() * selectedWard.totalBeds)}`;
+      const bedId = `${selectedWard.id}-bed-${bedNumber.replace("Bed ", "")}`;
+
+      // 1. Create Inpatient Encounter
+      const newEncounterId = await createHospitalEncounter({
+        patientId: selectedPatient.id,
+        patientName: selectedPatient.patientName,
+        nationalId: selectedPatient.nationalId,
+        phone: selectedPatient.phone,
+        age: selectedPatient.age,
+        gender: selectedPatient.gender,
+        bloodType: selectedPatient.bloodType,
+        admissionType: "INPATIENT",
+        assignedWardId: selectedWard.id,
+        assignedWardName: selectedWard.name,
+        assignedBedId: bedId,
+        assignedBedNumber: bedNumber,
+        initialSymptoms: symptoms || "Direct Admission from Doctor's Desk",
+        initialDiagnosis: diagnosis || "Inpatient Care Required",
+        attendingDoctorName: "Dr. On Duty",
+        recordedBy: "Doctor Consultation Desk"
+      });
+
+      // 2. Mark active queue ticket as admitted to ward
+      const qSnap = await getDocs(
+        query(
+          collection(db, "queue"),
+          where("patientName", "==", selectedPatient.patientName),
+          where("currentDepartment", "==", "doctor")
+        )
+      );
+
+      if (!qSnap.empty) {
+        for (const docItem of qSnap.docs) {
+          await updateDoc(doc(db, "queue", docItem.id), {
+            status: "completed",
+            currentDepartment: "inpatient_ward",
+            admissionRequired: true,
+            assignedWardName: selectedWard.name,
+            assignedBedNumber: bedNumber,
+            encounterId: newEncounterId,
+            notes: `Admitted to ${selectedWard.name} (${bedNumber}) by Doctor.`
+          });
+        }
+      }
+
+      setShowAdmissionModal(false);
+      setAdmissionNotes("");
+      toast.success(
+        `Patient ${selectedPatient.patientName} admitted to ${selectedWard.name} (${bedNumber})! Encounter #${newEncounterId} initiated.`,
+        "Inpatient Admission Successful"
+      );
+      onRefreshQueue();
+    } catch (err) {
+      console.error("Admission error:", err);
+      toast.error("Failed to process inpatient admission. Please try again.", "Admission Error");
+    } finally {
+      setIsAdmitting(false);
+    }
+  };
+
   // Trigger Gemini API to recommend alternatives
   const fetchAlternativeDrugs = async (outOfStockDrug: string) => {
     setAiLoading(true);
@@ -427,6 +548,7 @@ export default function DoctorsDesk({
           phone: selectedPatient.phone,
           ticketNo: selectedPatient.activeTicketNo,
           doctorName: "Doctor on Duty",
+          isResultsReview,
           prescriptions: draftPrescriptions.map(p => ({
             drugName: p.drugName,
             quantity: p.quantity,
@@ -761,7 +883,16 @@ export default function DoctorsDesk({
                   <p>National ID: <span className="font-mono font-bold text-gray-900">{selectedPatient.nationalId || "N/A"}</span></p>
                   <p>Age: <span className="font-semibold">{selectedPatient.age} years</span></p>
                   <p>Gender: <span className="font-semibold">{selectedPatient.gender}</span></p>
-                  <p>Blood Type: <span className="font-semibold">{selectedPatient.bloodType}</span></p>
+                  <p>
+                    Blood Type:{" "}
+                    {selectedPatient.bloodType === "Not Sure" || !selectedPatient.bloodType ? (
+                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                        Not Sure (Lab Test Needed)
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-rose-700">{selectedPatient.bloodType}</span>
+                    )}
+                  </p>
                   <p>Past Visits: <span className="font-bold text-indigo-700">{selectedPatient.visits?.length || 1} on file</span></p>
                   <p>SHA Code: <span className="font-mono font-bold text-[10px]">{selectedPatient.shaId || "N/A"}</span></p>
                 </div>
@@ -821,6 +952,16 @@ export default function DoctorsDesk({
                     >
                       <ShoppingCart className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Patient Cart</span>
+                    </button>
+                    <button
+                      id="btn-open-direct-inpatient-admission"
+                      type="button"
+                      onClick={() => setShowAdmissionModal(true)}
+                      className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 border border-amber-200 transition-colors cursor-pointer"
+                      title="Admit Patient directly to Inpatient Ward"
+                    >
+                      <Bed className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Admit to Ward</span>
                     </button>
                   </div>
 
@@ -943,6 +1084,55 @@ export default function DoctorsDesk({
         <div className="lg:col-span-8">
           {selectedPatient ? (
             <form onSubmit={handleSaveConsultation} className="space-y-6">
+              {/* Diagnostic Results Loopback Review Card (Kenyan Standard: Lab/Rad -> Doctor Review without duplicate fee) */}
+              {(isResultsReview || latestDiagnosticResults.length > 0) && (
+                <div id="diagnostic-results-review-panel" className="p-4 bg-gradient-to-br from-indigo-900 via-blue-900 to-slate-900 text-white rounded-2xl shadow-md border border-indigo-400/40 space-y-3 animate-in fade-in duration-300">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b border-indigo-700/50">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-indigo-500/20 text-indigo-300 rounded-lg border border-indigo-400/30">
+                        <FlaskRound className="w-4 h-4 text-indigo-300 animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-black tracking-wide text-white uppercase">Diagnostic Results Received (LIS / PACS)</h4>
+                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[10px] font-bold rounded-full">
+                            Results Review (No 2nd Consultation Charge)
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-indigo-200">Values returned by Ancillary Diagnostics Station for clinical decision-making</p>
+                      </div>
+                    </div>
+                    {activeServingTicket?.labSummary && (
+                      <span className="px-2.5 py-1 bg-white/10 text-white font-mono text-[10px] font-bold rounded-lg border border-white/20">
+                        LIS Transmit Ready
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Rendered diagnostic values */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {latestDiagnosticResults.length > 0 ? (
+                      latestDiagnosticResults.slice(0, 4).map((res, rIdx) => (
+                        <div key={rIdx} className="p-2.5 bg-white/10 backdrop-blur-xs rounded-xl border border-white/15 text-xs space-y-1">
+                          <div className="flex justify-between items-center text-[10px] text-indigo-200">
+                            <span className="font-bold uppercase tracking-wider">{res.dept}</span>
+                            <span>{res.date}</span>
+                          </div>
+                          <p className="font-bold text-white text-xs">{res.test}</p>
+                          <p className="font-mono text-emerald-300 text-[11px] bg-slate-950/60 p-1.5 rounded-lg border border-white/10 whitespace-pre-line">
+                            {res.findings}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-2 p-2.5 bg-white/10 rounded-xl text-xs text-indigo-200">
+                        {activeServingTicket?.labSummary || activeServingTicket?.notes || "Diagnostic parameters returned and attached to encounter record."}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Clinical notes and vitals */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Vitals */}
@@ -1010,7 +1200,12 @@ export default function DoctorsDesk({
                   </div>
                   <div className="space-y-1 relative">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-gray-600">Clinical Diagnosis (ICD-10/ICD-11 Compliant)</label>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-xs font-semibold text-gray-600">Clinical Diagnosis</label>
+                        <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded border border-emerald-200">
+                          {mohCategory}
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setShowIcdDropdown(!showIcdDropdown)}
@@ -1502,6 +1697,101 @@ export default function DoctorsDesk({
           currentUser={{ name: "Dr. Attending Physician", role: "Doctor" }}
           medications={medications}
         />
+      )}
+
+      {/* Direct Inpatient Ward Admission Modal (Kenyan OPD -> IPD Handshake) */}
+      {showAdmissionModal && selectedPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border border-gray-100 overflow-hidden">
+            <div className="p-6 bg-gradient-to-r from-amber-700 via-orange-800 to-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/10 rounded-2xl border border-white/20">
+                  <Bed className="w-6 h-6 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold">Direct Inpatient Admission</h3>
+                  <p className="text-xs text-amber-200">Initiate Hospital Admission & Ward Handshake</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdmissionModal(false)}
+                className="p-1 text-white/70 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDirectInpatientAdmission} className="p-6 space-y-4 text-xs">
+              <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-xl space-y-1">
+                <p className="font-bold text-amber-950 text-xs">Patient: {selectedPatient.patientName}</p>
+                <p className="text-amber-800 text-[11px]">
+                  ID: {selectedPatient.nationalId || "N/A"} • Age: {selectedPatient.age}y • Gender: {selectedPatient.gender}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-gray-700 block">Select Inpatient Ward</label>
+                <select
+                  id="select-admission-ward"
+                  value={admissionWardId}
+                  onChange={(e) => setAdmissionWardId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs bg-white focus:border-amber-500 font-semibold"
+                >
+                  {DEFAULT_HOSPITAL_WARDS.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.floor}) • Daily Rate: KES {w.dailyBaseRate.toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-gray-700 block">Admission Working Diagnosis</label>
+                <input
+                  id="input-admission-diagnosis"
+                  type="text"
+                  value={diagnosis}
+                  onChange={(e) => setDiagnosis(e.target.value)}
+                  placeholder="e.g. Severe Dehydration / Acute Appendicitis"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs focus:border-amber-500 font-medium"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-gray-700 block">Clinical Admission Notes & Nursing Orders</label>
+                <textarea
+                  id="input-admission-notes"
+                  rows={3}
+                  value={admissionNotes}
+                  onChange={(e) => setAdmissionNotes(e.target.value)}
+                  placeholder="Enter initial ward orders (IV Fluids, Q4H Vitals, NPO, etc.)..."
+                  className="w-full p-2.5 border border-gray-300 rounded-xl text-xs focus:border-amber-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAdmissionModal(false)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  id="btn-confirm-inpatient-admission"
+                  type="submit"
+                  disabled={isAdmitting}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Bed className="w-4 h-4" />
+                  <span>{isAdmitting ? "Allocating Bed..." : "Admit & Book Ward Bed"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

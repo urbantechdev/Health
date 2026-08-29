@@ -728,6 +728,20 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
       const invoiceId = `INV-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
       const finalKraNo = kraStatus?.kraInvoiceNo || `KRAETIMS-${Date.now().toString().slice(-6)}`;
 
+      const isSplitPayment = (insuranceCover > 0 || shaCover > 0) && patientOutPocket > 0;
+      let finalMethod: any = method;
+      if (isSplitPayment) {
+        if (insuranceCover > 0 && method === "M-PESA") {
+          finalMethod = "Insurance (Card) + M-PESA";
+        } else if (insuranceCover > 0 && method === "Cash") {
+          finalMethod = "Insurance (Card) + Cash";
+        } else if (insuranceCover > 0) {
+          finalMethod = "Insurance + Copay";
+        } else if (shaCover > 0) {
+          finalMethod = `SHA + ${method}`;
+        }
+      }
+
       const newInvoice: Record<string, any> = {
         id: invoiceId,
         patientId: selectedPatient.id,
@@ -742,9 +756,16 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
         split: {
           sha: shaCover,
           insurance: insuranceCover,
-          outOfPocket: patientOutPocket
+          outOfPocket: patientOutPocket,
+          insuranceCoveredAmount: insuranceCover,
+          copayAmount: patientOutPocket,
+          copayPaymentMethod: method === "M-PESA" ? "M-PESA" : method === "Cash" ? "Cash" : method,
+          insuranceProvider: selectedPatient.insuranceScheme || "Jubilee Health Insurance",
+          cardMemberNumber: selectedPatient.insuranceNumber || selectedPatient.nationalId,
+          preAuthCode: insuranceAuth?.authCode,
+          copayMpesaReceiptNumber: mpesaStatus?.includes("Receipt:") ? mpesaStatus.split("Receipt:")[1]?.trim() : refCode
         },
-        paymentMethod: method,
+        paymentMethod: finalMethod,
         paymentStatus: "paid",
         kraCompliantInvoiceNo: finalKraNo,
         timestamp: new Date().toLocaleDateString("en-GB", {
@@ -1239,7 +1260,11 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
                       <span>Nat. ID: <strong className="text-slate-700">{selectedPatient.nationalId || "N/A"}</strong></span>
                       <span>Phone: <strong className="text-slate-700">{selectedPatient.phone || "N/A"}</strong></span>
                       <span>Age/Gender: <strong className="text-slate-700">{selectedPatient.age} yrs • {selectedPatient.gender}</strong></span>
-                      <span>Blood Group: <strong className="text-slate-700">{selectedPatient.bloodType || "O+"}</strong></span>
+                      <span>Blood Group: {selectedPatient.bloodType === "Not Sure" || !selectedPatient.bloodType ? (
+                        <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">Not Confirmed</span>
+                      ) : (
+                        <strong className="text-slate-700">{selectedPatient.bloodType}</strong>
+                      )}</span>
                       {selectedPatient.insuranceScheme && (
                         <span>Scheme: <strong className="text-indigo-600">{selectedPatient.insuranceScheme}</strong></span>
                       )}
@@ -1798,9 +1823,9 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
                         </div>
 
                         {/* Private Insurance Input */}
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
-                            <label className="text-[10px] font-bold text-slate-600 uppercase">Private Insurance (KES)</label>
+                            <label className="text-[10px] font-bold text-slate-600 uppercase">Insurance Card Cover (KES)</label>
                             <button
                               id="btn-submit-slade-preauth"
                               onClick={submitInsurancePreauth}
@@ -1810,19 +1835,53 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
                               {insuranceLoading ? "Authorizing..." : "Slade Pre-auth"}
                             </button>
                           </div>
-                          <input
-                            id="input-insurance-coverage-amount"
-                            type="number"
-                            min="0"
-                            max={netDueAfterDiscount - shaCover}
-                            value={insuranceCover}
-                            onChange={(e) => {
-                              const val = Math.min(netDueAfterDiscount - shaCover, parseInt(e.target.value) || 0);
-                              setInsuranceCover(val);
-                            }}
-                            className="w-full px-2.5 py-1.5 border border-slate-200 bg-white rounded-xl text-xs font-mono font-bold"
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              id="input-insurance-coverage-amount"
+                              type="number"
+                              min="0"
+                              max={netDueAfterDiscount - shaCover}
+                              value={insuranceCover}
+                              onChange={(e) => {
+                                const maxAllowed = netDueAfterDiscount - shaCover;
+                                const val = Math.min(maxAllowed, parseInt(e.target.value) || 0);
+                                setInsuranceCover(val);
+                              }}
+                              className="flex-1 px-2.5 py-1.5 border border-slate-200 bg-white rounded-xl text-xs font-mono font-bold"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setInsuranceCover(Math.min(5000, netDueAfterDiscount - shaCover))}
+                              className="px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-[10px] font-bold rounded-lg cursor-pointer shrink-0"
+                            >
+                              5,000/-
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setInsuranceCover(Math.floor((netDueAfterDiscount - shaCover) / 2))}
+                              className="px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 text-[10px] font-bold rounded-lg cursor-pointer shrink-0"
+                            >
+                              50% Split
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setInsuranceCover(netDueAfterDiscount - shaCover)}
+                              className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg cursor-pointer shrink-0"
+                            >
+                              100%
+                            </button>
+                          </div>
                         </div>
+
+                        {/* Partial Insurance Card Banner */}
+                        {insuranceCover > 0 && patientOutPocket > 0 && (
+                          <div className="p-2.5 bg-indigo-100/60 border border-indigo-200 rounded-xl text-[11px] text-indigo-950">
+                            <span className="font-extrabold block">💳 Split Settlement Configured:</span>
+                            <span className="text-[10px] text-indigo-800">
+                              Card pays <strong>KES {insuranceCover.toLocaleString()}</strong>. Patient pays remaining <strong>KES {patientOutPocket.toLocaleString()}</strong> via M-PESA or Cash.
+                            </span>
+                          </div>
+                        )}
 
                         {/* Remaining Out of Pocket */}
                         <div className="pt-2 border-t border-slate-200 flex justify-between items-center font-bold">

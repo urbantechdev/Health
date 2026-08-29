@@ -192,12 +192,12 @@ export default function RolePortalLogin({
     },
     {
       id: "nurse",
-      title: "Nurse / Inpatient Care",
-      role: "Reception",
+      title: "Nurse / Triage Officer",
+      role: "Nurse",
       department: "nursing",
-      targetTab: "queue",
+      targetTab: "triage",
       icon: HeartPulse,
-      description: "Patient Triage, Vital Signs Monitoring & Ward Rounds",
+      description: "Patient Triage (TEWS / Emergency Score), Vitals Recording & Consultation Forwarding",
       color: "text-rose-600",
       bg: "bg-rose-50"
     },
@@ -288,7 +288,8 @@ export default function RolePortalLogin({
           (targetDept === "medical" && (d === "medical" || r.includes("doctor") || r.includes("practitioner") || r.includes("surgeon") || r.includes("clinician"))) ||
           (targetDept === "laboratory" && (d === "laboratory" || d === "diagnostics" || r.includes("lab"))) ||
           (targetDept === "pharmacy" && (d === "pharmacy" || r.includes("pharm"))) ||
-          (targetDept === "reception" && (d === "reception" || d === "nursing" || r.includes("reception") || r.includes("nurse") || r.includes("triage"))) ||
+          (targetDept === "nursing" && (d === "nursing" || d === "triage" || r.includes("nurse") || r.includes("triage") || r.includes("matron"))) ||
+          (targetDept === "reception" && (d === "reception" || r.includes("reception") || r.includes("front desk"))) ||
           (targetDept === "billing" && (d === "billing" || d === "finance" || r.includes("billing") || r.includes("cashier") || r.includes("accounts"))) ||
           (targetDept === "finance" && (d === "finance" || r.includes("finance") || r.includes("accountant"))) ||
           (targetDept === "hr" && (d === "hr" || r.includes("hr") || r.includes("human resources"))) ||
@@ -531,17 +532,17 @@ export default function RolePortalLogin({
           </div>
 
           <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-12 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4 sm:gap-5">
+            <div className="flex items-center gap-4 sm:gap-6">
               {hospitalLogoUrl ? (
                 <img
                   src={hospitalLogoUrl}
                   alt="Hospital Logo"
-                  className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-2xl sm:rounded-3xl border-2 border-white/30 shadow-xl"
+                  className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 object-cover rounded-full border-4 border-white/40 shadow-2xl ring-4 ring-blue-400/30 shrink-0"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 text-white rounded-2xl sm:rounded-3xl flex items-center justify-center border-2 border-white/20 shadow-lg">
-                  <Hospital className="w-9 h-9 sm:w-11 sm:h-11 text-blue-400" />
+                <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 bg-white/10 text-white rounded-full flex items-center justify-center border-4 border-white/30 shadow-2xl ring-4 ring-blue-400/30 shrink-0">
+                  <Hospital className="w-10 h-10 sm:w-14 sm:h-14 text-blue-400" />
                 </div>
               )}
               <div>

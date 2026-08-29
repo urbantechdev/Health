@@ -7,6 +7,7 @@ import { Tenant, DepartmentToggles, Employee } from "./types";
 import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "./constants/roles";
 import AdminPanel from "./components/AdminPanel";
 import ReceptionKiosk from "./components/ReceptionKiosk";
+import NurseTriageStation from "./components/NurseTriageStation";
 import QueueDashboard from "./components/QueueDashboard";
 import DoctorsDesk from "./components/DoctorsDesk";
 import SmartPharmacy from "./components/SmartPharmacy";
@@ -35,8 +36,11 @@ import PatientHistoryLookupModal from "./components/PatientHistoryLookupModal";
 import RolePortalLogin from "./components/RolePortalLogin";
 import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
+import UserGuide from "./components/UserGuide";
 import { bootstrapCloudFirestore, ensureSuperAdminsExist } from "./lib/dbInit";
 import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "./lib/superAdmins";
+import { toast } from "./lib/promptService";
+import { downloadReadmeFile } from "./lib/downloadReadme";
 
 import {
   Building2,
@@ -89,7 +93,12 @@ import {
   Hospital,
   FileCheck,
   Bed,
-  History
+  History,
+  HeartPulse,
+  BookOpen,
+  FileDown,
+  Download,
+  BookMarked
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -355,10 +364,10 @@ export default function App() {
 
   // Authentication & Session States
   const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [simulatedUser, setSimulatedUser] = useState<{ email: string; displayName: string; isSimulated: boolean; photoURL?: string } | null>(null);
+  const [simulatedUser, setSimulatedUser] = useState<{ email: string; displayName: string; isSimulated?: boolean; photoURL?: string } | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Specialist Simulation & Live Notification States
+  // Specialist Staff & Live Notification States
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [activeSpecialistId, setActiveSpecialistId] = useState<string>("");
   const [notifications, setNotifications] = useState<LiveNotification[]>([]);
@@ -798,8 +807,8 @@ export default function App() {
       };
     }
 
-    // Global dashboard overview is accessible to all logged-in roles
-    if (tabId === "dashboard") {
+    // Global dashboard overview and platform user guide are accessible to all logged-in roles
+    if (tabId === "dashboard" || tabId === "guide") {
       return { allowed: true };
     }
 
@@ -815,7 +824,7 @@ export default function App() {
     };
   };
 
-  // Desktop Keyboard Shortcuts: Alt+1 to Alt+8 for rapid module switching
+  // Desktop Keyboard Shortcuts: Alt+1 to Alt+9 for rapid module switching
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
@@ -828,6 +837,15 @@ export default function App() {
           "6": "billing",
           "7": "finance",
           "8": "admin",
+          "9": "guide",
+          "g": "guide",
+          "G": "guide",
+          "j": "journey",
+          "J": "journey",
+          "k": "tickets",
+          "K": "tickets",
+          "q": "queue",
+          "Q": "queue",
         };
         const targetTab = keyMap[e.key];
         if (targetTab && checkTabPermission(targetTab).allowed) {
@@ -908,15 +926,21 @@ export default function App() {
     setActiveTab("dashboard");
   };
 
-  // Online/Offline & Sync Tracking State
+  // Online/Offline & Cloud Firestore Sync Tracking State
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSimulatedOffline, setIsSimulatedOffline] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
 
   // Monitor real-world network status
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      enableNetwork(db).catch(() => {});
+      toast.success("Cloud database connection restored.", "Online");
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning("Network connection lost. Offline persistence active.", "Offline Mode");
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
@@ -936,22 +960,18 @@ export default function App() {
     return () => unsubQueueSync();
   }, []);
 
-  // Function to toggle simulated offline mode
-  const toggleOfflineSimulation = async () => {
+  // Function to refresh database network connection
+  const handleRefreshNetwork = async () => {
     try {
-      if (isSimulatedOffline) {
-        await enableNetwork(db);
-        setIsSimulatedOffline(false);
-      } else {
-        await disableNetwork(db);
-        setIsSimulatedOffline(true);
-      }
+      await enableNetwork(db);
+      setIsOnline(navigator.onLine);
+      toast.info("Database connection synchronized.", "Cloud Sync");
     } catch (err) {
-      console.error("Error toggling offline simulation:", err);
+      console.error("Error refreshing network:", err);
     }
   };
 
-  // Fetch specialists list for simulation
+  // Fetch active specialists list from database
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "employees"), (snapshot) => {
       const emps: Employee[] = [];
@@ -981,7 +1001,9 @@ export default function App() {
           setActiveTab("hr");
         } else if (dept === "security") {
           setActiveTab("security");
-        } else if (dept === "reception" || dept === "nursing") {
+        } else if (dept === "nursing" || dept === "triage") {
+          setActiveTab("triage");
+        } else if (dept === "reception") {
           setActiveTab("reception");
         }
       }
@@ -1081,6 +1103,7 @@ export default function App() {
   // Live badge counts per tab/menu item
   const openTicketsCount = systemTicketsList.filter((t) => t.status === "open" || t.status === "in_progress").length;
   const pendingQueueCount = queueItems.filter((q) => q.status === "pending" || q.status === "serving").length;
+  const triageWaitingCount = queueItems.filter((q) => (q.currentDepartment === "triage" || q.currentDepartment === "reception") && q.status === "pending").length;
   const doctorWaitingCount = queueItems.filter((q) => (q.currentDepartment === "doctor" || !q.currentDepartment) && q.status === "pending").length;
   const diagnosticsWaitingCount = queueItems.filter((q) => (q.currentDepartment === "laboratory" || q.currentDepartment === "radiology") && q.status === "pending").length;
   const pharmacyWaitingCount = queueItems.filter((q) => q.currentDepartment === "pharmacy" && q.status === "pending").length;
@@ -1094,6 +1117,8 @@ export default function App() {
         return openTicketsCount;
       case "queue":
         return pendingQueueCount;
+      case "triage":
+        return triageWaitingCount;
       case "doctor":
         return doctorWaitingCount;
       case "transfers":
@@ -1188,23 +1213,22 @@ export default function App() {
   };
 
   // Filter navigation tabs dynamically based on super-admin feature toggles
+  // Note: Tickets, Patient Journey, Live Queue, and Pharmacy are hosted on the Desktop Bottom Nav to avoid sidebar congestion
   const navItems = [
     { id: "dashboard", label: "Dashboard Overview", icon: LayoutDashboard, enabled: true },
     { id: "reception", label: "Reception Desk", icon: UserPlus, enabled: toggles.reception },
+    { id: "triage", label: "Nurse Triage", icon: HeartPulse, enabled: true },
     { id: "admissions", label: "Admission & Wards", icon: Bed, enabled: true },
-    { id: "tickets", label: "Patient Tickets", icon: Ticket, enabled: true },
-    { id: "journey", label: "Patient Journey", icon: Activity, enabled: true },
-    { id: "queue", label: "Live Queue Board", icon: Monitor, enabled: toggles.queue },
     { id: "doctor", label: "Doctor Station", icon: Stethoscope, enabled: toggles.doctor },
     { id: "transfers", label: "Transfers & Referrals", icon: ArrowRightLeft, enabled: true },
     { id: "diagnostics", label: "Lab / Radiology", icon: FlaskRound, enabled: toggles.laboratory || toggles.radiology },
-    { id: "pharmacy", label: "Pharmacy POS", icon: ShoppingCart, enabled: toggles.pharmacy },
     { id: "billing", label: "Split Billing", icon: CreditCard, enabled: toggles.billing },
     { id: "finance", label: "Finance & Accounts", icon: Landmark, enabled: true },
     { id: "procurement", label: "Procurement & LPO", icon: ShoppingBag, enabled: true },
     { id: "hr", label: "Human Resources", icon: Users, enabled: true },
     { id: "payroll", label: "Payroll & Tax", icon: DollarSign, enabled: true },
     { id: "security", label: "Security Desk", icon: Shield, enabled: true },
+    { id: "guide", label: "User Guide & Manual", icon: BookOpen, enabled: true },
     { id: "admin", label: "Developer Settings", icon: Sliders, enabled: true },
   ];
 
@@ -1304,20 +1328,20 @@ export default function App() {
               title="Click to upload, change or configure Hospital Logo"
               className="flex items-center gap-3 sm:gap-4 group cursor-pointer min-w-0"
             >
-              <div className="relative p-1.5 sm:p-2 bg-yellow-300 text-white rounded-2xl shadow-md border border-yellow-500 flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-yellow-200 transition-all duration-300 overflow-hidden">
+              <div className="relative p-1 sm:p-1.5 bg-yellow-300 text-white rounded-full shadow-lg border-2 border-yellow-500 ring-2 ring-yellow-400/50 flex items-center justify-center shrink-0 w-16 h-16 sm:w-20 sm:h-20 lg:w-22 lg:h-22 group-hover:scale-105 group-hover:bg-yellow-200 transition-all duration-300 overflow-hidden">
                 {brandLogoUrl ? (
                   <img
                     src={brandLogoUrl}
                     alt="HMIS Hospital Logo"
-                    className="w-9 h-9 sm:w-12 sm:h-12 object-cover rounded-xl shadow-inner transition-transform group-hover:scale-105"
+                    className="w-full h-full object-cover rounded-full shadow-inner transition-transform duration-300 group-hover:scale-105"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <Building2 className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-pulse group-hover:animate-none" />
+                  <Building2 className="w-9 h-9 sm:w-12 sm:h-12 text-slate-900 animate-pulse group-hover:animate-none" />
                 )}
                 {/* Upload indicator pill on hover */}
-                <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-white p-1 rounded-full border border-yellow-600 text-[8px] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs">
-                  <Sparkles className="w-2.5 h-2.5 text-white" />
+                <div className="absolute bottom-0 right-0 bg-yellow-500 text-white p-1 rounded-full border border-yellow-600 text-[8px] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs">
+                  <Sparkles className="w-3 h-3 text-white" />
                 </div>
               </div>
               <div className="min-w-0">
@@ -1329,7 +1353,7 @@ export default function App() {
                     Tier {tenant.type}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm font-bold truncate hidden sm:block mt-0.5 tracking-wide animate-header-subtext-color">
+                <p className={`text-xs sm:text-sm font-bold truncate hidden sm:block mt-0.5 tracking-wide ${currentHeaderStyle.textClass || "text-slate-800"}`}>
                   Hospital ERP Management System
                 </p>
               </div>
@@ -1392,13 +1416,25 @@ export default function App() {
                 </button>
               )}
 
+              {/* Mobile Platform User Guide Button */}
+              <button
+                id="btn-mobile-user-guide"
+                onClick={() => setActiveTab("guide")}
+                title="Platform User Guide & Operational Manual"
+                className={`p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer relative ${
+                  activeTab === "guide" ? "bg-white/20 rounded-lg" : ""
+                }`}
+              >
+                <BookOpen className="w-5 h-5 text-white" />
+              </button>
+
               {/* Mobile Offline/Online Indicator - Large White Icon (No Background) */}
               <button
-                onClick={toggleOfflineSimulation}
-                title={isSimulatedOffline ? "Offline Mode (Click to connect)" : "Online Mode (Connected)"}
+                onClick={handleRefreshNetwork}
+                title={isOnline ? "Online Mode (Cloud Firestore Connected)" : "Offline Mode (Local Cache Active)"}
                 className="p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer"
               >
-                {isSimulatedOffline ? <WifiOff className="w-5 h-5 text-white" /> : <Wifi className="w-5 h-5 text-white" />}
+                {!isOnline ? <WifiOff className="w-5 h-5 text-white" /> : <Wifi className="w-5 h-5 text-white" />}
               </button>
 
               {/* Mobile Profile & System Menu Button - Large Avatar / Bright Grey Icon (No Background) */}
@@ -1417,7 +1453,7 @@ export default function App() {
                 ) : (
                   <User className="w-6 h-6 text-slate-200 hover:text-white" />
                 )}
-                {isSimulatedOffline && (
+                {!isOnline && (
                   <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border border-slate-900 animate-pulse" />
                 )}
               </button>
@@ -1426,20 +1462,20 @@ export default function App() {
 
           {/* Desktop Top Header Controls - Large White Icons without Background Color */}
           <div className="hidden md:flex flex-wrap items-center gap-3 lg:gap-4 relative z-10">
-            {/* Offline/Online Status Indicator & Toggle - Large White Icon (No Background) */}
+            {/* Offline/Online Status Indicator & Reconnection - Large White Icon (No Background) */}
             <button
-              onClick={toggleOfflineSimulation}
-              title={isSimulatedOffline ? "Offline Mode (Click to reconnect with Cloud Firestore)" : "Online Mode (Connected to Cloud Firestore)"}
+              onClick={handleRefreshNetwork}
+              title={isOnline ? "Online Mode (Connected to Cloud Firestore)" : "Offline Mode (Click to sync with Cloud Firestore)"}
               className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
             >
-              {isSimulatedOffline ? (
+              {!isOnline ? (
                 <WifiOff className="w-6 h-6 lg:w-7 lg:h-7 text-white transition-transform duration-200 hover:rotate-12" />
               ) : (
                 <Wifi className="w-6 h-6 lg:w-7 lg:h-7 text-white hover:text-white/80 transition-transform duration-200" />
               )}
               
               {/* Online Pulse Indicator Dot */}
-              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full shrink-0 ${isOnline && !isSimulatedOffline ? "bg-emerald-600 animate-pulse" : "bg-amber-600"}`}></span>
+              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-emerald-600 animate-pulse" : "bg-amber-600"}`}></span>
 
               {pendingSyncCount > 0 && (
                 <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-yellow-500 text-slate-950 text-[9px] font-mono font-bold rounded-full border border-yellow-600 animate-pulse">
@@ -1543,6 +1579,21 @@ export default function App() {
                 <Hospital className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
               </button>
             )}
+
+            {/* Platform User Guide & Manual Link - Large White Icon */}
+            <button
+              id="btn-header-user-guide"
+              onClick={() => setActiveTab("guide")}
+              title="Platform User Guide & Operational Manual (Complete module instructions & SOPs)"
+              className={`relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer ${
+                activeTab === "guide" ? "bg-white/20 rounded-xl" : ""
+              }`}
+            >
+              <BookOpen className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
+              {activeTab === "guide" && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              )}
+            </button>
 
             {/* Header Color Theme Customizer - Large White Icon (No Background) */}
             {isSuperAdmin && (
@@ -1891,7 +1942,7 @@ export default function App() {
                 <span className="absolute -top-1 -right-2 px-1 min-w-[15px] h-3.5 text-[8px] font-black rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white flex items-center justify-center ring-1 ring-white animate-pulse">
                   {totalSystemActiveNotifications > 99 ? "99+" : totalSystemActiveNotifications}
                 </span>
-              ) : isSimulatedOffline ? (
+              ) : !isOnline ? (
                 <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
               ) : null}
             </div>
@@ -2064,19 +2115,19 @@ export default function App() {
                 <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${isOnline && !isSimulatedOffline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+                      <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Database Connection</span>
                     </div>
                     <button
-                      onClick={toggleOfflineSimulation}
+                      onClick={handleRefreshNetwork}
                       className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
-                        isOnline && !isSimulatedOffline
+                        isOnline
                           ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                           : "bg-amber-500/20 text-amber-200 border-amber-500/50 animate-pulse"
                       }`}
                     >
-                      {isSimulatedOffline ? <WifiOff className="w-4 h-4 text-amber-300" /> : <Wifi className="w-4 h-4 text-emerald-400" />}
-                      <span>{isSimulatedOffline ? "Offline Mode" : "Firebase Sync"}</span>
+                      {!isOnline ? <WifiOff className="w-4 h-4 text-amber-300" /> : <Wifi className="w-4 h-4 text-emerald-400" />}
+                      <span>{isOnline ? "Firestore Online" : "Reconnect Cloud"}</span>
                     </button>
                   </div>
                   {pendingSyncCount > 0 && (
@@ -2130,7 +2181,34 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 6. Live System Clock Display - Big Bold Font */}
+                {/* 6. System Documentation & Operational Guides */}
+                <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Documentation & Manuals</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        setActiveTab("guide");
+                      }}
+                      className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <BookOpen className="w-4 h-4 text-blue-400" />
+                      <span>User Guide</span>
+                    </button>
+                    <button
+                      onClick={() => downloadReadmeFile("AfyaCare-HMS-Enterprise-Documentation.md")}
+                      className="p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <FileDown className="w-4 h-4 text-emerald-400" />
+                      <span>README.md</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 7. Live System Clock Display - Big Bold Font */}
                 <div className="flex items-center justify-between p-4 bg-slate-950/80 rounded-2xl border border-slate-800 text-slate-400">
                   <div className="flex items-center gap-2.5">
                     <Clock className="w-5 h-5 text-emerald-400 animate-pulse" />
@@ -2148,8 +2226,8 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Main Content Area - adjusted padding for auto-fit bottom nav spacing and responsive scaling */}
-        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 pb-32 md:pb-28 lg:pb-32 overflow-y-auto w-full min-w-0">
+        {/* Main Content Area - generous bottom padding for double-height desktop bottom nav dock */}
+        <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 pb-36 md:pb-48 lg:pb-52 overflow-y-auto w-full min-w-0">
           {/* Mobile-Only Active Department Banner */}
           <div className="md:hidden flex items-center justify-between bg-white border border-slate-200/90 px-3.5 py-2.5 rounded-2xl shadow-xs mb-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -2298,7 +2376,15 @@ export default function App() {
                     )}
 
                     {activeTab === "reception" && toggles.reception && (
-                      <ReceptionKiosk onTicketCreated={() => setActiveTab("queue")} />
+                      <ReceptionKiosk onTicketCreated={() => setActiveTab("triage")} />
+                    )}
+
+                    {activeTab === "triage" && (
+                      <NurseTriageStation
+                        onNavigateToDoctor={() => setActiveTab("doctor")}
+                        onNavigateToQueue={() => setActiveTab("queue")}
+                        activeSpecialistId={activeSpecialistId}
+                      />
                     )}
 
                     {activeTab === "admissions" && (
@@ -2313,7 +2399,7 @@ export default function App() {
                     )}
 
                     {activeTab === "journey" && (
-                      <PatientJourneyTracker />
+                      <PatientJourneyTracker onNavigateTab={(tab) => setActiveTab(tab)} />
                     )}
 
                     {activeTab === "queue" && toggles.queue && (
@@ -2389,13 +2475,17 @@ export default function App() {
                     {activeTab === "security" && (
                       <SecurityDesk />
                     )}
+
+                    {activeTab === "guide" && (
+                      <UserGuide onNavigateTab={(tab) => setActiveTab(tab)} />
+                    )}
                   </>
                 )}
               </motion.div>
             </AnimatePresence>
 
             {/* Desktop Footer */}
-            <footer className="mt-12 pt-6 pb-4 border-t border-slate-200/80 text-slate-500 text-xs hidden md:flex flex-col md:flex-row items-center justify-between gap-4">
+            <footer className="mt-12 pt-6 pb-6 border-t border-slate-200/80 text-slate-500 text-xs hidden md:flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 font-bold text-slate-700">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -2403,6 +2493,25 @@ export default function App() {
                 </div>
                 <span className="text-slate-300">•</span>
                 <span className="text-slate-500 text-[11px] font-medium">SHA Portal API v4.2 • KRA eTIMS v2.0 Live Sync</span>
+                <span className="text-slate-300">•</span>
+                <button
+                  id="btn-footer-download-readme"
+                  onClick={() => downloadReadmeFile("AfyaCare-HMS-Enterprise-Documentation.md")}
+                  title="Download complete system documentation and architecture (README.md)"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold border border-slate-300/80 hover:border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95 text-[11px]"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Download README.md</span>
+                </button>
+                <button
+                  id="btn-footer-user-guide"
+                  onClick={() => setActiveTab("guide")}
+                  title="Open Platform User Guide & Staff Operational Manual"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-bold border border-slate-300/80 hover:border-blue-300 shadow-2xs transition-all cursor-pointer active:scale-95 text-[11px]"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                  <span>User Guide</span>
+                </button>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-500">
                 <span className="flex items-center gap-1 text-slate-600 font-semibold">
@@ -2497,8 +2606,13 @@ export default function App() {
       activeTab={activeTab}
       setActiveTab={setActiveTab}
       currentUserRole={currentSystemRole}
-      queueCount={queueItems.filter(q => q.status === "pending" || q.status === "serving").length}
-      isOffline={isSimulatedOffline || !isOnline}
+      queueCount={pendingQueueCount}
+      openTicketsCount={openTicketsCount}
+      pharmacyCount={pharmacyWaitingCount}
+      journeyCount={activeJourneysCount}
+      pharmacyEnabled={toggles.pharmacy}
+      queueEnabled={toggles.queue}
+      isOffline={!isOnline}
       onOpenMpesa={() => {
         setMpesaModalData({
           defaultPhone: "0712345678",

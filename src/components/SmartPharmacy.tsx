@@ -392,7 +392,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
     setKeyboardScanInput("");
   };
 
-  const triggerMockScanForCode = (code: string) => {
+  const selectDrugBatchByCode = (code: string) => {
     handleBarcodedItemScanned(code);
   };
 
@@ -564,7 +564,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                     <div key={m.id} className="group relative">
                       <button
                         type="button"
-                        onClick={() => triggerMockScanForCode(m.batchNo)}
+                        onClick={() => selectDrugBatchByCode(m.batchNo)}
                         className="px-2 py-1 bg-slate-100 hover:bg-orange-100 hover:text-orange-900 border border-gray-200 rounded-md font-mono text-[9px] text-gray-700 cursor-pointer transition-all flex items-center gap-1"
                         title="Click to scan drug batch barcode into system"
                       >
@@ -574,7 +574,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                       
                       {/* Show Real live QR code image generated on the fly for the camera to read! */}
                       <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-white border border-gray-200 rounded-lg shadow-xl z-20 w-40 text-center">
-                        <p className="text-[9px] font-bold text-gray-800 mb-1">Scan me with webcam!</p>
+                        <p className="text-[9px] font-bold text-gray-800 mb-1">Scan barcode with webcam/gun</p>
                         <img 
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${m.batchNo}`} 
                           alt="QR Code" 
@@ -586,7 +586,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                     </div>
                   ))}
                 </div>
-                <p className="text-[9px] text-gray-400 italic">💡 Hover over any drug batch pill to display its live QR Code! You can scan it using your smartphone/webcam, or simply click it to trigger a quick test scan.</p>
+                <p className="text-[9px] text-gray-400 italic">💡 Hover over any drug batch pill to display its live QR Code, or scan it directly using your handheld laser barcode gun / webcam scanner.</p>
               </div>
             </div>
           )}
@@ -606,7 +606,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
               />
             </div>
 
-            {/* Hardware simulated / handheld gun scanner input */}
+            {/* Hardware handheld gun scanner / keyboard input */}
             <form onSubmit={handleKeyboardGunScanSubmit} className="relative md:col-span-4 flex gap-1.5">
               <div className="relative flex-1">
                 <Barcode className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
@@ -616,7 +616,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                   value={keyboardScanInput}
                   onChange={(e) => setKeyboardScanInput(e.target.value)}
                   className="w-full pl-10 pr-3 py-2 border border-orange-200 bg-orange-50/10 focus:bg-white rounded-xl text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                  title="Simulate a hardware handheld laser barcode gun scan by typing or pasting a drug code and pressing Enter"
+                  title="Scan with handheld laser barcode gun or type batch code and press Enter"
                 />
               </div>
               <button

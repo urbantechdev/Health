@@ -142,39 +142,7 @@ body,
   animation: textGradientCycle 6s ease infinite;
 }
 
-@keyframes colorCycleShifting {
-  0% {
-    color: #047857; /* Emerald 700 */
-    text-shadow: 0 0 10px rgba(52, 211, 153, 0.4);
-  }
-  20% {
-    color: #0284c7; /* Sky 600 */
-    text-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
-  }
-  40% {
-    color: #4f46e5; /* Indigo 600 */
-    text-shadow: 0 0 10px rgba(129, 140, 248, 0.45);
-  }
-  60% {
-    color: #9333ea; /* Purple 600 */
-    text-shadow: 0 0 10px rgba(216, 180, 254, 0.45);
-  }
-  80% {
-    color: #e11d48; /* Rose 600 */
-    text-shadow: 0 0 10px rgba(251, 113, 133, 0.45);
-  }
-  100% {
-    color: #047857; /* Emerald 700 */
-    text-shadow: 0 0 10px rgba(52, 211, 153, 0.4);
-  }
-}
 
-.animate-header-subtext-color {
-  animation: colorCycleShifting 5s ease-in-out infinite;
-  display: inline-block;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
 
 @keyframes colorShiftGlow {
   0%, 100% {
@@ -400,6 +368,56 @@ a[role="button"]:active,
 
 .animate-green-shadow-motion {
   animation: greenShadowPulse 2.2s ease-in-out infinite;
+}
+
+/* Green Smoke Ambient Aura for Nav Button Backgrounds */
+@keyframes greenSmokeDrift {
+  0% {
+    transform: scale(0.95) translate(-3px, 2px) rotate(0deg);
+    opacity: 0.45;
+    filter: blur(12px) drop-shadow(0 0 16px rgba(16, 185, 129, 0.6));
+  }
+  33% {
+    transform: scale(1.15) translate(4px, -3px) rotate(3deg);
+    opacity: 0.85;
+    filter: blur(18px) drop-shadow(0 0 26px rgba(52, 211, 153, 0.8));
+  }
+  66% {
+    transform: scale(1.08) translate(-2px, -4px) rotate(-3deg);
+    opacity: 0.65;
+    filter: blur(15px) drop-shadow(0 0 22px rgba(5, 150, 105, 0.75));
+  }
+  100% {
+    transform: scale(0.95) translate(-3px, 2px) rotate(0deg);
+    opacity: 0.45;
+    filter: blur(12px) drop-shadow(0 0 16px rgba(16, 185, 129, 0.6));
+  }
+}
+
+.animate-green-smoke-aura {
+  animation: greenSmokeDrift 5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes greenSmokePuffSecondary {
+  0% {
+    transform: scale(1.1) translate(3px, -2px) rotate(0deg);
+    opacity: 0.35;
+    filter: blur(14px);
+  }
+  50% {
+    transform: scale(0.92) translate(-4px, 3px) rotate(-4deg);
+    opacity: 0.75;
+    filter: blur(20px);
+  }
+  100% {
+    transform: scale(1.1) translate(3px, -2px) rotate(0deg);
+    opacity: 0.35;
+    filter: blur(14px);
+  }
+}
+
+.animate-green-smoke-secondary {
+  animation: greenSmokePuffSecondary 6.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 @keyframes greenSubtlePulse {

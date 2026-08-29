@@ -130,18 +130,18 @@ export default function LogoUploadModal({
 
         <div className="p-6 space-y-5">
           {/* Live Preview Box */}
-          <div className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-            <div className="w-20 h-20 bg-white border-2 border-dashed border-slate-300 rounded-2xl flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+          <div className="flex items-center gap-5 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <div className="w-24 h-24 bg-white border-2 border-yellow-500 rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-lg ring-4 ring-yellow-400/30">
               {previewUrl ? (
                 <img
                   src={previewUrl}
                   alt="Logo Preview"
-                  className="w-full h-full object-contain p-1"
+                  className="w-full h-full object-cover"
                   onError={() => setUploadError("Failed to render image from URL.")}
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <ImageIcon className="w-8 h-8 text-slate-300" />
+                <ImageIcon className="w-10 h-10 text-slate-300" />
               )}
             </div>
             <div className="min-w-0 flex-1">

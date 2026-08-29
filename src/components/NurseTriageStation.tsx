@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { db } from "../firebase";
+import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, query, orderBy, getDocs, where, addDoc } from "firebase/firestore";
 import { QueueTicket, MedicalRecord, ClinicalVisit } from "../types";
 import { findUnifiedPatient, upsertUnifiedPatientRecord } from "../lib/patientSyncService";
-import { addVitalToEncounter } from "../lib/encounterService";
-import { voiceAnnouncer } from "../lib/voiceAnnouncer";
+import { addEncounterVital } from "../lib/encounterService";
 import { toast } from "../lib/promptService";
 import {
   HeartPulse,
@@ -257,12 +256,12 @@ export default function NurseTriageStation({
         if (selectedTicket.encounterId || matched.activeEncounterId) {
           const encId = selectedTicket.encounterId || matched.activeEncounterId;
           if (encId) {
-            await addVitalToEncounter(encId, {
-              bloodPressure: bpString,
-              heartRate: pulse,
+            await addEncounterVital(encId, {
+              bp: bpString,
+              pulse: pulse,
               respiratoryRate: respRate,
-              temperature: temp,
-              oxygenSaturation: spo2,
+              temp: temp,
+              spo2: spo2,
               weight: weight,
               recordedBy: "Triage Nurse Officer"
             });
@@ -288,12 +287,19 @@ export default function NurseTriageStation({
       });
 
       // 4. Vocal Announcement for Patient
-      voiceAnnouncer.announceTurnArrived({
-        ticketNo: selectedTicket.ticketNo,
-        patientName: selectedTicket.patientName,
-        roomOrDesk: "Doctor Consultation Room",
-        departmentOrRole: targetDoctorClinic
-      }).catch((e) => console.warn("Triage voice announcer:", e));
+      try {
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(
+            `Ticket ${selectedTicket.ticketNo}, ${selectedTicket.patientName}, please proceed to Doctor Consultation Room for ${targetDoctorClinic}`
+          );
+          utterance.rate = 0.95;
+          utterance.lang = "en-KE";
+          window.speechSynthesis.speak(utterance);
+        }
+      } catch (e) {
+        console.warn("Speech synthesis notice:", e);
+      }
 
       toast.success(
         `Vitals recorded and Ticket #${selectedTicket.ticketNo} (${selectedTicket.patientName}) routed to ${targetDoctorClinic}!`,

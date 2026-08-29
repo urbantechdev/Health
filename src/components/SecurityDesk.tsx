@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
-import { collection, onSnapshot, doc, addDoc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { SecurityLog } from "../types";
 import { createAutoTicket, closeAutoTicket } from "../lib/ticketService";
 import { toast, modernAlert, modernConfirm } from "../lib/promptService";
@@ -22,8 +22,19 @@ import {
   MapPin,
   CheckCircle,
   XCircle,
-  Plus
+  Plus,
+  Trash2
 } from "lucide-react";
+
+export interface WatchlistItem {
+  id?: string;
+  type: "vehicle" | "individual";
+  identifier: string;
+  reason: string;
+  severity: "critical" | "warning";
+  addedAt: string;
+  addedBy: string;
+}
 
 export default function SecurityDesk() {
   const [logs, setLogs] = useState<SecurityLog[]>([]);
@@ -44,13 +55,17 @@ export default function SecurityDesk() {
   const [notes, setNotes] = useState("");
   const [officerName, setOfficerName] = useState("Officer Kipkorir");
 
-  // Alert/Flag list (e.g., suspicious vehicles or VIP patients)
-  const blacklistPlates = ["KCA 666X", "KBZ 911F", "KDN 007A"];
-  const blacklistIds = ["22334455", "99887766"];
+  // Real Dynamic Watchlist state from Firestore
+  const [watchlists, setWatchlists] = useState<WatchlistItem[]>([]);
+  const [showAddWatchlist, setShowAddWatchlist] = useState(false);
+  const [newWatchType, setNewWatchType] = useState<"vehicle" | "individual">("vehicle");
+  const [newWatchIdentifier, setNewWatchIdentifier] = useState("");
+  const [newWatchReason, setNewWatchReason] = useState("");
+  const [newWatchSeverity, setNewWatchSeverity] = useState<"critical" | "warning">("critical");
 
   useEffect(() => {
     // Listen to live security checkpoint logs
-    const unsub = onSnapshot(collection(db, "security_logs"), (snapshot) => {
+    const unsubLogs = onSnapshot(collection(db, "security_logs"), (snapshot) => {
       const records: SecurityLog[] = [];
       snapshot.forEach((doc) => {
         records.push({ id: doc.id, ...doc.data() } as SecurityLog);
@@ -60,8 +75,59 @@ export default function SecurityDesk() {
       setLogs(records);
     });
 
-    return () => unsub();
+    // Listen to live security watchlist records in Firestore
+    const unsubWatchlist = onSnapshot(collection(db, "security_watchlists"), (snapshot) => {
+      const items: WatchlistItem[] = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ id: docSnap.id, ...docSnap.data() } as WatchlistItem);
+      });
+      setWatchlists(items);
+    });
+
+    return () => {
+      unsubLogs();
+      unsubWatchlist();
+    };
   }, []);
+
+  const handleAddWatchlistItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWatchIdentifier.trim()) {
+      toast.warning("Please enter a valid License Plate or National ID.", "Missing Identifier");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "security_watchlists"), {
+        type: newWatchType,
+        identifier: newWatchIdentifier.trim().toUpperCase(),
+        reason: newWatchReason.trim() || "Security watchlist alert",
+        severity: newWatchSeverity,
+        addedAt: new Date().toISOString(),
+        addedBy: officerName || "Security Officer Desk"
+      });
+
+      toast.success(`${newWatchType === "vehicle" ? "Vehicle Plate" : "National ID"} ${newWatchIdentifier.toUpperCase()} added to active watchlist!`);
+      setNewWatchIdentifier("");
+      setNewWatchReason("");
+      setShowAddWatchlist(false);
+    } catch (err: any) {
+      toast.error("Failed to save watchlist entry: " + err.message);
+    }
+  };
+
+  const handleDeleteWatchlistItem = async (id?: string) => {
+    if (!id) return;
+    const confirmed = await modernConfirm("Are you sure you want to remove this record from the active security watchlist?");
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "security_watchlists", id));
+      toast.info("Record removed from security watchlist.");
+    } catch (err: any) {
+      toast.error("Failed to remove watchlist entry: " + err.message);
+    }
+  };
 
   const handleRegisterEntry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,24 +144,32 @@ export default function SecurityDesk() {
       return;
     }
 
-    // Check Blacklist / Suspect database triggers
+    // Check Live Blacklist / Watchlist database triggers
     let status: SecurityLog["status"] = "authorized";
     let customNotes = notes;
 
-    if (logType === "vehicle" && blacklistPlates.includes(nameOrPlate.toUpperCase())) {
+    const matchedVehicleWatch = watchlists.find(
+      (w) => w.type === "vehicle" && w.identifier.toUpperCase() === nameOrPlate.trim().toUpperCase()
+    );
+
+    const matchedIdWatch = watchlists.find(
+      (w) => w.type === "individual" && w.identifier.toUpperCase() === idOrPhone.trim().toUpperCase()
+    );
+
+    if (logType === "vehicle" && matchedVehicleWatch) {
       status = "flagged";
-      customNotes = `[FLAGGED SUSPECT] ${notes || "Unscheduled suspect vehicle entry flagged by automated gate sensor"}`;
-      modernAlert(`Vehicle plate "${nameOrPlate.toUpperCase()}" is registered on the SUSPECT WATCHLIST! Notification dispatched to internal guard posts & police.`, {
+      customNotes = `[FLAGGED WATCHLIST: ${matchedVehicleWatch.reason}] ${notes || "Suspect vehicle entry flagged by security database"}`;
+      modernAlert(`Vehicle plate "${nameOrPlate.toUpperCase()}" is on the ACTIVE SECURITY WATCHLIST: "${matchedVehicleWatch.reason}". Notification dispatched to internal guard posts.`, {
         title: "Security Threat Alert",
         type: "error",
       });
     }
 
-    if (logType === "individual" && blacklistIds.includes(idOrPhone)) {
-      status = "denied";
-      customNotes = `[DENIED GATE PASS] ${notes || "Individual ID matches blacklisted contractor profile"}`;
-      modernAlert(`National ID / Passport "${idOrPhone}" is blacklisted from this facility. Gate pass rejected.`, {
-        title: "Entry Denied",
+    if (logType === "individual" && matchedIdWatch) {
+      status = matchedIdWatch.severity === "critical" ? "denied" : "flagged";
+      customNotes = `[WATCHLIST MATCH: ${matchedIdWatch.reason}] ${notes || "Individual ID matches flagged profile"}`;
+      modernAlert(`National ID / Passport "${idOrPhone}" is flagged on the security watchlist: "${matchedIdWatch.reason}". ${matchedIdWatch.severity === "critical" ? "Gate pass rejected." : "Supervised entry required."}`, {
+        title: matchedIdWatch.severity === "critical" ? "Entry Denied" : "Security Alert",
         type: "error",
       });
     }
@@ -515,35 +589,150 @@ export default function SecurityDesk() {
           {/* Quick Security Advisory & Watchlists (RHS) */}
           <div className="lg:col-span-7 space-y-4">
             <div className="bg-white p-6 rounded-2xl border border-gray-150 shadow-3xs">
-              <h3 className="text-sm font-extrabold text-gray-950 uppercase tracking-wide flex items-center gap-2 mb-3 text-red-700">
-                <ShieldAlert className="w-4.5 h-4.5" />
-                <span>Automated Watchlist Databases (Static Mock)</span>
-              </h3>
-              <p className="text-[11px] text-gray-400 mb-4">Any entry attempt matching these coordinates triggers a silent alarm and immediate gate denial.</p>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-extrabold text-red-700 uppercase tracking-wide flex items-center gap-2">
+                  <ShieldAlert className="w-4.5 h-4.5" />
+                  <span>Security Threat & Watchlist Registry ({watchlists.length})</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddWatchlist(!showAddWatchlist)}
+                  className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{showAddWatchlist ? "Cancel" : "Add Flagged Target"}</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-400 mb-4">
+                Real-time Firestore Threat Registry. Any gate entry matching these coordinates automatically flags security logs and alerts officers.
+              </p>
 
-              <div className="grid grid-cols-2 gap-4 text-xs font-semibold">
+              {/* Add Flagged Item Form */}
+              {showAddWatchlist && (
+                <form onSubmit={handleAddWatchlistItem} className="mb-4 p-3.5 bg-red-50/70 border border-red-200 rounded-xl space-y-3">
+                  <p className="text-xs font-bold text-red-900">Add New Flagged Record</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-600 block mb-1">Target Type</label>
+                      <select
+                        value={newWatchType}
+                        onChange={(e) => setNewWatchType(e.target.value as any)}
+                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs"
+                      >
+                        <option value="vehicle">Vehicle Plate</option>
+                        <option value="individual">National ID / Passport</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-600 block mb-1">
+                        {newWatchType === "vehicle" ? "Plate (e.g. KCA 123A)" : "ID No. (e.g. 23456789)"}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newWatchIdentifier}
+                        onChange={(e) => setNewWatchIdentifier(e.target.value)}
+                        placeholder={newWatchType === "vehicle" ? "KCA 999X" : "28472910"}
+                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-600 block mb-1">Threat Severity</label>
+                      <select
+                        value={newWatchSeverity}
+                        onChange={(e) => setNewWatchSeverity(e.target.value as any)}
+                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs"
+                      >
+                        <option value="critical">Critical (Deny Gate Pass)</option>
+                        <option value="warning">Warning (Alert Guard Only)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-600 block mb-1">Threat Reason / Note</label>
+                    <input
+                      type="text"
+                      value={newWatchReason}
+                      onChange={(e) => setNewWatchReason(e.target.value)}
+                      placeholder="e.g. Suspected pharmaceutical theft or unauthorized entry"
+                      className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddWatchlist(false)}
+                      className="px-3 py-1 bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-lg cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer shadow-xs"
+                    >
+                      Save to Watchlist
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
                 <div className="p-4 bg-red-50/50 border border-red-100 rounded-xl space-y-2">
-                  <span className="text-[10px] font-extrabold text-red-800 uppercase tracking-wider block">Blacklisted Vehicle License Plates</span>
-                  <ul className="space-y-1.5 font-mono text-gray-700 text-[11px]">
-                    {blacklistPlates.map((plate, idx) => (
-                      <li key={idx} className="flex items-center gap-1.5 text-red-900 font-bold">
-                        <XCircle className="w-3.5 h-3.5 text-red-600" />
-                        <span>{plate} (Suspicious tracking)</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <span className="text-[10px] font-extrabold text-red-800 uppercase tracking-wider block">
+                    Flagged Vehicle Plates ({watchlists.filter(w => w.type === "vehicle").length})
+                  </span>
+                  {watchlists.filter(w => w.type === "vehicle").length === 0 ? (
+                    <p className="text-[11px] text-gray-400 font-normal italic">No vehicle plates currently flagged.</p>
+                  ) : (
+                    <ul className="space-y-1.5 font-mono text-gray-700 text-[11px]">
+                      {watchlists.filter(w => w.type === "vehicle").map((item) => (
+                        <li key={item.id} className="flex items-center justify-between gap-1.5 text-red-900 font-bold p-1 bg-white/70 rounded border border-red-100">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <XCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <span className="truncate">{item.identifier}</span>
+                            <span className="text-[9px] text-gray-500 font-sans font-normal truncate">({item.reason})</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteWatchlistItem(item.id)}
+                            className="text-gray-400 hover:text-red-600 p-1 cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 <div className="p-4 bg-red-50/50 border border-red-100 rounded-xl space-y-2">
-                  <span className="text-[10px] font-extrabold text-red-800 uppercase tracking-wider block">Banned/Flagged National IDs</span>
-                  <ul className="space-y-1.5 font-mono text-gray-700 text-[11px]">
-                    {blacklistIds.map((id, idx) => (
-                      <li key={idx} className="flex items-center gap-1.5 text-red-900 font-bold">
-                        <XCircle className="w-3.5 h-3.5 text-red-600" />
-                        <span>ID: {id} (Theft/Fraud alert)</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <span className="text-[10px] font-extrabold text-red-800 uppercase tracking-wider block">
+                    Flagged National IDs ({watchlists.filter(w => w.type === "individual").length})
+                  </span>
+                  {watchlists.filter(w => w.type === "individual").length === 0 ? (
+                    <p className="text-[11px] text-gray-400 font-normal italic">No individual IDs currently flagged.</p>
+                  ) : (
+                    <ul className="space-y-1.5 font-mono text-gray-700 text-[11px]">
+                      {watchlists.filter(w => w.type === "individual").map((item) => (
+                        <li key={item.id} className="flex items-center justify-between gap-1.5 text-red-900 font-bold p-1 bg-white/70 rounded border border-red-100">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <XCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <span className="truncate">ID: {item.identifier}</span>
+                            <span className="text-[9px] text-gray-500 font-sans font-normal truncate">({item.reason})</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteWatchlistItem(item.id)}
+                            className="text-gray-400 hover:text-red-600 p-1 cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
 
