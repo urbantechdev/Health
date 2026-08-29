@@ -3,6 +3,7 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { SecurityLog } from "../types";
 import { createAutoTicket, closeAutoTicket } from "../lib/ticketService";
+import { upsertUnifiedPatientRecord } from "../lib/patientSyncService";
 import { toast, modernAlert, modernConfirm } from "../lib/promptService";
 import { 
   Shield, 
@@ -175,29 +176,49 @@ export default function SecurityDesk() {
     }
 
     try {
+      const cleanNationalId = (idOrPhone || "").trim();
+      const cleanName = (nameOrPlate || "").trim();
+
       const newLog: Omit<SecurityLog, "id"> = {
         type: logType,
-        nameOrPlate: logType === "vehicle" ? nameOrPlate.toUpperCase() : nameOrPlate,
+        nameOrPlate: logType === "vehicle" ? cleanName.toUpperCase() : cleanName,
         entityType,
         direction: "entry",
         checkpoint,
-        idOrPhone,
+        idOrPhone: cleanNationalId,
+        nationalId: cleanNationalId,
+        patientName: entityType === "patient" ? cleanName : undefined,
+        phone: cleanNationalId,
         timestamp: new Date().toISOString(),
         status,
         notes: customNotes,
-        officerName
+        officerName,
+        receptionStatus: "pending"
       };
 
       await addDoc(collection(db, "security_logs"), newLog);
 
-      // Auto-trigger system ticket for patient entry
-      if (entityType === "patient") {
+      // Auto-trigger unified EHR patient record & system ticket for patient entry
+      if (entityType === "patient" && cleanName) {
+        try {
+          await upsertUnifiedPatientRecord({
+            patientName: cleanName,
+            nationalId: cleanNationalId || `GATE-${Math.floor(100000 + Math.random() * 900000)}`,
+            phone: cleanNationalId,
+            currentDepartment: "reception",
+            sourceStation: `Security Gate Entry (${checkpoint})`,
+            symptoms: `Security Gate Entry logged at ${checkpoint} • Officer: ${officerName} • Note: ${customNotes || "Awaiting Reception Intake"}`
+          });
+        } catch (syncErr) {
+          console.warn("Unified patient sync note from security desk:", syncErr);
+        }
+
         await createAutoTicket({
-          patientName: nameOrPlate,
-          nationalId: idOrPhone || `ID-${Math.floor(100000 + Math.random() * 900000)}`,
-          phone: idOrPhone,
+          patientName: cleanName,
+          nationalId: cleanNationalId || `ID-${Math.floor(100000 + Math.random() * 900000)}`,
+          phone: cleanNationalId,
           department: "reception",
-          visitReason: customNotes || "Hospital Facility Entry & Consultation Intake"
+          visitReason: customNotes || `Gate Arrival at ${checkpoint} • Officer: ${officerName}`
         });
       }
       
@@ -206,8 +227,10 @@ export default function SecurityDesk() {
       setIdOrPhone("");
       setNotes("");
       toast.success(
-        `${logType === "vehicle" ? "Vehicle" : "Individual"} entry registered at ${checkpoint}.`,
-        "Entry Logged"
+        entityType === "patient"
+          ? `Patient ${cleanName} registered at ${checkpoint}. National ID #${cleanNationalId || "N/A"} is linked and retrievable at Reception.`
+          : `${logType === "vehicle" ? "Vehicle" : "Individual"} entry registered at ${checkpoint}.`,
+        "Security Entry Logged"
       );
     } catch (err) {
       console.error(err);

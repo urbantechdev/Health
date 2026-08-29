@@ -20,16 +20,24 @@ import {
   History,
   FileText,
   Eye,
-  Activity
+  Activity,
+  Shield,
+  MapPin,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  DoorOpen,
+  Sparkles
 } from "lucide-react";
-import { Employee, MedicalRecord, SystemTicket, QueueTicket } from "../types";
+import { Employee, MedicalRecord, SystemTicket, QueueTicket, SecurityLog } from "../types";
 import { createAutoTicket, checkActivePatientEncounter, findPatientByNationalId, DuplicateEncounterCheck } from "../lib/ticketService";
 import { upsertUnifiedPatientRecord, findUnifiedPatient } from "../lib/patientSyncService";
 import { addChargeToCart } from "../lib/patientCartService";
-import { HOSPITAL_SPECIALISTS_DIRECTORY, SPECIALIST_CATEGORIES, SpecialistDefinition, getSpecialistByName } from "../constants/specialists";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 import PatientHistoryLookupModal from "./PatientHistoryLookupModal";
+import BiometricScannerModal from "./BiometricScannerModal";
+import { BiometricScanResult } from "../lib/biometricService";
 
 interface ReceptionKioskProps {
   onTicketCreated: () => void;
@@ -42,7 +50,6 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("Male");
   const [bloodType, setBloodType] = useState("Not Sure");
-  const [service, setService] = useState("General Doctor");
   const [issue, setIssue] = useState("");
 
   // History Lookup Modal state
@@ -59,23 +66,15 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   const [allergies, setAllergies] = useState("No Known Drug Allergies (NKDA)");
   const [chronicConditions, setChronicConditions] = useState("None");
 
-  // Specialists state
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [assignedSpecialistId, setAssignedSpecialistId] = useState<string>("");
-  const [selectedSpecialistName, setSelectedSpecialistName] = useState<string>("");
-  const [specialistCategory, setSpecialistCategory] = useState<string>("all");
-  const [specialistSearch, setSpecialistSearch] = useState<string>("");
-  const [assignedDoctorId, setAssignedDoctorId] = useState<string>("");
-  const [issuedSpecialistInfo, setIssuedSpecialistInfo] = useState<{
-    specialist?: SpecialistDefinition;
-    doctorName?: string;
-    room?: string;
-  } | null>(null);
-
   // Real-time lookup & duplicate check states
   const [existingPatientProfile, setExistingPatientProfile] = useState<MedicalRecord | null>(null);
   const [activeDuplicateEncounter, setActiveDuplicateEncounter] = useState<DuplicateEncounterCheck | null>(null);
   const [isCheckingId, setIsCheckingId] = useState(false);
+
+  // Security Desk Integration State
+  const [securityLogs, setSecurityLogs] = useState<SecurityLog[]>([]);
+  const [matchedSecurityLog, setMatchedSecurityLog] = useState<SecurityLog | null>(null);
+  const [showSecurityGateDrawer, setShowSecurityGateDrawer] = useState(true);
 
   // Duplicate Encounter Rejection Modal state
   const [duplicateRejectionModal, setDuplicateRejectionModal] = useState<{
@@ -85,25 +84,32 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
     patientName: string;
   } | null>(null);
 
-  // Subscribe to employees from Firestore to list clinical specialists
+  // Real-time subscription to Security Gate Checkpoint Entry Logs
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "employees"), (snapshot) => {
-      const emps: Employee[] = [];
-      snapshot.forEach((doc) => {
-        emps.push({ id: doc.id, ...doc.data() } as Employee);
+    const unsubSecurity = onSnapshot(collection(db, "security_logs"), (snapshot) => {
+      const logsList: SecurityLog[] = [];
+      snapshot.forEach((docSnap) => {
+        logsList.push({ id: docSnap.id, ...docSnap.data() } as SecurityLog);
       });
-      // Filter active clinical employees/doctors/pharmacists/etc.
-      setEmployees(emps.filter(emp => emp.status === "active"));
+      logsList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
+      // Filter entry records for patients / individuals
+      const patientGateLogs = logsList.filter(
+        (l) => l.direction === "entry" && (l.entityType === "patient" || l.type === "individual" || l.patientName)
+      );
+      setSecurityLogs(patientGateLogs);
     });
-    return () => unsubscribe();
+
+    return () => unsubSecurity();
   }, []);
 
-  // Real-time National ID lookup function
+  // Real-time National ID lookup function (EHR + Security Desk Link)
   const performIdLookup = useCallback(async (idToCheck: string) => {
     const cleanId = (idToCheck || "").trim();
     if (!cleanId || cleanId.length < 3) {
       setExistingPatientProfile(null);
       setActiveDuplicateEncounter(null);
+      setMatchedSecurityLog(null);
       return;
     }
 
@@ -113,13 +119,21 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       const dupCheck = await checkActivePatientEncounter(cleanId);
       setActiveDuplicateEncounter(dupCheck.isDuplicate ? dupCheck : null);
 
-      // 2. Check for existing registered patient file in EHR database
+      // 2. Check for security gate entry log match
+      const matchedSec = securityLogs.find((s) => {
+        const sId = (s.nationalId || s.idOrPhone || "").trim().toLowerCase();
+        const sName = (s.patientName || s.nameOrPlate || "").trim().toLowerCase();
+        return sId === cleanId.toLowerCase() || (cleanId.length >= 4 && sName.includes(cleanId.toLowerCase()));
+      });
+      setMatchedSecurityLog(matchedSec || null);
+
+      // 3. Check for existing registered patient file in EHR database
       const existingPatient = await findPatientByNationalId(cleanId);
       if (existingPatient) {
         setExistingPatientProfile(existingPatient);
         // Auto-populate demographics if current fields are empty
-        setPatientName((prev) => prev || existingPatient.patientName || "");
-        setPhone((prev) => prev || existingPatient.phone || "");
+        setPatientName((prev) => prev || existingPatient.patientName || (matchedSec?.patientName || matchedSec?.nameOrPlate) || "");
+        setPhone((prev) => prev || existingPatient.phone || (matchedSec?.phone || matchedSec?.idOrPhone) || "");
         setAge((prev) => (prev ? prev : existingPatient.age ? String(existingPatient.age) : ""));
         if (existingPatient.gender) setGender(existingPatient.gender);
         if (existingPatient.bloodType) setBloodType(existingPatient.bloodType);
@@ -133,13 +147,41 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         }
       } else {
         setExistingPatientProfile(null);
+        // If not in EHR but found in Security Gate log, auto-populate from Security Log
+        if (matchedSec) {
+          setPatientName((prev) => prev || matchedSec.patientName || matchedSec.nameOrPlate || "");
+          if (matchedSec.phone) setPhone((prev) => prev || matchedSec.phone || (matchedSec.idOrPhone?.startsWith("07") ? matchedSec.idOrPhone : "") || "");
+          if (matchedSec.notes) setIssue((prev) => prev || matchedSec.notes || "");
+        }
       }
     } catch (err) {
       console.error("Error performing ID verification lookup:", err);
     } finally {
       setIsCheckingId(false);
     }
-  }, []);
+  }, [securityLogs]);
+
+  // One-click retrieve patient profile from Security Gate Log
+  const handleRetrieveFromSecurityLog = (secLog: SecurityLog) => {
+    const secId = secLog.nationalId || secLog.idOrPhone || "";
+    const secName = secLog.patientName || secLog.nameOrPlate || "";
+    const secPhone = secLog.phone || (secLog.idOrPhone && (secLog.idOrPhone.startsWith("07") || secLog.idOrPhone.startsWith("+254") || secLog.idOrPhone.startsWith("254")) ? secLog.idOrPhone : "");
+
+    setNationalId(secId);
+    setPatientName(secName);
+    if (secPhone) setPhone(secPhone);
+    if (secLog.notes) setIssue(secLog.notes);
+    setMatchedSecurityLog(secLog);
+
+    if (secId) {
+      performIdLookup(secId);
+    }
+
+    toast.success(
+      `Loaded Security Checkpoint record for ${secName} (Arrived at ${secLog.checkpoint} at ${new Date(secLog.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} by ${secLog.officerName}).`,
+      "Security Patient Record Retrieved"
+    );
+  };
 
   // Debounced lookup on National ID change
   useEffect(() => {
@@ -158,6 +200,8 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
   // Biometric state
   const [biometricsCaptured, setBiometricsCaptured] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
+  const [biometricScanData, setBiometricScanData] = useState<BiometricScanResult | null>(null);
 
   // SHA integration state
   const [shaLoading, setShaLoading] = useState(false);
@@ -253,87 +297,13 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         return;
       }
 
-      // Dynamic prefix generator & mapping specialist details
-      const specialistDef = selectedSpecialistName ? getSpecialistByName(selectedSpecialistName) : undefined;
-      let prefix = "GEN";
-      let currentDept: any = "doctor";
-      let selectedServiceName = service;
-      let specName = "";
-      let specialistTitle = "";
-      let consultationRoom = "";
-
-      if (specialistDef) {
-        specialistTitle = specialistDef.name;
-        prefix = specialistDef.shortCode;
-        currentDept = specialistDef.department;
-        consultationRoom = specialistDef.defaultRoom || "Room 101 - Specialist OPD";
-        
-        if (assignedDoctorId) {
-          const docObj = employees.find(e => e.id === assignedDoctorId);
-          if (docObj) {
-            specName = docObj.name;
-            selectedServiceName = `Consultation with ${docObj.name} (${specialistDef.name})`;
-          } else {
-            specName = `${specialistDef.name} (Specialist OPD)`;
-            selectedServiceName = `Consultation with ${specialistDef.name}`;
-          }
-        } else {
-          specName = `${specialistDef.name} (Specialist OPD)`;
-          selectedServiceName = `Consultation with ${specialistDef.name}`;
-        }
-      } else if (assignedSpecialistId) {
-        const spec = employees.find(e => e.id === assignedSpecialistId);
-        if (spec) {
-          specName = spec.name;
-          specialistTitle = spec.specialty || spec.role;
-          const dept = spec.department.toLowerCase();
-          if (dept === "medical" || dept === "nursing") {
-            currentDept = "doctor";
-            selectedServiceName = `Consultation with ${spec.name} (${spec.specialty || "General GP"})`;
-          } else if (dept === "laboratory" || dept === "lab") {
-            currentDept = "laboratory";
-            selectedServiceName = `Lab Service: ${spec.name}`;
-            prefix = "LAB";
-          } else if (dept === "radiology") {
-            currentDept = "radiology";
-            selectedServiceName = `Radiology Service: ${spec.name}`;
-            prefix = "RAD";
-          } else if (dept === "pharmacy") {
-            currentDept = "pharmacy";
-            selectedServiceName = `Pharmacy Service: ${spec.name}`;
-            prefix = "PHA";
-          } else {
-            currentDept = "doctor";
-            selectedServiceName = `Consultation with ${spec.name}`;
-          }
-        }
-      } else {
-        if (service === "Laboratory") {
-          prefix = "LAB";
-          currentDept = "laboratory";
-        } else if (service === "Radiology") {
-          prefix = "RAD";
-          currentDept = "radiology";
-        } else if (service === "Pharmacy") {
-          prefix = "PHA";
-          currentDept = "pharmacy";
-        } else if (service === "Labour Room") {
-          prefix = "LBR";
-          currentDept = "labour_room";
-        } else if (service === "Gynecology (Gyna)") {
-          prefix = "GYN";
-          currentDept = "gyna";
-        }
-      }
-
-      // Standard Hospital Care Protocol: Outpatient consultations route through Nurse Triage Station first
-      const isDirectAncillary = service === "Laboratory" || service === "Radiology" || service === "Pharmacy";
-      if (!isDirectAncillary && !fastTrackDirectVitals) {
-        currentDept = "triage";
-        prefix = "TRI";
-      }
-
+      // Standard Hospital Care Protocol: Every patient registered at Reception routes directly to Nurse Triage first
+      const currentDept = "triage";
+      const targetDept = "triage";
+      const selectedServiceName = "Nurse Triage & Clinical Intake";
+      const prefix = "TRI";
       const ticketNo = `${prefix}-${Math.floor(Math.random() * 900 + 100)}`;
+      const consultationRoom = "Nurse Triage Desk";
 
       // STEP 2: Unified EHR Auto-Sync Engine (Creates or Updates Master Patient Profile)
       const patientSyncResult = await upsertUnifiedPatientRecord({
@@ -351,54 +321,67 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
           pulse: triagePulse || "72",
           weight: triageWeight || "68",
         },
-        symptoms: `${issue.trim() || `Walk-in registration for ${specialistDef ? specialistDef.name : service}.`}${allergies ? ` | Allergies: ${allergies}` : ""}${chronicConditions && chronicConditions !== "None" ? ` | Chronic: ${chronicConditions}` : ""}`,
-        diagnosis: specialistDef ? `Pending specialist review (${specialistDef.name})` : "Initial checkup pending clinical consultation",
-        currentDepartment: currentDept,
+        allergies: allergies || "No Known Drug Allergies (NKDA)",
+        chronicConditions: chronicConditions || "None",
+        symptoms: `${issue.trim() || "Walk-in registration for Clinical Triage & Consultation."}${allergies ? ` | Allergies: ${allergies}` : ""}${chronicConditions && chronicConditions !== "None" ? ` | Chronic: ${chronicConditions}` : ""}`,
+        diagnosis: "Initial checkup pending Nurse Triage assessment & specialist routing",
+        currentDepartment: "triage",
         activeTicketNo: ticketNo,
         sourceStation: "Reception Kiosk"
       });
 
       const resolvedPatientId = patientSyncResult.patientId;
 
-      // STEP 3: Create active Queue ticket in database
+      // STEP 3: Create active Queue ticket in database (Queued in Nurse Triage Station)
       const queueData = {
         ticketNo,
         patientName: cleanName,
         nationalId: cleanId,
         biometricStatus: biometricsCaptured ? "verified" : "not_verified",
-        service: selectedServiceName,
-        currentDepartment: currentDept,
+        service: "Nurse Triage & Clinical Intake",
+        currentDepartment: "triage",
         status: "pending",
         patientId: resolvedPatientId,
         timestamp: new Date().toISOString(),
         phone: phone.trim() || "N/A",
         age: parseInt(age) || 30,
-        issue: issue.trim() || "Not Specified",
-        assignedSpecialistId: assignedDoctorId || assignedSpecialistId || (specialistDef ? specialistDef.id : ""),
-        assignedSpecialistName: specName || "",
-        specialistTitle: specialistTitle || "",
-        consultationRoom: consultationRoom || "",
+        gender: gender,
+        bloodType: bloodType,
+        issue: issue.trim() || "Outpatient Clinical Intake",
+        allergies: allergies || "No Known Drug Allergies (NKDA)",
+        chronicConditions: chronicConditions || "None",
+        vitals: {
+          temp: triageTemp || "36.8",
+          bp: triageBp || "120/80",
+          pulse: triagePulse || "72",
+          weight: triageWeight || "68",
+        },
+        targetDepartment: "triage",
+        targetClinic: "Nurse Triage & Vital Signs Desk",
+        assignedSpecialistId: "",
+        assignedSpecialistName: "Triage Nurse Officer",
+        specialistTitle: "Triage & Vitals",
+        consultationRoom: consultationRoom,
       };
 
       await addDoc(collection(db, "queue"), queueData);
 
-      // STEP 4: Automatically trigger system ticket creation
+      // STEP 4: Automatically trigger system ticket creation in Triage
       await createAutoTicket({
         patientName: cleanName,
         nationalId: cleanId,
         phone: phone.trim(),
-        department: currentDept,
-        visitReason: issue.trim() || selectedServiceName || "Outpatient Clinical Intake",
-        priority: specialistDef?.department === "emergency" ? "Emergency" : "Normal",
+        department: "triage",
+        visitReason: issue.trim() || "Outpatient Clinical Intake & Nurse Triage",
+        priority: "Normal",
         patientId: resolvedPatientId,
-        assignedSpecialistId: assignedDoctorId || assignedSpecialistId || (specialistDef ? specialistDef.id : ""),
-        assignedSpecialistName: specName || "",
-        specialistTitle: specialistTitle || "",
-        consultationRoom: consultationRoom || ""
+        assignedSpecialistId: "",
+        assignedSpecialistName: "Triage Nurse Officer",
+        specialistTitle: "Nurse Triage",
+        consultationRoom: consultationRoom
       });
 
       // STEP 5: Automatically post initial Registration & Clinical Consultation Charge to Patient Cart
-      const standardConsultFee = specialistDef?.department === "emergency" ? 1500 : 1000;
       await addChargeToCart({
         patientId: resolvedPatientId,
         patientName: cleanName,
@@ -408,33 +391,40 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         stage: "Registration & Triage",
         department: "Reception / OPD",
         category: "consultation",
-        itemCode: specialistDef?.department === "emergency" ? "CON-003" : "CON-001",
-        name: `${specialistDef ? specialistDef.name : "General Outpatient"} Consultation & Intake Fee`,
-        unitPrice: standardConsultFee,
+        itemCode: "REG-001",
+        name: "Outpatient Registration & Clinical Triage Intake",
+        unitPrice: 500,
         quantity: 1,
-        notes: `Intake at Reception Kiosk • Room: ${consultationRoom || "General OPD"}`,
+        notes: "Intake at Reception Kiosk • Forwarded to Nurse Triage Desk",
         addedBy: "Reception Desk",
         addedByRole: "Reception"
       });
 
+      // STEP 6: Update any matching Security Log record to mark it as registered in Reception
+      if (matchedSecurityLog?.id) {
+        try {
+          await updateDoc(doc(db, "security_logs", matchedSecurityLog.id), {
+            receptionStatus: "registered",
+            receptionTicketNo: ticketNo
+          });
+        } catch (secErr) {
+          console.warn("Security log status update notice:", secErr);
+        }
+      }
+
       setSuccessTicket(ticketNo);
-      setIssuedSpecialistInfo(specialistDef ? {
-        specialist: specialistDef,
-        doctorName: assignedDoctorId ? employees.find(e => e.id === assignedDoctorId)?.name : undefined,
-        room: consultationRoom
-      } : null);
 
       // Automated Vocal PA Announcement on Ticket Creation
       voiceAnnouncer.announceNewTicket({
         ticketNo: ticketNo,
         patientName: cleanName,
-        department: (specialistDef ? specialistDef.name : service).toUpperCase(),
-        assignedRoom: consultationRoom || "Waiting Area"
+        department: "NURSE TRIAGE & VITALS",
+        assignedRoom: "Triage Desk"
       }).catch(e => console.warn("Kiosk voice announcement error:", e));
 
       toast.success(
-        `Patient ${cleanName} onboarded successfully! Queue Ticket #${ticketNo} created for ${specialistTitle || service}.`,
-        "Patient Onboarding Successful"
+        `Patient ${cleanName} registered and queued to Nurse Triage Station (Ticket #${ticketNo}).`,
+        "Queued to Nurse Triage"
       );
 
       // Reset form fields
@@ -443,9 +433,6 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       setPhone("");
       setAge("");
       setIssue("");
-      setAssignedSpecialistId("");
-      setSelectedSpecialistName("");
-      setAssignedDoctorId("");
       setBiometricsCaptured(false);
       setShaStatus(null);
       setExistingPatientProfile(null);
@@ -489,6 +476,104 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Form and capture fields */}
         <form onSubmit={handleRegisterAndTicket} className="lg:col-span-8 space-y-4">
+          
+          {/* SECURITY GATE CHECKPOINT INFLOW & PATIENT RETRIEVAL DRAWER */}
+          {securityLogs.length > 0 && (
+            <div id="security-gate-inflow-card" className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 space-y-3 transition-all animate-fade-in shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-sky-600 text-white rounded-lg shadow-xs">
+                    <Shield className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs font-bold text-sky-950 uppercase tracking-wider">
+                        Security Checkpoint Inflow Stream
+                      </h4>
+                      <span className="px-2 py-0.5 bg-sky-200 text-sky-900 rounded-full text-[10px] font-extrabold">
+                        {securityLogs.filter(l => l.receptionStatus !== "registered").length} Waiting Intake
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-sky-800">
+                      Entrants logged at hospital security gates can be retrieved instantly using National ID or the one-click button below.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSecurityGateDrawer(!showSecurityGateDrawer)}
+                  className="px-2.5 py-1 text-xs text-sky-700 hover:text-sky-900 bg-white/80 hover:bg-white rounded-lg border border-sky-200 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <span>{showSecurityGateDrawer ? "Collapse" : "Expand Arrivals"}</span>
+                  {showSecurityGateDrawer ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {showSecurityGateDrawer && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
+                  {securityLogs.slice(0, 6).map((log) => {
+                    const isRegistered = log.receptionStatus === "registered";
+                    const isSelected = matchedSecurityLog?.id === log.id;
+                    const logId = log.nationalId || log.idOrPhone || "N/A";
+                    const logName = log.patientName || log.nameOrPlate;
+                    const timeString = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    return (
+                      <div
+                        key={log.id}
+                        className={`p-2.5 rounded-xl border text-xs flex flex-col justify-between gap-2 transition-all ${
+                          isSelected
+                            ? "bg-white border-sky-500 ring-2 ring-sky-300 shadow-sm"
+                            : isRegistered
+                            ? "bg-sky-100/40 border-sky-200 opacity-60"
+                            : "bg-white border-sky-200 hover:border-sky-300 hover:shadow-xs"
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-gray-900 truncate max-w-[130px]" title={logName}>
+                              {logName}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              isRegistered ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800"
+                            }`}>
+                              {isRegistered ? "Registered" : log.checkpoint}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono">
+                            <span>ID: <strong className="text-gray-800">{logId}</strong></span>
+                            <span>{timeString}</span>
+                          </div>
+
+                          {log.notes && (
+                            <p className="text-[10px] text-gray-600 italic line-clamp-1">
+                              "{log.notes}"
+                            </p>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRetrieveFromSecurityLog(log)}
+                          className={`w-full py-1 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-sky-600 text-white shadow-xs"
+                              : "bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200"
+                          }`}
+                        >
+                          <Zap className="w-3 h-3" />
+                          <span>{isSelected ? "Active in Form" : "Retrieve Patient"}</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* National ID Field */}
             <div className="space-y-1.5">
@@ -496,7 +581,7 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
                 <label className="block text-xs font-semibold text-gray-600">National ID / Passport</label>
                 {isCheckingId && (
                   <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3 animate-spin" /> Verifying ID...
+                    <RefreshCw className="w-3 h-3 animate-spin" /> Verifying ID & Gate Logs...
                   </span>
                 )}
               </div>
@@ -515,6 +600,8 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
                         ? "border-rose-400 bg-rose-50/50 text-rose-950 focus:border-rose-500"
                         : existingPatientProfile
                         ? "border-emerald-400 bg-emerald-50/30 text-emerald-950 focus:border-emerald-500"
+                        : matchedSecurityLog
+                        ? "border-sky-400 bg-sky-50/30 text-sky-950 focus:border-sky-500"
                         : "border-gray-200 focus:border-emerald-500"
                     }`}
                   />
@@ -552,6 +639,42 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
               </button>
             </div>
           </div>
+
+          {/* SECURITY GATE CLEARANCE VERIFIED BADGE */}
+          {matchedSecurityLog && (
+            <div
+              id="security-gate-match-badge"
+              className="p-3.5 rounded-xl border border-sky-300 bg-sky-50 text-sky-950 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in shadow-xs"
+            >
+              <div className="flex items-start gap-2.5">
+                <Shield className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-sky-950">
+                      Security Gate Arrival Linked & Verified
+                    </p>
+                    <span className="px-2 py-0.5 bg-sky-200 text-sky-900 border border-sky-300 rounded text-[9px] font-black uppercase tracking-wider">
+                      {matchedSecurityLog.status || "AUTHORIZED"}
+                    </span>
+                  </div>
+                  <p className="text-sky-900 text-[11px]">
+                    Logged at <strong className="font-semibold">{matchedSecurityLog.checkpoint}</strong> by <span className="font-semibold">{matchedSecurityLog.officerName || "Security Desk"}</span> at {new Date(matchedSecurityLog.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+                  </p>
+                  {matchedSecurityLog.notes && (
+                    <p className="text-[10px] text-sky-800 font-medium italic">
+                      Guard Notes: "{matchedSecurityLog.notes}"
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-1 rounded-md border border-emerald-300">
+                  Ready to Queue to Triage
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* ACTIVE DUPLICATE ENCOUNTER REJECTION ALERT BANNER */}
           {activeDuplicateEncounter && (
@@ -863,232 +986,51 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
             </div>
           </div>
 
-          {/* Desired Service Ticket */}
+          {/* Patient Complaint / Reason for Visit */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-gray-600">Required Service Department</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-              {[
-                { name: "General Doctor", label: "Consultation" },
-                { name: "Laboratory", label: "Diagnostic Tests" },
-                { name: "Radiology", label: "DICOM Scans" },
-                { name: "Pharmacy", label: "Dispensary & POS" },
-                { name: "Labour Room", label: "Maternity Care" },
-                { name: "Gynecology (Gyna)", label: "Specialist OB/GYN" },
-              ].map((serv) => (
-                <button
-                  key={serv.name}
-                  id={`btn-service-${serv.name.toLowerCase().replace(" ", "-")}`}
-                  type="button"
-                  onClick={() => {
-                    setService(serv.name);
-                    // Clear specialist if switching to a non-medical department that doesn't fit
-                    if (serv.name !== "General Doctor") {
-                      setAssignedSpecialistId("");
-                    }
-                  }}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    service === serv.name && !assignedSpecialistId
-                      ? "border-emerald-500 bg-emerald-50/40 text-emerald-800 font-semibold"
-                      : "border-gray-200 hover:border-gray-300 text-gray-600 bg-white"
-                  }`}
-                >
-                  <span className="block text-xs">{serv.name}</span>
-                  <span className="text-[10px] text-gray-400 font-normal">{serv.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Patient Complaint / Issue */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-gray-600">Patient Complaint / Chief Medical Issue</label>
+            <label className="block text-xs font-semibold text-gray-700">
+              Patient Chief Complaint / Reason for Visit
+            </label>
             <textarea
               id="input-patient-issue"
               required
               rows={2}
-              placeholder="e.g. Complaining of sudden abdominal pain, mild nausea, and slight dizziness for past 12 hours."
+              placeholder="e.g. Complaining of sudden abdominal pain, mild nausea, or routine follow-up checkup..."
               value={issue}
               onChange={(e) => setIssue(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:border-emerald-500 focus:outline-hidden bg-white"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-emerald-500 focus:outline-hidden bg-white shadow-2xs"
             />
           </div>
 
-          {/* DIRECT SPECIALIST ASSIGNMENT PANEL */}
-          <div className="space-y-3 p-4 bg-slate-50/80 rounded-2xl border border-slate-200">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
-                  <Stethoscope className="w-4 h-4" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-800">
-                    Direct Specialist Assignment ({HOSPITAL_SPECIALISTS_DIRECTORY.length} Available)
-                  </label>
-                  <p className="text-[10px] text-gray-500">
-                    Assign incoming patient directly to a specialist discipline or on-duty physician
-                  </p>
-                </div>
+          {/* HOSPITAL CARE PATHWAY NOTICE: AUTOMATIC ROUTING TO NURSE TRIAGE */}
+          <div className="p-4 bg-gradient-to-r from-rose-50 via-pink-50/50 to-amber-50/40 rounded-2xl border border-rose-200/80 space-y-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-rose-600 text-white rounded-xl shadow-xs">
+                <Activity className="w-4 h-4" />
               </div>
-
-              {selectedSpecialistName && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSpecialistName("");
-                    setAssignedDoctorId("");
-                    setAssignedSpecialistId("");
-                    setService("General Doctor");
-                  }}
-                  className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <X className="w-3 h-3" />
-                  <span>Clear Specialist (General Pool)</span>
-                </button>
-              )}
-            </div>
-
-            {/* Category Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] scrollbar-thin">
-              <button
-                type="button"
-                onClick={() => setSpecialistCategory("all")}
-                className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-colors ${
-                  specialistCategory === "all"
-                    ? "bg-slate-900 text-white shadow-2xs"
-                    : "bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200"
-                }`}
-              >
-                All Categories ({HOSPITAL_SPECIALISTS_DIRECTORY.length})
-              </button>
-              {SPECIALIST_CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setSpecialistCategory(cat.id)}
-                  className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-colors ${
-                    specialistCategory === cat.id
-                      ? "bg-emerald-600 text-white shadow-2xs"
-                      : "bg-white text-slate-600 hover:bg-slate-200/70 border border-slate-200"
-                  }`}
-                >
-                  {cat.title}
-                </button>
-              ))}
-            </div>
-
-            {/* Live Search & Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Filter by organ, disease, or title (e.g., heart, brain, kidney)..."
-                  value={specialistSearch}
-                  onChange={(e) => setSpecialistSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs focus:border-emerald-500 focus:outline-hidden bg-white"
-                />
-              </div>
-
-              <div className="relative">
-                <select
-                  id="select-specialist-role"
-                  value={selectedSpecialistName}
-                  onChange={(e) => {
-                    const chosen = e.target.value;
-                    setSelectedSpecialistName(chosen);
-                    setAssignedDoctorId("");
-                    if (chosen) {
-                      const specDef = getSpecialistByName(chosen);
-                      if (specDef) {
-                        if (specDef.department === "laboratory") setService("Laboratory");
-                        else if (specDef.department === "radiology") setService("Radiology");
-                        else if (specDef.department === "pharmacy") setService("Pharmacy");
-                        else if (specDef.department === "labour_room") setService("Labour Room");
-                        else if (specDef.department === "gyna") setService("Gynecology (Gyna)");
-                        else setService("General Doctor");
-                      }
-                    }
-                  }}
-                  className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-xl text-xs font-bold text-gray-800 focus:border-emerald-500 focus:outline-hidden bg-white"
-                >
-                  <option value="">-- Select Specialist from Hospital Taxonomy --</option>
-                  {HOSPITAL_SPECIALISTS_DIRECTORY
-                    .filter((s) => {
-                      const matchesCategory = specialistCategory === "all" || s.category === specialistCategory;
-                      const q = specialistSearch.toLowerCase().trim();
-                      const matchesSearch = !q || 
-                        s.name.toLowerCase().includes(q) || 
-                        s.description.toLowerCase().includes(q) ||
-                        (s.focusAreas && s.focusAreas.toLowerCase().includes(q));
-                      return matchesCategory && matchesSearch;
-                    })
-                    .map((s) => (
-                      <option key={s.id} value={s.name}>
-                        {s.name} [{s.shortCode}] — {s.description.substring(0, 45)}...
-                      </option>
-                    ))}
-                </select>
+              <div>
+                <h4 className="text-xs font-bold text-rose-950 uppercase tracking-wide">
+                  Standard Clinical Routing: Nurse Triage & Vitals First
+                </h4>
+                <p className="text-[11px] text-rose-800">
+                  Patient is automatically queued to Nurse Triage Desk 1 for vitals, TEWS assessment & specialist assignment.
+                </p>
               </div>
             </div>
-
-            {/* Selected Specialist Highlighted Card */}
-            {selectedSpecialistName && (() => {
-              const activeSpec = getSpecialistByName(selectedSpecialistName);
-              if (!activeSpec) return null;
-              
-              // Doctors matching this specialty or all medical doctors
-              const candidateDoctors = employees.filter(emp => {
-                const dept = (emp.department || "").toLowerCase();
-                const spec = (emp.specialty || "").toLowerCase();
-                const role = (emp.role || "").toLowerCase();
-                return dept.includes("med") || spec.includes(activeSpec.name.toLowerCase()) || role.includes("dr") || role.includes("doctor") || role.includes("physician");
-              });
-
-              return (
-                <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2.5 text-xs animate-fade-in">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-emerald-700 text-white font-mono font-black rounded-lg text-[10px]">
-                        {activeSpec.shortCode}
-                      </span>
-                      <h4 className="font-bold text-emerald-950 text-sm">{activeSpec.name}</h4>
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
-                      {activeSpec.defaultRoom}
-                    </span>
-                  </div>
-
-                  <p className="text-emerald-900 text-[11px] leading-relaxed">
-                    <strong>Clinical Focus:</strong> {activeSpec.description}
-                  </p>
-
-                  {activeSpec.focusAreas && (
-                    <p className="text-emerald-800/80 text-[10px]">
-                      <strong>Key Clinical Domains:</strong> {activeSpec.focusAreas}
-                    </p>
-                  )}
-
-                  {/* Optional Doctor Assignment */}
-                  <div className="pt-2 border-t border-emerald-200/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-emerald-900">
-                      Assign to specific on-duty doctor (Optional):
-                    </span>
-                    <select
-                      value={assignedDoctorId}
-                      onChange={(e) => setAssignedDoctorId(e.target.value)}
-                      className="w-full sm:w-64 px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-semibold text-gray-800"
-                    >
-                      <option value="">-- Specialist Pool (Auto Queue Routing) --</option>
-                      {candidateDoctors.map((doc) => (
-                        <option key={doc.id} value={doc.id}>
-                          {doc.name} — {doc.specialty || doc.role}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              );
-            })()}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+              <div className="bg-white/80 p-2 rounded-xl border border-rose-100 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-800 font-bold flex items-center justify-center text-[10px]">1</span>
+                <span className="text-slate-700 font-medium">Reception Intake</span>
+              </div>
+              <div className="bg-white/80 p-2 rounded-xl border border-rose-100 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-rose-600 text-white font-bold flex items-center justify-center text-[10px]">2</span>
+                <span className="text-rose-900 font-bold">Nurse Triage & Vitals</span>
+              </div>
+              <div className="bg-white/80 p-2 rounded-xl border border-rose-100 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center text-[10px]">3</span>
+                <span className="text-slate-700 font-medium">Doctor / Specialist Clinic</span>
+              </div>
+            </div>
           </div>
 
           {/* Submit Button */}
@@ -1096,10 +1038,10 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
             id="btn-register-submit"
             type="submit"
             disabled={submitting || !!activeDuplicateEncounter}
-            className={`w-full py-3 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors disabled:opacity-50 ${
+            className={`w-full py-3.5 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2.5 shadow-md transition-all cursor-pointer disabled:opacity-50 ${
               activeDuplicateEncounter
                 ? "bg-rose-600 hover:bg-rose-700 cursor-not-allowed"
-                : "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-emerald-600 hover:bg-emerald-700 hover:shadow-emerald-600/20"
             }`}
           >
             {activeDuplicateEncounter ? (
@@ -1110,14 +1052,12 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
             ) : submitting ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Processing EHR & Dispatching Ticket...</span>
+                <span>Creating Record & Queuing to Nurse Triage...</span>
               </>
             ) : (
               <>
-                <Ticket className="w-4 h-4" />
-                <span>
-                  {selectedSpecialistName ? `Issue Ticket for ${selectedSpecialistName}` : "Issue Digital Queue Ticket"}
-                </span>
+                <Ticket className="w-4.5 h-4.5" />
+                <span>Issue Ticket & Route to Nurse Triage Station</span>
               </>
             )}
           </button>
@@ -1127,37 +1067,59 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
         <div className="lg:col-span-4 space-y-6">
           {/* Biometrics */}
           <div className="p-5 border border-gray-100 rounded-2xl bg-gray-50 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
-              <Fingerprint className="w-4.5 h-4.5 text-gray-400" />
-              <span>Biometric Verification</span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-2">
+                <Fingerprint className="w-4.5 h-4.5 text-indigo-600" />
+                <span>Biometrics & Phone Fingerprint Hub</span>
+              </h3>
+              {biometricsCaptured ? (
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold text-[10px] flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> Verified
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 font-bold text-[9px] flex items-center gap-1">
+                  📱 Phone & USB
+                </span>
+              )}
+            </div>
 
-            <div className="flex flex-col items-center justify-center p-4 border border-dashed border-gray-200 bg-white rounded-xl">
+            <div className="flex flex-col items-center justify-center p-5 border border-dashed border-indigo-200 bg-white rounded-2xl space-y-3">
               <button
                 id="btn-biometric-capture"
                 type="button"
-                onClick={captureBiometrics}
-                disabled={capturing || biometricsCaptured}
-                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                onClick={() => setIsBiometricModalOpen(true)}
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all cursor-pointer shadow-sm ${
                   biometricsCaptured
-                    ? "bg-emerald-100 text-emerald-600"
-                    : capturing
-                    ? "bg-amber-100 text-amber-600 animate-pulse"
-                    : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                    ? "bg-emerald-500 text-white shadow-emerald-500/20 ring-4 ring-emerald-100"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/25 hover:scale-105"
                 }`}
               >
                 <Fingerprint className="w-8 h-8" />
               </button>
 
-              <span className="mt-2 text-xs font-medium text-gray-700">
-                {biometricsCaptured
-                  ? "Biometrics Verified"
-                  : capturing
-                  ? "Place finger on reader..."
-                  : "Tap to scan fingerprint"}
-              </span>
-              <span className="text-[10px] text-gray-400 mt-1">Smart Applications SDK Proxy</span>
+              <div className="text-center space-y-1">
+                <p className="text-xs font-bold text-gray-800">
+                  {biometricsCaptured
+                    ? `Fingerprint Verified (${biometricScanData?.qualityScore || 98}% Quality)`
+                    : "Open Phone / USB Biometrics"}
+                </p>
+                <p className="text-[10px] text-gray-500">
+                  {biometricsCaptured
+                    ? `Device: ${biometricScanData?.deviceUsed || "Phone / USB Reader"}`
+                    : "Supports Phone Fingerprints (Android/iOS), QR Remote Pair & USB Scanners"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsBiometricModalOpen(true)}
+                className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 border border-indigo-200"
+              >
+                <Fingerprint className="w-3.5 h-3.5" />
+                <span>{biometricsCaptured ? "Re-scan Fingerprint" : "Scan via Phone / USB Sensor"}</span>
+              </button>
             </div>
+
           </div>
 
           {/* Output Ticket Receipt Simulator */}
@@ -1171,26 +1133,18 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
                 <p className="text-[10px] text-gray-400 uppercase">A.B.M Clinic Reception</p>
                 <h3 className="text-2xl font-bold text-gray-900 tracking-wider">{successTicket}</h3>
                 
-                {issuedSpecialistInfo?.specialist ? (
-                  <div className="py-1 px-2 bg-emerald-50 rounded-lg border border-emerald-200 text-left text-xs font-sans space-y-0.5">
-                    <div className="font-bold text-emerald-950 flex items-center justify-between">
-                      <span>Specialist: {issuedSpecialistInfo.specialist.name}</span>
-                    </div>
-                    {issuedSpecialistInfo.room && (
-                      <p className="text-[11px] text-emerald-800 font-semibold">{issuedSpecialistInfo.room}</p>
-                    )}
-                    {issuedSpecialistInfo.doctorName && (
-                      <p className="text-[10px] text-slate-600">Attending: {issuedSpecialistInfo.doctorName}</p>
-                    )}
+                <div className="py-1.5 px-2 bg-rose-50 rounded-lg border border-rose-200 text-left text-xs font-sans space-y-0.5">
+                  <div className="font-bold text-rose-950 flex items-center justify-between">
+                    <span>Target: Nurse Triage & Vitals</span>
                   </div>
-                ) : (
-                  <p className="text-[11px] font-semibold text-gray-600 capitalize">{service} Intake</p>
-                )}
+                  <p className="text-[11px] text-rose-800 font-semibold">Triage Desk 1</p>
+                  <p className="text-[10px] text-slate-600">Action: Vitals Assessment & Doctor Referral</p>
+                </div>
                 
                 <p className="text-[9px] text-gray-400">{new Date().toLocaleString()}</p>
               </div>
               <p className="text-[10px] text-emerald-700 text-center">
-                Autodispatched to department. Present ticket on clinical display screens.
+                Patient directed to Nurse Triage Desk. Ticket is visible on Triage Station display.
               </p>
             </div>
           )}
@@ -1300,6 +1254,22 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
             });
           }
           toast.success(`Loaded clinical profile for ${p.patientName}`, "Patient Record Retrieved");
+        }}
+      />
+      {/* Biometric Hardware Scanner Modal */}
+      <BiometricScannerModal
+        isOpen={isBiometricModalOpen}
+        onClose={() => setIsBiometricModalOpen(false)}
+        patientName={patientName || "Patient"}
+        nationalId={nationalId}
+        onBiometricCaptured={(res) => {
+          setBiometricsCaptured(true);
+          setBiometricScanData(res);
+          setIsBiometricModalOpen(false);
+          toast.success(
+            `Biometric fingerprint registered successfully (${res.qualityScore}% match quality on ${res.deviceUsed || "USB Scanner"}).`,
+            "Biometrics Verified"
+          );
         }}
       />
     </div>

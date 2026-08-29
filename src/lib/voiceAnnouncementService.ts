@@ -1,17 +1,19 @@
 // NextGen HMS - Intelligent Banking & Hospital Voice Queue Announcement Engine
 // Provides high-fidelity acoustic chimes (Web Audio API) + Natural Speech Synthesis (Web Speech API)
+// Optimized for Loud, Calm Female Voice & Fluent English Announcing
 
 export interface VoiceAnnouncementConfig {
   enabled: boolean;
   announceOnNewTicket: boolean;
   announceOnTurnArrived: boolean;
   repeatCount: 1 | 2;
-  volume: number; // 0.1 to 1.0
-  rate: number; // 0.8 to 1.2
-  pitch: number; // 0.8 to 1.3
+  volume: number; // 0.1 to 1.0 (Default 1.0 for loud/clear PA)
+  rate: number; // 0.75 to 1.25 (Default 0.90 for calm, articulate cadence)
+  pitch: number; // 0.8 to 1.3 (Default 1.02 for natural warm feminine tone)
   chimeType: "banking_ding_dong" | "hospital_3tone" | "subtle_bell" | "none";
   preferredVoiceURI?: string;
   defaultRoom: string;
+  voiceGenderPreference?: "female" | "any";
 }
 
 export interface ActiveAnnouncement {
@@ -25,18 +27,19 @@ export interface ActiveAnnouncement {
   timestamp: number;
 }
 
-const STORAGE_KEY = "nextgen_hms_voice_announcer_config_v2";
+const STORAGE_KEY = "nextgen_hms_voice_announcer_config_v3";
 
 const DEFAULT_CONFIG: VoiceAnnouncementConfig = {
   enabled: true,
   announceOnNewTicket: true,
   announceOnTurnArrived: true,
   repeatCount: 1,
-  volume: 1.0,
-  rate: 0.92,
-  pitch: 1.04,
+  volume: 1.0, // Maximum loudness
+  rate: 0.90, // Calm, fluent, articulate hospital cadence
+  pitch: 1.02, // Warm, pleasant, calm female pitch
   chimeType: "banking_ding_dong",
-  defaultRoom: "Room 5"
+  defaultRoom: "Room 5",
+  voiceGenderPreference: "female"
 };
 
 type Listener = (active: ActiveAnnouncement | null) => void;
@@ -51,10 +54,32 @@ class VoiceAnnouncementService {
   }> = [];
   private currentAnnouncement: ActiveAnnouncement | null = null;
   private listeners: Set<Listener> = new Set();
+  private cachedVoices: SpeechSynthesisVoice[] = [];
 
   constructor() {
     this.config = this.loadConfig();
     this.initAudioContext();
+    this.initVoiceListener();
+  }
+
+  private initVoiceListener() {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const refreshVoices = () => {
+      try {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length > 0) {
+          this.cachedVoices = voices;
+        }
+      } catch (e) {
+        console.warn("Could not retrieve speechSynthesis voices:", e);
+      }
+    };
+
+    refreshVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = refreshVoices;
+    }
   }
 
   private loadConfig(): VoiceAnnouncementConfig {
@@ -66,7 +91,7 @@ class VoiceAnnouncementService {
         if (parsed.defaultRoom) {
           parsed.defaultRoom = parsed.defaultRoom.replace(/,\s*doctor$/i, "").replace(/\s+doctor$/i, "").trim() || "Room 5";
         }
-        return { ...DEFAULT_CONFIG, ...parsed };
+        return { ...DEFAULT_CONFIG, ...parsed, volume: parsed.volume ?? 1.0 };
       }
     } catch (e) {
       console.warn("Failed to load voice config from localStorage:", e);
@@ -118,7 +143,7 @@ class VoiceAnnouncementService {
   }
 
   /**
-   * Generates a rich, resonant multi-tone chime (Banking 2-tone Ding-Dong or Hospital 3-tone)
+   * Generates a loud, resonant, crystal-clear multi-tone chime (Banking 2-tone Ding-Dong or Hospital 3-tone)
    */
   public async playChime(type = this.config.chimeType): Promise<void> {
     if (type === "none" || !this.config.enabled) return;
@@ -129,35 +154,36 @@ class VoiceAnnouncementService {
 
     const ctx = this.audioCtx;
     const now = ctx.currentTime;
+    const vol = Math.max(0.2, Math.min(1.0, this.config.volume));
 
     if (type === "banking_ding_dong") {
       // Classic Airport / High-End Banking Ding-Dong (High tone ~587.33Hz D5 -> Drop ~440Hz A4)
       return new Promise((resolve) => {
-        // Tone 1: High crisp chime
+        // Tone 1: High crisp chime (Full punchy loudness)
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.type = "sine";
         osc1.frequency.setValueAtTime(587.33, now); // D5
-        gain1.gain.setValueAtTime(0.35 * this.config.volume, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        gain1.gain.setValueAtTime(0.70 * vol, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
         osc1.connect(gain1);
         gain1.connect(ctx.destination);
         osc1.start(now);
-        osc1.stop(now + 0.45);
+        osc1.stop(now + 0.5);
 
-        // Tone 2: Lower mellow resonant chime
+        // Tone 2: Lower mellow resonant chime (Loud & rich)
         const osc2 = ctx.createOscillator();
         const gain2 = ctx.createGain();
         osc2.type = "sine";
         osc2.frequency.setValueAtTime(440.0, now + 0.35); // A4
-        gain2.gain.setValueAtTime(0.4 * this.config.volume, now + 0.35);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+        gain2.gain.setValueAtTime(0.80 * vol, now + 0.35);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
         osc2.connect(gain2);
         gain2.connect(ctx.destination);
         osc2.start(now + 0.35);
-        osc2.stop(now + 1.0);
+        osc2.stop(now + 1.1);
 
-        setTimeout(resolve, 850);
+        setTimeout(resolve, 900);
       });
     } else if (type === "hospital_3tone") {
       // Medical 3-Tone Ascending/Descending Chord (F4 -> A4 -> C5)
@@ -169,14 +195,14 @@ class VoiceAnnouncementService {
           const gain = ctx.createGain();
           osc.type = "triangle";
           osc.frequency.setValueAtTime(freq, t);
-          gain.gain.setValueAtTime(0.3 * this.config.volume, t);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+          gain.gain.setValueAtTime(0.60 * vol, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.start(t);
-          osc.stop(t + 0.5);
+          osc.stop(t + 0.55);
         });
-        setTimeout(resolve, 1000);
+        setTimeout(resolve, 1050);
       });
     } else if (type === "subtle_bell") {
       // Warm single bell
@@ -185,22 +211,22 @@ class VoiceAnnouncementService {
         const gain = ctx.createGain();
         osc.type = "sine";
         osc.frequency.setValueAtTime(880.0, now);
-        gain.gain.setValueAtTime(0.25 * this.config.volume, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        gain.gain.setValueAtTime(0.65 * vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.6);
-        setTimeout(resolve, 600);
+        osc.stop(now + 0.7);
+        setTimeout(resolve, 650);
       });
     }
   }
 
   /**
-   * Helper to spell out ticket codes naturally for crystal-clear PA vocalization.
+   * Helper to spell out ticket codes naturally and fluently for crystal-clear PA vocalization.
    * e.g., "52TC" => "5 2 T C"
    * e.g., "TCK-8492" => "T C K, 8 4 9 2"
-   * e.g., "GEN-002" => "G E N, 0 0 2"
+   * e.g., "TRI-104" => "T R I, 1 0 4"
    */
   public formatTicketForSpeech(rawTicketNo: string): string {
     if (!rawTicketNo) return "unknown ticket";
@@ -213,14 +239,14 @@ class VoiceAnnouncementService {
       return `${prefix}, ${num}`;
     }
 
-    // Split alphanumeric chunks
+    // Split alphanumeric chunks with clean spacing
     return cleaned.split("").join(" ");
   }
 
   /**
-   * Announce when a ticket's turn has arrived in the queue (Banking / Hospital Counter style)
-   * Example: "Ticket number 5 2 T C, please go to Room 5"
-   * Example: "Ticket number 5 2 T C, please go to Laboratory Window A"
+   * Announce when a ticket's turn has arrived in the queue (Calm, Fluent Female English PA voice)
+   * Example: "Ticket number T R I, 1 0 4. Please proceed to Nurse Triage Desk 1."
+   * Example: "Ticket number 5 2 T C. Please proceed to Room 5."
    */
   public async announceTurnArrived(params: {
     ticketNo: string;
@@ -231,7 +257,7 @@ class VoiceAnnouncementService {
   }): Promise<void> {
     if (!this.config.enabled || !this.config.announceOnTurnArrived) return;
 
-    // Resolve destination specified from ticket and remove any trailing doctor word
+    // Resolve destination specified from ticket
     let rawRoom = (params.roomOrDesk || this.config.defaultRoom || "Room 5").trim();
     let cleanRoom = rawRoom
       .replace(/,\s*doctor$/i, "")
@@ -249,10 +275,12 @@ class VoiceAnnouncementService {
 
     const spokenTicket = this.formatTicketForSpeech(params.ticketNo);
 
-    // Standard announcement template using the exact destination specified from the ticket
-    // e.g. "Ticket number 5 2 T C, please go to Room 5"
-    // e.g. "Ticket number T C K, 8 4 9 2, please go to Laboratory Window A"
-    const spokenText = `Ticket number ${spokenTicket}, please go to ${cleanRoom}`;
+    // Fluent, calm English phrasing with natural cadence and punctuation pauses
+    let spokenText = `Ticket number ${spokenTicket}.`;
+    if (params.patientName && params.patientName.trim()) {
+      spokenText += ` Patient ${params.patientName.trim()}.`;
+    }
+    spokenText += ` Please proceed to ${cleanRoom}.`;
 
     const item: ActiveAnnouncement = {
       id: `ann-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -273,7 +301,7 @@ class VoiceAnnouncementService {
 
   /**
    * Announce when a new ticket is raised at Reception / Kiosk / Department
-   * Example: "New ticket raised: Ticket number 5 2 T C. Please proceed to Waiting Area for Room 5"
+   * Example: "New ticket issued. Ticket number T R I, 1 0 4. Please proceed to Nurse Triage Desk 1 for clinical intake."
    */
   public async announceNewTicket(params: {
     ticketNo: string;
@@ -284,12 +312,12 @@ class VoiceAnnouncementService {
     if (!this.config.enabled || !this.config.announceOnNewTicket) return;
 
     const spokenTicket = this.formatTicketForSpeech(params.ticketNo);
-    const dept = params.department || "General Consultation";
+    const dept = params.department || "Clinical Triage & Consultation";
     const room = params.assignedRoom || "Waiting Area";
 
-    let spokenText = `New ticket raised. Ticket number ${spokenTicket}. `;
-    if (params.patientName) {
-      spokenText += `Patient ${params.patientName}. `;
+    let spokenText = `New ticket issued. Ticket number ${spokenTicket}. `;
+    if (params.patientName && params.patientName.trim()) {
+      spokenText += `Patient ${params.patientName.trim()}. `;
     }
     spokenText += `Please proceed to ${room} for ${dept}.`;
 
@@ -347,15 +375,15 @@ class VoiceAnnouncementService {
     this.notify();
 
     try {
-      // 1. Play Chime first
+      // 1. Play loud, crisp Chime first
       await this.playChime(this.config.chimeType);
 
-      // 2. Speak Text
+      // 2. Speak Text with Calm, Loud Female Voice & Fluent English
       await this.speakUtterance(current.announcement.formattedText);
     } catch (e) {
       console.warn("Speech synthesis error:", e);
     } finally {
-      // Small pause after speech finishes
+      // Small graceful pause after speech finishes
       await new Promise((r) => setTimeout(r, 600));
 
       this.currentAnnouncement = null;
@@ -370,6 +398,78 @@ class VoiceAnnouncementService {
     }
   }
 
+  /**
+   * Selects the highest quality calm, fluent female English voice available on the host OS
+   */
+  public selectBestCalmFemaleVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+    if (!voices || voices.length === 0) return null;
+
+    // Filter English voices
+    const englishVoices = voices.filter(
+      (v) => v.lang && (v.lang.toLowerCase().startsWith("en") || v.lang.toLowerCase().startsWith("en_"))
+    );
+
+    const candidates = englishVoices.length > 0 ? englishVoices : voices;
+
+    // Female voice scoring table
+    const getScore = (voice: SpeechSynthesisVoice): number => {
+      let score = 0;
+      const name = voice.name.toLowerCase();
+      const uri = (voice.voiceURI || "").toLowerCase();
+      const lang = (voice.lang || "").toLowerCase();
+
+      // Language scoring: Prefer standard accents (US, UK, Australian, Canadian, Irish, etc.)
+      if (lang.includes("gb") || lang.includes("uk")) score += 35;
+      else if (lang.includes("us")) score += 30;
+      else if (lang.includes("au") || lang.includes("ca") || lang.includes("ie")) score += 25;
+      else if (lang.startsWith("en")) score += 20;
+
+      // Premium neural / natural online voices (Exceptionally calm and human-like)
+      if (name.includes("natural") || uri.includes("natural")) score += 60;
+      if (name.includes("neural") || uri.includes("neural")) score += 50;
+      if (name.includes("online") || uri.includes("online")) score += 40;
+      if (name.includes("enhanced") || uri.includes("enhanced")) score += 35;
+      if (name.includes("google") || uri.includes("google")) score += 30;
+
+      // Recognized calm, fluent female voice personas
+      const topCalmFemaleNames = [
+        "jenny", "aria", "sonia", "libby", "natasha", "ava", "emma", "ana",
+        "samantha", "victoria", "karen", "serena", "moira", "fiona", "tessa",
+        "zira", "hazel", "susan", "catherine", "linda", "heather", "clara",
+        "amy", "olivia", "grace", "alice", "stephanie", "kate", "allison"
+      ];
+
+      for (const fn of topCalmFemaleNames) {
+        if (name.includes(fn) || uri.includes(fn)) {
+          score += 70;
+          break;
+        }
+      }
+
+      // Explicit female keyword check
+      if (name.includes("female") || uri.includes("female")) {
+        score += 50;
+      }
+
+      // Explicitly penalize male voices to ensure a calm female voice is chosen
+      const maleNames = [
+        "david", "mark", "george", "daniel", "guy", "ryan", "fred", "bruce",
+        "male", "stefan", "oliver", "arthur", "james", "thomas", "alex", "paul"
+      ];
+      for (const mn of maleNames) {
+        if (name.includes(mn) || uri.includes(mn)) {
+          score -= 100;
+          break;
+        }
+      }
+
+      return score;
+    };
+
+    const sorted = [...candidates].sort((a, b) => getScore(b) - getScore(a));
+    return sorted[0] || null;
+  }
+
   private speakUtterance(text: string): Promise<void> {
     return new Promise((resolve) => {
       if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -380,29 +480,30 @@ class VoiceAnnouncementService {
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
+      // Ensure loud, crisp volume output (0.1 to 1.0)
       utterance.volume = Math.max(0.1, Math.min(1.0, this.config.volume));
-      utterance.rate = Math.max(0.7, Math.min(1.3, this.config.rate));
-      utterance.pitch = Math.max(0.7, Math.min(1.4, this.config.pitch));
+      // Calm, articulate speech speed (0.85 to 0.95 is optimal for hospital queues)
+      utterance.rate = Math.max(0.75, Math.min(1.25, this.config.rate));
+      // Natural warm feminine pitch
+      utterance.pitch = Math.max(0.8, Math.min(1.3, this.config.pitch));
 
       // Choose preferred voice if available
-      const voices = window.speechSynthesis.getVoices();
+      const voices = window.speechSynthesis.getVoices().length > 0
+        ? window.speechSynthesis.getVoices()
+        : this.cachedVoices;
+
       if (voices.length > 0) {
         if (this.config.preferredVoiceURI) {
           const selected = voices.find((v) => v.voiceURI === this.config.preferredVoiceURI);
-          if (selected) utterance.voice = selected;
+          if (selected) {
+            utterance.voice = selected;
+          } else {
+            const bestFemale = this.selectBestCalmFemaleVoice(voices);
+            if (bestFemale) utterance.voice = bestFemale;
+          }
         } else {
-          // Prefer natural clear English voices (e.g. Google UK English Female, Samantha, or Natural)
-          const preferred = voices.find(
-            (v) =>
-              (v.lang.startsWith("en") || v.lang.startsWith("sw")) &&
-              (v.name.includes("Natural") ||
-                v.name.includes("Google") ||
-                v.name.includes("Samantha") ||
-                v.name.includes("Victoria") ||
-                v.name.includes("Karen") ||
-                v.name.includes("Daniel"))
-          );
-          if (preferred) utterance.voice = preferred;
+          const bestFemale = this.selectBestCalmFemaleVoice(voices);
+          if (bestFemale) utterance.voice = bestFemale;
         }
       }
 
@@ -423,7 +524,7 @@ class VoiceAnnouncementService {
       timeoutHandle = setTimeout(() => {
         window.speechSynthesis.cancel();
         resolve();
-      }, 12000);
+      }, 14000);
 
       window.speechSynthesis.speak(utterance);
     });
@@ -434,7 +535,9 @@ class VoiceAnnouncementService {
    */
   public getVoices(): SpeechSynthesisVoice[] {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
-    return window.speechSynthesis.getVoices();
+    const direct = window.speechSynthesis.getVoices();
+    if (direct && direct.length > 0) return direct;
+    return this.cachedVoices;
   }
 
   /**
@@ -452,3 +555,4 @@ class VoiceAnnouncementService {
 }
 
 export const voiceAnnouncer = new VoiceAnnouncementService();
+

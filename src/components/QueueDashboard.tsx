@@ -46,6 +46,7 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
   };
 
   const resolveRoomName = (ticket: QueueTicket) => {
+    if (ticket.currentDepartment === "triage" || ticket.currentDepartment === "reception") return "Nurse Triage & Vitals Desk";
     if (ticket.consultationRoom && ticket.consultationRoom.trim()) {
       return ticket.consultationRoom.replace(/,\s*doctor$/i, "").replace(/\s+doctor$/i, "").trim();
     }

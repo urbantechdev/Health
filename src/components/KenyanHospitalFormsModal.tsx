@@ -118,7 +118,13 @@ export default function KenyanHospitalFormsModal({
       spo2: "98% on room air",
       respiratoryRate: "18 bpm"
     },
-    allergies: patient?.allergies?.join(", ") || "Penicillin, Sulfa drugs (Severe rash)",
+    allergies: Array.isArray(patient?.allergies)
+      ? patient.allergies.join(", ")
+      : typeof patient?.allergies === "string" && patient.allergies.trim()
+      ? patient.allergies
+      : typeof ticket?.allergies === "string" && ticket.allergies.trim()
+      ? ticket.allergies
+      : "Penicillin, Sulfa drugs (Severe rash)",
 
     // Sick Sheet specific
     sickOffDays: 3,

@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, query, orderBy, getDocs, where, addDoc } from "firebase/firestore";
-import { QueueTicket, MedicalRecord, ClinicalVisit } from "../types";
+import { QueueTicket, MedicalRecord, ClinicalVisit, Employee } from "../types";
 import { findUnifiedPatient, upsertUnifiedPatientRecord } from "../lib/patientSyncService";
 import { addEncounterVital } from "../lib/encounterService";
 import { toast } from "../lib/promptService";
+import { HOSPITAL_SPECIALISTS_DIRECTORY, SPECIALIST_CATEGORIES, SpecialistDefinition, getSpecialistByName } from "../constants/specialists";
+import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
+import {
+  getSmartQueueRecommendation,
+  calculateAllDoctorsWorkload,
+  getDoctorConsultationRoom,
+  DoctorWorkload,
+  SpecialtyQueueBalance
+} from "../lib/queueLoadBalancer";
 import {
   HeartPulse,
   Activity,
@@ -29,7 +38,17 @@ import {
   Phone,
   User,
   ShieldCheck,
-  HelpCircle
+  HelpCircle,
+  Building2,
+  X,
+  UserCheck2,
+  Check,
+  Volume2,
+  Megaphone,
+  Zap,
+  Scale,
+  Users,
+  Award
 } from "lucide-react";
 
 interface NurseTriageStationProps {
@@ -45,6 +64,7 @@ export default function NurseTriageStation({
 }: NurseTriageStationProps) {
   const [tickets, setTickets] = useState<QueueTicket[]>([]);
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<QueueTicket | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -66,17 +86,24 @@ export default function NurseTriageStation({
 
   // Triage Urgency / TEWS Scoring
   const [triageCategory, setTriageCategory] = useState<"GREEN" | "YELLOW" | "RED">("GREEN");
-  const [targetDoctorDepartment, setTargetDoctorDepartment] = useState("doctor");
-  const [targetDoctorClinic, setTargetDoctorClinic] = useState("General OPD Consultation");
+  
+  // Destination Department & Specialist Routing Selection
+  const [targetDepartment, setTargetDepartment] = useState("doctor");
+  const [targetClinicTitle, setTargetClinicTitle] = useState("General OPD Consultation");
+  const [selectedSpecialistName, setSelectedSpecialistName] = useState<string>("");
+  const [specialistCategory, setSpecialistCategory] = useState<string>("all");
+  const [specialistSearch, setSpecialistSearch] = useState<string>("");
+  const [assignedDoctorId, setAssignedDoctorId] = useState<string>("");
+  const [targetRoom, setTargetRoom] = useState<string>("Room 101 - General OPD");
+  const [autoBalanceMode, setAutoBalanceMode] = useState<boolean>(true);
 
-  // Listen to Active Queue tickets awaiting Triage
+  // Listen to Active Queue tickets awaiting Triage & Staff Directory
   useEffect(() => {
     const unsubQueue = onSnapshot(collection(db, "queue"), (snapshot) => {
       const allTickets: QueueTicket[] = [];
       snapshot.forEach((docSnap) => {
         allTickets.push({ id: docSnap.id, ...docSnap.data() } as QueueTicket);
       });
-      // Sort newest first
       allTickets.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setTickets(allTickets);
     });
@@ -89,17 +116,26 @@ export default function NurseTriageStation({
       setPatients(allPatients);
     });
 
+    const unsubEmployees = onSnapshot(collection(db, "employees"), (snapshot) => {
+      const emps: Employee[] = [];
+      snapshot.forEach((docSnap) => {
+        emps.push({ id: docSnap.id, ...docSnap.data() } as Employee);
+      });
+      setEmployees(emps);
+    });
+
     return () => {
       unsubQueue();
       unsubPatients();
+      unsubEmployees();
     };
   }, []);
 
   // Filter queue tickets needing triage
   const triageTickets = useMemo(() => {
     return tickets.filter((t) => {
-      // Pending tickets in triage or reception stage
-      const isTriageDept = t.currentDepartment === "triage" || t.currentDepartment === "reception";
+      const dept = (t.currentDepartment || "").toLowerCase();
+      const isTriageDept = dept === "triage" || dept === "reception" || dept === "nurse" || dept === "nursing" || dept === "";
       const isPending = t.status === "pending" || t.status === "serving";
       return isTriageDept && isPending;
     });
@@ -159,11 +195,62 @@ export default function NurseTriageStation({
   // Select a patient ticket for triage
   const handleSelectTicket = (t: QueueTicket) => {
     setSelectedTicket(t);
+
+    // Populate or auto-detect requested clinic/specialist
+    if (t.targetClinic) {
+      setTargetClinicTitle(t.targetClinic);
+    } else if (t.service && !t.service.toLowerCase().includes("triage")) {
+      setTargetClinicTitle(t.service);
+    } else if (t.assignedSpecialistName) {
+      setTargetClinicTitle(`Consultation with ${t.assignedSpecialistName}`);
+    } else {
+      setTargetClinicTitle("General OPD Consultation");
+    }
+
+    if (t.targetDepartment) {
+      setTargetDepartment(t.targetDepartment);
+    } else {
+      setTargetDepartment("doctor");
+    }
+
+    if (t.consultationRoom) {
+      setTargetRoom(t.consultationRoom);
+    } else {
+      setTargetRoom("Room 101 - General OPD");
+    }
+
+    if (t.assignedSpecialistId) {
+      setAssignedDoctorId(t.assignedSpecialistId);
+    } else {
+      setAssignedDoctorId("");
+    }
+
+    if (t.specialistTitle) {
+      setSelectedSpecialistName(t.specialistTitle);
+    } else {
+      setSelectedSpecialistName("");
+    }
+
+    if (t.allergies) setAllergies(t.allergies);
+    if (t.issue) setChiefComplaint(t.issue);
+
+    // Populate kiosk intake vitals if present
+    if (t.vitals) {
+      if (t.vitals.bp && t.vitals.bp.includes("/")) {
+        const parts = t.vitals.bp.split("/");
+        setSystolic(parts[0].trim());
+        setDiastolic(parts[1].trim());
+      }
+      if (t.vitals.temp) setTemp(t.vitals.temp);
+      if (t.vitals.pulse) setPulse(t.vitals.pulse);
+      if (t.vitals.weight) setWeight(t.vitals.weight);
+    }
+
     const pat = findUnifiedPatient(t.patientId || t.nationalId || t.patientName, patients);
     if (pat) {
-      if (pat.allergies) setAllergies(pat.allergies);
-      if (pat.chronicConditions) setChiefComplaint(t.issue || pat.chronicConditions);
-      if (pat.latestVitals) {
+      if (pat.allergies && !t.allergies) setAllergies(pat.allergies);
+      if (pat.chronicConditions && !t.issue) setChiefComplaint(pat.chronicConditions);
+      if (pat.latestVitals && !t.vitals) {
         if (pat.latestVitals.bp && pat.latestVitals.bp.includes("/")) {
           const parts = pat.latestVitals.bp.split("/");
           setSystolic(parts[0].trim());
@@ -173,12 +260,52 @@ export default function NurseTriageStation({
         if (pat.latestVitals.pulse) setPulse(pat.latestVitals.pulse);
         if (pat.latestVitals.weight) setWeight(pat.latestVitals.weight);
       }
-    } else {
-      setChiefComplaint(t.issue || "");
     }
   };
 
-  // Transmit vitals and forward to Doctor Desk
+  // Quick Department Presets
+  const DEPARTMENT_PRESETS = [
+    { id: "doctor", name: "General Outpatient (OPD)", dept: "doctor", defaultRoom: "Room 101 - General OPD" },
+    { id: "peds", name: "Pediatrics & Child Health", dept: "doctor", defaultRoom: "Room 102 - Pediatrics Clinic" },
+    { id: "gyna", name: "Obstetrics & Gynecology (Gyna)", dept: "gyna", defaultRoom: "Room 105 - OB/GYN Suite" },
+    { id: "labour_room", name: "Labour & Delivery Ward", dept: "labour_room", defaultRoom: "Maternity Ward 1" },
+    { id: "emergency", name: "Casualty / Emergency Resuscitation", dept: "doctor", defaultRoom: "Emergency Resus Bay A" },
+    { id: "dental", name: "Dental Surgery Clinic", dept: "doctor", defaultRoom: "Room 201 - Dental Surgery" },
+    { id: "eye", name: "Eye / Ophthalmology Clinic", dept: "doctor", defaultRoom: "Room 203 - Eye Clinic" },
+    { id: "laboratory", name: "Direct Laboratory Diagnostics", dept: "laboratory", defaultRoom: "Main Clinical Lab" },
+    { id: "radiology", name: "Radiology & Imaging (DICOM)", dept: "radiology", defaultRoom: "Imaging Suite 1" },
+    { id: "pharmacy", name: "Pharmacy & Dispensary", dept: "pharmacy", defaultRoom: "Main Dispensary Window" }
+  ];
+
+  // Eligible Doctors for Assignment & Intelligent Least-Queue Load Balancer for Clinicians of same specialty
+  const queueBalance: SpecialtyQueueBalance = useMemo(() => {
+    return getSmartQueueRecommendation({
+      specialtyName: selectedSpecialistName || targetClinicTitle,
+      department: targetDepartment,
+      fallbackRoom: targetRoom,
+      employees,
+      queueTickets: tickets
+    });
+  }, [selectedSpecialistName, targetClinicTitle, targetDepartment, targetRoom, employees, tickets]);
+
+  // Synchronize doctor assignment when auto-balance is active
+  useEffect(() => {
+    if (autoBalanceMode && queueBalance.recommendedDoctor) {
+      setAssignedDoctorId(queueBalance.recommendedDoctor.doctorId);
+      if (queueBalance.recommendedRoom) {
+        setTargetRoom(queueBalance.recommendedRoom);
+      }
+    }
+  }, [
+    autoBalanceMode,
+    queueBalance.recommendedDoctor?.doctorId,
+    queueBalance.recommendedRoom,
+    selectedSpecialistName,
+    targetClinicTitle,
+    targetDepartment
+  ]);
+
+  // Transmit vitals and forward to Doctor / Specialist Desk
   const handleForwardToDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket) {
@@ -188,6 +315,22 @@ export default function NurseTriageStation({
 
     setSubmitting(true);
     const bpString = `${systolic}/${diastolic}`;
+    
+    // Resolve chosen or auto-balanced doctor
+    const matchedDoctorWorkload = queueBalance.matchingDoctors.find(d => d.doctorId === assignedDoctorId);
+    const assignedDocObj = matchedDoctorWorkload?.doctor || employees.find(e => e.id === assignedDoctorId) || (autoBalanceMode ? queueBalance.recommendedDoctor?.doctor : undefined);
+    const specialistDef = selectedSpecialistName ? getSpecialistByName(selectedSpecialistName) : undefined;
+    
+    // Resolve final destination details
+    const finalDepartment = specialistDef?.department || targetDepartment || (assignedDocObj?.department) || "doctor";
+    const finalClinicName = selectedSpecialistName
+      ? `${selectedSpecialistName} Clinic`
+      : targetClinicTitle || "General OPD Consultation";
+    const finalDocName = assignedDocObj ? assignedDocObj.name : (queueBalance.recommendedDoctor?.doctorName || "");
+    const finalDocId = assignedDocObj ? assignedDocObj.id : (queueBalance.recommendedDoctor?.doctorId || "");
+    const finalRoom = targetRoom || (assignedDocObj ? getDoctorConsultationRoom(assignedDocObj) : queueBalance.recommendedRoom) || "Room 101 - General OPD";
+    const finalSpecialistTitle = selectedSpecialistName || (assignedDocObj?.specialty || queueBalance.recommendedDoctor?.specialty || "Medical Doctor");
+
     const compiledVitals = {
       bp: bpString,
       temp: temp.trim(),
@@ -206,7 +349,7 @@ export default function NurseTriageStation({
     };
 
     try {
-      // 1. Locate patient master record
+      // 1. Locate patient master record and persist vitals
       const matched = findUnifiedPatient(
         selectedTicket.patientId || selectedTicket.nationalId || selectedTicket.patientName,
         patients
@@ -215,8 +358,6 @@ export default function NurseTriageStation({
       if (matched) {
         const patientRef = doc(db, "patients", matched.id);
         const updatedVisits = [...(matched.visits || [])];
-
-        const notesSummary = `Triage (${triageCategory}) | BP: ${bpString} | Temp: ${temp}°C | HR: ${pulse} bpm | SpO2: ${spo2}% | BMI: ${bmiData.bmi || "-"} | Pain: ${painScale}/10. Complaint: ${chiefComplaint || "Routine Checkup"}. Notes: ${nurseNotes || "None"}`;
 
         if (updatedVisits.length > 0) {
           const lastVisit = updatedVisits[updatedVisits.length - 1];
@@ -242,7 +383,7 @@ export default function NurseTriageStation({
               date: new Date().toISOString().split("T")[0],
               vitals: { temp: temp || "36.8", bp: bpString, pulse: pulse || "72", weight: weight || "68" },
               symptoms: chiefComplaint || "Triage Intake",
-              diagnosis: `Triage Priority: ${triageCategory}`,
+              diagnosis: `Triage Priority: ${triageCategory} • Assigned: ${finalClinicName}`,
               prescriptions: [],
               referrals: []
             }],
@@ -252,7 +393,7 @@ export default function NurseTriageStation({
           });
         }
 
-        // 2. Also attach vital record into active encounter if encounter exists
+        // 2. Attach vital record into active clinical encounter
         if (selectedTicket.encounterId || matched.activeEncounterId) {
           const encId = selectedTicket.encounterId || matched.activeEncounterId;
           if (encId) {
@@ -269,41 +410,49 @@ export default function NurseTriageStation({
         }
       }
 
-      // 3. Update Queue ticket to route to Doctor
+      // 3. Update Queue ticket to route to assigned Department / Specialist Doctor
       const queueRef = doc(db, "queue", selectedTicket.id);
       await updateDoc(queueRef, {
-        currentDepartment: "doctor",
-        service: targetDoctorClinic,
+        currentDepartment: finalDepartment,
+        service: finalClinicName,
         status: "pending",
+        assignedSpecialistId: finalDocId || "",
+        assignedSpecialistName: finalDocName || "",
+        specialistTitle: finalSpecialistTitle || "",
+        consultationRoom: finalRoom,
         vitals: {
           bp: bpString,
           temp: temp,
           pulse: pulse,
           weight: weight,
+          spo2: spo2,
+          respRate: respRate,
+          rbs: rbs,
+          height: height,
+          bmi: bmiData.bmi ? `${bmiData.bmi} (${bmiData.category})` : "N/A",
+          painScale: `${painScale}/10`
         },
         triageScore: triageCategory,
         notes: `Triage Completed [${triageCategory}] • BP: ${bpString}, HR: ${pulse} bpm, Temp: ${temp}°C, SpO2: ${spo2}%. ${chiefComplaint ? `Complaint: ${chiefComplaint}` : ""}`,
         triageCompletedAt: new Date().toISOString()
       });
 
-      // 4. Vocal Announcement for Patient
+      // 4. Loud, Calm Female Voice Announcement for Patient
       try {
-        if ("speechSynthesis" in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(
-            `Ticket ${selectedTicket.ticketNo}, ${selectedTicket.patientName}, please proceed to Doctor Consultation Room for ${targetDoctorClinic}`
-          );
-          utterance.rate = 0.95;
-          utterance.lang = "en-KE";
-          window.speechSynthesis.speak(utterance);
-        }
+        voiceAnnouncer.resumeAudioContext();
+        await voiceAnnouncer.announceTurnArrived({
+          ticketNo: selectedTicket.ticketNo,
+          patientName: selectedTicket.patientName,
+          roomOrDesk: finalRoom,
+          departmentOrRole: finalClinicName
+        });
       } catch (e) {
         console.warn("Speech synthesis notice:", e);
       }
 
       toast.success(
-        `Vitals recorded and Ticket #${selectedTicket.ticketNo} (${selectedTicket.patientName}) routed to ${targetDoctorClinic}!`,
-        "Triage Complete"
+        `Vitals recorded and Ticket #${selectedTicket.ticketNo} (${selectedTicket.patientName}) successfully assigned to ${finalClinicName} [${finalRoom}]${finalDocName ? ` - ${finalDocName}` : ""}!`,
+        "Triage & Assignment Complete"
       );
 
       setSelectedTicket(null);
@@ -311,7 +460,7 @@ export default function NurseTriageStation({
       if (onNavigateToQueue) onNavigateToQueue();
     } catch (err: any) {
       console.error("Triage submission error:", err);
-      toast.error("Failed to forward patient to doctor: " + (err?.message || "Unknown error"));
+      toast.error("Failed to forward patient: " + (err?.message || "Unknown error"));
     } finally {
       setSubmitting(false);
     }
@@ -334,8 +483,8 @@ export default function NurseTriageStation({
                 <span className="text-xs text-rose-200">OPD / Emergency Intake</span>
               </div>
               <h1 className="text-2xl font-black tracking-tight mt-1">Nurse Triage & Vital Signs Station</h1>
-              <p className="text-xs text-rose-150 text-rose-100/80">
-                Capture objective biometrics, compute BMI & emergency urgency scores, and route triaged patients to Doctor Stations.
+              <p className="text-xs text-rose-100/80">
+                Capture vital signs, assess emergency urgency scores, and assign triaged patients directly to specific departments, specialist clinics, or on-duty doctors.
               </p>
             </div>
           </div>
@@ -420,35 +569,24 @@ export default function NurseTriageStation({
                         </div>
 
                         <div className="mt-2">
-                          <p className="text-xs font-bold text-slate-900 truncate">{t.patientName}</p>
-                          <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                            <span>{t.gender || pat?.gender || "Adult"}</span>
+                          <p className="text-sm font-bold text-slate-900 leading-snug">{t.patientName}</p>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                            <span>Age: {t.age || pat?.age || "—"}</span>
                             <span>•</span>
-                            <span>{t.age || pat?.age || 30} yrs</span>
-                            {pat?.bloodType && (
-                              <>
-                                <span>•</span>
-                                <span className="font-semibold text-rose-700">Blood: {pat.bloodType}</span>
-                              </>
-                            )}
-                          </p>
+                            <span>ID: {t.nationalId || pat?.nationalId || "Walk-in"}</span>
+                          </div>
                         </div>
 
-                        {t.issue && (
-                          <p className="mt-2 text-[11px] text-slate-600 bg-slate-100/80 px-2 py-1 rounded-lg line-clamp-1">
-                            {t.issue}
-                          </p>
+                        {t.targetClinic && (
+                          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                            <span className="text-rose-700 font-semibold truncate max-w-[200px]">
+                              {t.targetClinic}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                              Triage <ChevronRight className="w-3 h-3" />
+                            </span>
+                          </div>
                         )}
-
-                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-                          <span className="font-bold text-rose-700 flex items-center gap-1">
-                            <span>Ready for Vitals</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </span>
-                          <span className="text-slate-400 uppercase font-mono">
-                            {t.service || "General OPD"}
-                          </span>
-                        </div>
                       </button>
                     );
                   })
@@ -457,113 +595,102 @@ export default function NurseTriageStation({
           </div>
         </div>
 
-        {/* Right Column: Vitals Measurement & Clinical Triage Form (8 Cols) */}
-        <div className="lg:col-span-8">
+        {/* Right Column: Vitals Measurement, Triage TEWS, & Department / Specialist Assignment Desk (8 Cols) */}
+        <div className="lg:col-span-8 space-y-6">
           {selectedTicket ? (
             <form onSubmit={handleForwardToDoctor} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-6">
               
               {/* Selected Patient Banner */}
-              <div className="p-4 rounded-2xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-rose-50/50 border border-rose-200 rounded-2xl">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white font-mono text-[10px] font-black">
+                    <span className="font-mono font-black text-sm px-2.5 py-0.5 bg-rose-600 text-white rounded-lg">
                       #{selectedTicket.ticketNo}
                     </span>
-                    <span className="text-slate-400 text-xs">Active Triage Intake</span>
+                    <h2 className="text-base font-black text-rose-950">{selectedTicket.patientName}</h2>
                   </div>
-                  <h2 className="text-lg font-bold mt-1 text-white">{selectedTicket.patientName}</h2>
-                  <p className="text-xs text-slate-300 flex items-center gap-2 mt-0.5">
-                    <span>National ID: {selectedTicket.nationalId || "N/A"}</span>
-                    <span>•</span>
-                    <span>Phone: {selectedTicket.phone || "N/A"}</span>
-                    <span>•</span>
-                    <span>Age: {selectedTicket.age || 30} yrs</span>
+                  <p className="text-xs text-rose-800 mt-1">
+                    National ID: <strong>{selectedTicket.nationalId || "Not on file"}</strong> • Age: {selectedTicket.age || 30} • Gender: {selectedTicket.gender || "Adult"} • Blood: {selectedTicket.bloodType || "N/A"}
                   </p>
                 </div>
 
-                {/* Urgency Pill */}
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">TEWS Triage Score:</span>
-                  <div className="flex items-center gap-1.5">
-                    {(["GREEN", "YELLOW", "RED"] as const).map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setTriageCategory(cat)}
-                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                          triageCategory === cat
-                            ? cat === "RED"
-                              ? "bg-rose-600 text-white shadow-md ring-2 ring-rose-400"
-                              : cat === "YELLOW"
-                              ? "bg-amber-500 text-slate-950 shadow-md ring-2 ring-amber-300"
-                              : "bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400"
-                            : "bg-slate-800 text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {cat === "RED" ? "🔴 Emergency" : cat === "YELLOW" ? "🟡 Urgent" : "🟢 Routine"}
-                      </button>
-                    ))}
+                {/* Priority Status Pill & Vocal Call Button */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      voiceAnnouncer.resumeAudioContext();
+                      await voiceAnnouncer.announceTurnArrived({
+                        ticketNo: selectedTicket.ticketNo,
+                        patientName: selectedTicket.patientName,
+                        roomOrDesk: "Nurse Triage Desk 1",
+                        departmentOrRole: "Triage & Vitals"
+                      });
+                      toast.success(`Voice Announcement broadcast for Ticket #${selectedTicket.ticketNo} to Triage Desk 1`, "PA Broadcast Sent");
+                    }}
+                    className="px-3 py-2 bg-white hover:bg-rose-100 text-rose-700 font-bold rounded-xl border border-rose-300 text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                    title="Broadcast Vocal Call across waiting lobby"
+                  >
+                    <Volume2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Call to Triage</span>
+                  </button>
+
+                  <div className={`px-4 py-2 rounded-xl text-center border font-bold text-xs ${
+                    triageCategory === "RED"
+                      ? "bg-rose-600 text-white border-rose-700 animate-pulse shadow-md"
+                      : triageCategory === "YELLOW"
+                      ? "bg-amber-100 text-amber-900 border-amber-300 shadow-xs"
+                      : "bg-emerald-100 text-emerald-900 border-emerald-300 shadow-xs"
+                  }`}>
+                    <p className="text-[9px] uppercase tracking-wider opacity-80 font-black">TEWS Urgency</p>
+                    <p className="text-sm font-black">
+                      {triageCategory === "RED" ? "🚨 EMERGENCY (RED)" : triageCategory === "YELLOW" ? "⚠️ PRIORITY (YELLOW)" : "✓ ROUTINE (GREEN)"}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* 1. Hemodynamic Vital Signs & Biometrics Grid */}
+              {/* 1. Vital Signs Entry Form */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-rose-600" />
-                    <span>1. Objective Vital Signs & Hemodynamics</span>
-                  </h3>
-                  <span className="text-[11px] text-slate-500 font-medium">Standard WHO / MoH Clinical Range</span>
-                </div>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-rose-600" />
+                  <span>1. Clinical Vital Signs & Biometrics</span>
+                </h3>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {/* Blood Pressure (Systolic / Diastolic) */}
-                  <div className="col-span-2 sm:col-span-2 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                        <Gauge className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Blood Pressure (mmHg)</span>
-                      </label>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${bpEvaluation.color}`}>
-                        {bpEvaluation.label}
-                      </span>
+                  {/* Blood Pressure */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1.5">
+                      <Gauge className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Blood Pressure</span>
+                    </label>
+                    <div className="flex items-center gap-1.5 font-mono">
+                      <input
+                        type="number"
+                        value={systolic}
+                        onChange={(e) => setSystolic(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-rose-500 text-center"
+                        placeholder="120"
+                      />
+                      <span className="text-slate-400 font-bold">/</span>
+                      <input
+                        type="number"
+                        value={diastolic}
+                        onChange={(e) => setDiastolic(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-rose-500 text-center"
+                        placeholder="80"
+                      />
                     </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="text-[9px] font-semibold text-slate-400 uppercase">Systolic</span>
-                        <input
-                          type="number"
-                          value={systolic}
-                          onChange={(e) => setSystolic(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
-                          placeholder="120"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-semibold text-slate-400 uppercase">Diastolic</span>
-                        <input
-                          type="number"
-                          value={diastolic}
-                          onChange={(e) => setDiastolic(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
-                          placeholder="80"
-                        />
-                      </div>
-                    </div>
+                    <p className={`text-[10px] px-1.5 py-0.5 rounded-md border text-center font-bold truncate ${bpEvaluation.color}`}>
+                      {bpEvaluation.label}
+                    </p>
                   </div>
 
                   {/* Body Temperature */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Thermometer className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Temp (°C)</span>
-                      </span>
-                      {parseFloat(temp) >= 38.0 && (
-                        <span className="text-[9px] font-black text-rose-600 uppercase">Pyrexia / Fever</span>
-                      )}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1.5">
+                      <Thermometer className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Temp (°C)</span>
                     </label>
                     <input
                       type="number"
@@ -573,19 +700,16 @@ export default function NurseTriageStation({
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
                       placeholder="36.8"
                     />
-                    <p className="text-[9px] text-slate-400">Normal: 36.5 - 37.5°C</p>
+                    <p className="text-[10px] text-slate-500 text-center font-semibold">
+                      {parseFloat(temp) >= 38.0 ? "🔥 Febrile (>38.0°)" : parseFloat(temp) < 35.5 ? "❄️ Hypothermia" : "Normal Afebrile"}
+                    </p>
                   </div>
 
                   {/* Pulse / Heart Rate */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <HeartPulse className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Pulse (bpm)</span>
-                      </span>
-                      {parseInt(pulse) > 100 && (
-                        <span className="text-[9px] font-black text-amber-600 uppercase">Tachy</span>
-                      )}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1.5">
+                      <HeartPulse className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Pulse (bpm)</span>
                     </label>
                     <input
                       type="number"
@@ -594,21 +718,16 @@ export default function NurseTriageStation({
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
                       placeholder="72"
                     />
-                    <p className="text-[9px] text-slate-400">Normal: 60 - 100 bpm</p>
+                    <p className="text-[10px] text-slate-500 text-center font-semibold">
+                      {parseInt(pulse) > 100 ? "⚡ Tachycardia (>100)" : parseInt(pulse) < 60 ? "⚠️ Bradycardia (<60)" : "Normal Sinus"}
+                    </p>
                   </div>
 
-                  {/* Oxygen Saturation (SpO2) */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Activity className="w-3.5 h-3.5 text-blue-600" />
-                        <span>SpO2 (%)</span>
-                      </span>
-                      {spo2Evaluation && (
-                        <span className={`text-[9px] font-black ${spo2Evaluation.color}`}>
-                          {parseInt(spo2) < 95 ? "Hypoxia" : "OK"}
-                        </span>
-                      )}
+                  {/* Oxygen Saturation SpO2 */}
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-blue-600" />
+                      <span>SpO2 (%)</span>
                     </label>
                     <input
                       type="number"
@@ -617,17 +736,17 @@ export default function NurseTriageStation({
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
                       placeholder="98"
                     />
-                    <p className="text-[9px] text-slate-400">Normal: &ge; 95%</p>
+                    <p className={`text-[10px] text-center font-bold ${spo2Evaluation?.color || "text-slate-500"}`}>
+                      {spo2Evaluation?.label || "Normal"}
+                    </p>
                   </div>
+                </div>
 
+                {/* Additional Clinical Vitals Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1">
                   {/* Respiratory Rate */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
-                      <span>Resp. Rate (/min)</span>
-                      {parseInt(respRate) > 20 && (
-                        <span className="text-[9px] font-black text-amber-600 uppercase">Tachypnea</span>
-                      )}
-                    </label>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Resp Rate (cpm)</label>
                     <input
                       type="number"
                       value={respRate}
@@ -635,14 +754,11 @@ export default function NurseTriageStation({
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
                       placeholder="18"
                     />
-                    <p className="text-[9px] text-slate-400">Normal: 12 - 20 /min</p>
                   </div>
 
-                  {/* Random Blood Sugar (RBS) */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-700">
-                      RBS (mmol/L)
-                    </label>
+                  {/* Blood Sugar (RBS) */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Random Blood Sugar (mmol/L)</label>
                     <input
                       type="number"
                       step="0.1"
@@ -651,59 +767,51 @@ export default function NurseTriageStation({
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
                       placeholder="5.4"
                     />
-                    <p className="text-[9px] text-slate-400">Normal: 4.0 - 7.8</p>
                   </div>
 
-                  {/* Body Weight (kg) */}
-                  <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                      <Weight className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Weight (kg)</span>
-                    </label>
+                  {/* Body Weight */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Weight (kg)</label>
                     <input
                       type="number"
-                      step="0.5"
+                      step="0.1"
                       value={weight}
                       onChange={(e) => setWeight(e.target.value)}
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
                       placeholder="68"
                     />
                   </div>
+
+                  {/* Body Height */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Height (cm)</label>
+                    <input
+                      type="number"
+                      value={height}
+                      onChange={(e) => setHeight(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500"
+                      placeholder="170"
+                    />
+                  </div>
                 </div>
 
-                {/* Anthropometrics & Auto BMI Calculation Banner */}
-                <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Anthropometrics & Computed BMI Banner */}
+                <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
-                      <Ruler className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
+                      <Ruler className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-indigo-950">Height & BMI Calculation</p>
-                      <p className="text-[11px] text-indigo-700">
-                        WHO Anthropometric Classification for adult dosages & care planning
-                      </p>
+                      <p className="text-xs font-bold text-indigo-950">Height & BMI Classification (WHO Standard)</p>
+                      <p className="text-[11px] text-indigo-700">Adult body mass index for clinical dosage planning</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-600 uppercase">Height (cm)</label>
-                      <input
-                        type="number"
-                        value={height}
-                        onChange={(e) => setHeight(e.target.value)}
-                        className="w-24 px-2 py-1.5 bg-white border border-indigo-200 rounded-xl text-xs font-mono font-bold text-slate-900"
-                        placeholder="170"
-                      />
-                    </div>
-
-                    <div className="bg-white px-3.5 py-2 rounded-xl border border-indigo-200 text-right">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase">Computed BMI</p>
-                      <p className={`text-sm font-black ${bmiData.color}`}>
-                        {bmiData.bmi ? `${bmiData.bmi} kg/m²` : "N/A"}
-                      </p>
-                      <p className={`text-[10px] font-bold ${bmiData.color}`}>{bmiData.category}</p>
-                    </div>
+                  <div className="bg-white px-4 py-1.5 rounded-xl border border-indigo-200 text-right">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Computed BMI</p>
+                    <p className={`text-sm font-black ${bmiData.color}`}>
+                      {bmiData.bmi ? `${bmiData.bmi} kg/m² • ${bmiData.category}` : "N/A"}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -712,18 +820,16 @@ export default function NurseTriageStation({
               <div className="space-y-4 pt-2 border-t border-slate-100">
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span>2. Pain Assessment & Medical Safety Alerts</span>
+                  <span>2. Pain Rating & Clinical Alerts</span>
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Numeric Pain Rating Scale (0 to 10) */}
+                  {/* Numeric Pain Rating Scale */}
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-800">
-                        Numeric Pain Scale (0 - 10):
-                      </label>
+                      <label className="text-xs font-bold text-slate-800">Numeric Pain Scale (0 - 10):</label>
                       <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-rose-700">
-                        {painScale === 0 ? "0 (No Pain)" : painScale < 4 ? `${painScale} (Mild)` : painScale < 7 ? `${painScale} (Moderate)` : `${painScale} (Severe / Excruciating)`}
+                        {painScale === 0 ? "0 (No Pain)" : painScale < 4 ? `${painScale} (Mild)` : painScale < 7 ? `${painScale} (Moderate)` : `${painScale} (Severe / Urgent)`}
                       </span>
                     </div>
 
@@ -758,7 +864,7 @@ export default function NurseTriageStation({
                         <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
                         <span>Known Drug / Food Allergies</span>
                       </span>
-                      <span className="text-[10px] text-slate-400">e.g., Penicillin, Sulfa, Latex</span>
+                      <span className="text-[10px] text-slate-400">e.g., Penicillin, Sulfa, NKDA</span>
                     </label>
                     <input
                       type="text"
@@ -796,49 +902,383 @@ export default function NurseTriageStation({
                 </div>
               </div>
 
-              {/* 3. Destination Doctor Station / Specialist Clinic */}
-              <div className="p-4 rounded-2xl bg-rose-50/50 border border-rose-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-black text-rose-950 uppercase tracking-wide flex items-center gap-1.5">
-                    <Stethoscope className="w-4 h-4 text-rose-600" />
-                    <span>3. Forward to Doctor / Specialist Clinic Destination</span>
-                  </label>
-                </div>
+              {/* 3. DYNAMIC DEPARTMENT, SPECIALIST TAXONOMY & ATTENDING DOCTOR ASSIGNMENT */}
+              <div className="p-5 rounded-3xl bg-slate-50 border border-slate-200 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-black text-slate-950 uppercase tracking-wide flex items-center gap-2">
+                      <Stethoscope className="w-4 h-4 text-rose-600" />
+                      <span>3. Clinical Assignment: Department, Specialist & Doctor</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Select the destination department, hospital specialist specialty, or assign directly to an on-duty clinician.
+                    </p>
+                  </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  {[
-                    { name: "General OPD Consultation", dept: "doctor" },
-                    { name: "Pediatrics & Child Health", dept: "doctor" },
-                    { name: "Obstetrics & Gynecology (Gyna)", dept: "gyna" },
-                    { name: "Casualty / Emergency Resuscitation", dept: "doctor" },
-                    { name: "Dental Surgery Clinic", dept: "doctor" },
-                    { name: "Eye / Ophthalmology Clinic", dept: "doctor" }
-                  ].map((clinic) => (
+                  {selectedSpecialistName && (
                     <button
-                      key={clinic.name}
                       type="button"
                       onClick={() => {
-                        setTargetDoctorClinic(clinic.name);
-                        setTargetDoctorDepartment(clinic.dept);
+                        setSelectedSpecialistName("");
+                        setTargetClinicTitle("General OPD Consultation");
+                        setTargetDepartment("doctor");
+                        setTargetRoom("Room 101 - General OPD");
                       }}
-                      className={`p-2.5 rounded-xl border text-left font-bold transition-all cursor-pointer ${
-                        targetDoctorClinic === clinic.name
-                          ? "bg-rose-600 text-white border-rose-700 shadow-xs"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-rose-50"
+                      className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>Reset to General OPD</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Fast Department Selector Pills */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Select Target Department / OPD Unit:</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                    {DEPARTMENT_PRESETS.map((preset) => {
+                      const isSelected = !selectedSpecialistName && (targetClinicTitle === preset.name || targetDepartment === preset.dept);
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSpecialistName("");
+                            setTargetClinicTitle(preset.name);
+                            setTargetDepartment(preset.dept);
+                            setTargetRoom(preset.defaultRoom);
+                          }}
+                          className={`p-2.5 rounded-xl border text-left font-bold transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                              : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100"
+                          }`}
+                        >
+                          <span className="block text-xs truncate">{preset.name}</span>
+                          <span className="text-[9px] opacity-75 font-normal block truncate">{preset.defaultRoom}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Direct Hospital Specialist Directory Search & Dropdown */}
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Or Assign to Medical Specialist Taxonomy ({HOSPITAL_SPECIALISTS_DIRECTORY.length} Available)</span>
+                    </label>
+                  </div>
+
+                  {/* Specialist Category Tabs */}
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px] scrollbar-thin">
+                    <button
+                      type="button"
+                      onClick={() => setSpecialistCategory("all")}
+                      className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-colors cursor-pointer ${
+                        specialistCategory === "all"
+                          ? "bg-indigo-600 text-white shadow-2xs"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200"
                       }`}
                     >
-                      {clinic.name}
+                      All Specialties
                     </button>
-                  ))}
+                    {SPECIALIST_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSpecialistCategory(cat.id)}
+                        className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-colors cursor-pointer ${
+                          specialistCategory === cat.id
+                            ? "bg-indigo-600 text-white shadow-2xs"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200"
+                        }`}
+                      >
+                        {cat.title}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Filter Input & Specialist Dropdown */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={specialistSearch}
+                        onChange={(e) => setSpecialistSearch(e.target.value)}
+                        placeholder="Search specialist (e.g. Cardiology, Neuro, Gyna, ENT)..."
+                        className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <select
+                      value={selectedSpecialistName}
+                      onChange={(e) => {
+                        const chosen = e.target.value;
+                        setSelectedSpecialistName(chosen);
+                        if (chosen) {
+                          const specDef = getSpecialistByName(chosen);
+                          if (specDef) {
+                            setTargetClinicTitle(`${specDef.name} Clinic`);
+                            setTargetDepartment(specDef.department);
+                            setTargetRoom(specDef.defaultRoom || "Specialist Suite");
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="">-- Choose Specialist Discipline --</option>
+                      {HOSPITAL_SPECIALISTS_DIRECTORY
+                        .filter((s) => {
+                          const matchesCat = specialistCategory === "all" || s.category === specialistCategory;
+                          const q = specialistSearch.toLowerCase().trim();
+                          const matchesQ = !q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || (s.focusAreas && s.focusAreas.toLowerCase().includes(q));
+                          return matchesCat && matchesQ;
+                        })
+                        .map((s) => (
+                          <option key={s.id} value={s.name}>
+                            {s.name} [{s.shortCode}] — {s.description.substring(0, 50)}...
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Active Specialist Preview Badge */}
+                  {selectedSpecialistName && (() => {
+                    const activeSpec = getSpecialistByName(selectedSpecialistName);
+                    if (!activeSpec) return null;
+                    return (
+                      <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1 animate-fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-600 text-white font-mono text-[10px] font-black">
+                              {activeSpec.shortCode}
+                            </span>
+                            <span>{activeSpec.name}</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md border border-indigo-200">
+                            {activeSpec.defaultRoom}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-indigo-900">{activeSpec.description}</p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* 4. SMART LEAST-QUEUE LOAD BALANCING ENGINE & CLINICAL ASSIGNMENT */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 text-white border border-slate-800 shadow-md space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                            Smart Queue Rule: Least-Queue Doctor Balancing
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Active
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Distributes patients to the clinician with the lowest waiting queue of the same specialty.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Auto-Balance Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newMode = !autoBalanceMode;
+                        setAutoBalanceMode(newMode);
+                        if (newMode && queueBalance.recommendedDoctor) {
+                          setAssignedDoctorId(queueBalance.recommendedDoctor.doctorId);
+                          if (queueBalance.recommendedRoom) {
+                            setTargetRoom(queueBalance.recommendedRoom);
+                          }
+                          toast.success(`Smart Auto-Balance active: Routed to ${queueBalance.recommendedDoctor.doctorName} (Least Queue)`, "Auto-Balance Enabled");
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                        autoBalanceMode
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30"
+                          : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700"
+                      }`}
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>{autoBalanceMode ? "Auto-Balance: ON" : "Manual Override"}</span>
+                    </button>
+                  </div>
+
+                  {/* Recommendation Insight Banner */}
+                  <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700/80 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Scale className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span className="text-slate-200 text-[11px] leading-relaxed">
+                        {queueBalance.recommendationReason}
+                      </span>
+                    </div>
+                    {queueBalance.matchingDoctors.length > 1 && (
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-900/80 px-2 py-1 rounded-lg border border-slate-700 shrink-0">
+                        {queueBalance.matchingDoctors.length} Specialists On Duty
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Live Same-Specialty Doctor Queue Load Comparison Grid */}
+                  {queueBalance.matchingDoctors.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                        <Users className="w-3 h-3 text-emerald-400" />
+                        <span>Real-Time Queue Depth for {selectedSpecialistName || targetClinicTitle}:</span>
+                      </label>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {queueBalance.matchingDoctors.map((docWorkload, idx) => {
+                          const isSelected = assignedDoctorId === docWorkload.doctorId || (autoBalanceMode && queueBalance.recommendedDoctor?.doctorId === docWorkload.doctorId);
+                          const isBest = queueBalance.recommendedDoctor?.doctorId === docWorkload.doctorId;
+
+                          return (
+                            <button
+                              key={docWorkload.doctorId}
+                              type="button"
+                              onClick={() => {
+                                setAutoBalanceMode(false);
+                                setAssignedDoctorId(docWorkload.doctorId);
+                                setTargetRoom(docWorkload.assignedRoom);
+                                toast.info(`Assigned to ${docWorkload.doctorName} [${docWorkload.assignedRoom}]`, "Doctor Selected");
+                              }}
+                              className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+                                isSelected
+                                  ? "bg-emerald-950/50 border-emerald-500 shadow-sm ring-1 ring-emerald-500/50"
+                                  : "bg-slate-800/60 border-slate-700 hover:border-slate-600 hover:bg-slate-800"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-xs text-white truncate max-w-[150px]">
+                                      {docWorkload.doctorName}
+                                    </span>
+                                    {isBest && (
+                                      <span className="px-1.5 py-0.2 rounded bg-emerald-500 text-slate-950 text-[9px] font-black shrink-0">
+                                        LEAST QUEUE
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
+                                    {docWorkload.specialty}
+                                  </span>
+                                </div>
+
+                                {/* Queue Count Badge */}
+                                <div className="text-right shrink-0">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-black inline-block border ${
+                                      docWorkload.totalLoad === 0
+                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                        : docWorkload.totalLoad <= 2
+                                        ? "bg-blue-500/20 text-blue-300 border-blue-500/40"
+                                        : docWorkload.totalLoad <= 4
+                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                        : "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                    }`}
+                                  >
+                                    {docWorkload.totalLoad} in Queue
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="mt-2 pt-2 border-t border-slate-700/60 flex items-center justify-between text-[10px]">
+                                <span className="text-slate-400 font-mono flex items-center gap-1">
+                                  <Building2 className="w-3 h-3 text-slate-500" />
+                                  {docWorkload.assignedRoom}
+                                </span>
+                                {isSelected ? (
+                                  <span className="text-emerald-400 font-bold flex items-center gap-0.5">
+                                    <Check className="w-3 h-3" />
+                                    Active Target
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500 hover:text-slate-300">
+                                    Click to Assign
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Specific Attending Clinician & Room Number Controls */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-800">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-300 uppercase flex items-center gap-1">
+                        <UserCheck2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Attending Clinician (Auto or Override):</span>
+                      </label>
+                      <select
+                        value={assignedDoctorId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAssignedDoctorId(val);
+                          if (val) {
+                            setAutoBalanceMode(false);
+                            const chosenDoc = queueBalance.matchingDoctors.find(d => d.doctorId === val);
+                            if (chosenDoc?.assignedRoom) {
+                              setTargetRoom(chosenDoc.assignedRoom);
+                            }
+                          } else {
+                            setAutoBalanceMode(true);
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                      >
+                        {queueBalance.recommendedDoctor && (
+                          <option value={queueBalance.recommendedDoctor.doctorId}>
+                            ⚡ Auto-Balance: {queueBalance.recommendedDoctor.doctorName} [{queueBalance.recommendedDoctor.totalLoad} in queue • Least Load]
+                          </option>
+                        )}
+                        <option value="">-- General Clinic Pool (Next Available Doctor) --</option>
+                        {queueBalance.matchingDoctors.map((docW) => (
+                          <option key={docW.doctorId} value={docW.doctorId}>
+                            {docW.doctorName} — {docW.specialty} [{docW.totalLoad} in Queue]
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-300 uppercase flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Target Consultation Room / Location:</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={targetRoom}
+                        onChange={(e) => setTargetRoom(e.target.value)}
+                        placeholder="e.g. Room 104 - Cardiac Clinic"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Submit & Forward Action Bar */}
-              <div className="flex items-center justify-between gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
                 <button
                   type="button"
                   onClick={() => setSelectedTicket(null)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   Cancel / Clear Selection
                 </button>
@@ -846,13 +1286,13 @@ export default function NurseTriageStation({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-3.5 px-6 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-rose-600/25 transition-all cursor-pointer disabled:opacity-50"
+                  className="w-full sm:flex-1 py-3.5 px-6 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-rose-600/25 transition-all cursor-pointer disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />
                   <span>
                     {submitting
                       ? "Recording Vitals & Routing Ticket..."
-                      : `Complete Triage & Forward Patient #${selectedTicket.ticketNo} to ${targetDoctorClinic}`}
+                      : `Forward Patient #${selectedTicket.ticketNo} to ${selectedSpecialistName || targetClinicTitle} [${targetRoom}]`}
                   </span>
                 </button>
               </div>
@@ -865,7 +1305,7 @@ export default function NurseTriageStation({
               <div className="max-w-md mx-auto space-y-1">
                 <h3 className="text-base font-bold text-slate-800">Nurse Triage Desk Idle</h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Select a patient waiting in the Triage Queue on the left to begin taking clinical vital signs, assess urgency scores, and forward their file to the Doctor's Desk.
+                  Select a patient waiting in the Triage Queue on the left to begin recording clinical vital signs, computing TEWS emergency scores, and assigning the patient to any hospital department or specialist.
                 </p>
               </div>
             </div>

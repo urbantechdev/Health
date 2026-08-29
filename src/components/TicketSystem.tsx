@@ -63,6 +63,7 @@ export default function TicketSystem() {
   const [voiceConfig, setVoiceConfig] = useState<VoiceAnnouncementConfig>(() => voiceAnnouncer.getConfig());
   const [activeAnnouncement, setActiveAnnouncement] = useState<ActiveAnnouncement | null>(null);
   const [showVoiceSettingsModal, setShowVoiceSettingsModal] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [callingTicketModal, setCallingTicketModal] = useState<{
     ticket: SystemTicket;
     selectedRoom: string;
@@ -1834,15 +1835,15 @@ export default function TicketSystem() {
       {/* VOICE PA & CHIME SETTINGS MODAL */}
       {showVoiceSettingsModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-60 animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border-2 border-slate-200 overflow-hidden animate-scale-up">
-            <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border-2 border-slate-200 overflow-hidden animate-scale-up max-h-[90vh] flex flex-col">
+            <div className="p-5 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
                   <Settings2 className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="font-extrabold text-sm uppercase tracking-wide">Intelligent Voice PA & Chime Settings</h3>
-                  <p className="text-xs text-slate-400">Configure acoustic chime, TTS voice engine, and event triggers</p>
+                  <p className="text-xs text-slate-400">Loud, Calm Female Voice & Fluent English Announcing Engine</p>
                 </div>
               </div>
               <button 
@@ -1853,7 +1854,40 @@ export default function TicketSystem() {
               </button>
             </div>
 
-            <div className="p-6 space-y-5 text-xs">
+            <div className="p-6 space-y-5 text-xs overflow-y-auto flex-1">
+              {/* Quick Calm Female Voice Preset */}
+              <div className="p-4 bg-gradient-to-r from-rose-50 to-indigo-50 border border-rose-200/80 rounded-2xl flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 font-black text-rose-950 text-xs">
+                    <Sparkles className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Calm Female Voice & Loud English Preset</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Auto-calibrates 100% volume, fluent 0.90x cadence, warm pitch, and high-clarity chime.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const voices = voiceAnnouncer.getVoices();
+                    const best = voiceAnnouncer.selectBestCalmFemaleVoice(voices);
+                    updateVoiceSettings({
+                      volume: 1.0,
+                      rate: 0.90,
+                      pitch: 1.02,
+                      chimeType: "banking_ding_dong",
+                      preferredVoiceURI: best?.voiceURI || "",
+                      voiceGenderPreference: "female",
+                      enabled: true
+                    });
+                    toast.success("Applied Loud & Calm Female English Voice Preset!", "Voice Preset Active");
+                  }}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs whitespace-nowrap cursor-pointer transition-colors shadow-xs"
+                >
+                  Apply Preset
+                </button>
+              </div>
+
               {/* Master Enabled Switch */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
                 <div>
@@ -1873,12 +1907,39 @@ export default function TicketSystem() {
                 </button>
               </div>
 
+              {/* Specific Speech Voice Selector */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-800">Installed Speech Synthesizer Voice</label>
+                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                    Fluent English Female Preferred
+                  </span>
+                </div>
+                <select
+                  value={voiceConfig.preferredVoiceURI || ""}
+                  onChange={(e) => updateVoiceSettings({ preferredVoiceURI: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-indigo-600"
+                >
+                  <option value="">✨ Auto-Select Best Calm Female Voice (Recommended)</option>
+                  {(availableVoices.length > 0 ? availableVoices : voiceAnnouncer.getVoices())
+                    .filter((v) => v.lang.toLowerCase().startsWith("en") || v.lang.toLowerCase().startsWith("sw"))
+                    .map((v) => {
+                      const isLikelyFemale = /female|samantha|victoria|karen|zira|hazel|aria|jenny|sonia|libby|natasha|ava|emma|ana|serena/i.test(v.name);
+                      return (
+                        <option key={v.voiceURI} value={v.voiceURI}>
+                          {v.name} ({v.lang}) {isLikelyFemale ? "👩 Calm Female" : ""}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+
               {/* Chime Melody Selector */}
               <div className="space-y-2">
                 <label className="block font-bold text-slate-800">Acoustic Audio Chime Tone *</label>
                 <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { id: "banking_ding_dong", title: "Banking 2-Tone Ding-Dong", desc: "Classic crisp D5-A4 chime" },
+                    { id: "banking_ding_dong", title: "Banking 2-Tone Ding-Dong", desc: "Crisp D5-A4 chime (Loud & Clear)" },
                     { id: "hospital_3tone", title: "Hospital 3-Tone Chord", desc: "Medical F4-A4-C5 chime" },
                     { id: "subtle_bell", title: "Subtle Bell Chime", desc: "Gentle 880Hz crystal bell" },
                     { id: "none", title: "No Chime (Speech Only)", desc: "Direct voice broadcast" }
@@ -1923,7 +1984,7 @@ export default function TicketSystem() {
                   <label className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100/70">
                     <div>
                       <span className="font-bold text-slate-800 block">Announce Queue Calls & Turn Arrival</span>
-                      <span className="text-[10px] text-slate-500">Vocalizes: "Ticket No 52TC, please go to Room 5"</span>
+                      <span className="text-[10px] text-slate-500">Vocalizes: "Ticket number 5 2 T C. Please proceed to Room 5."</span>
                     </div>
                     <input
                       type="checkbox"
@@ -1935,28 +1996,29 @@ export default function TicketSystem() {
                 </div>
               </div>
 
-              {/* Volume & Speed Sliders */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Volume, Speed & Pitch Sliders */}
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <div className="flex justify-between font-bold text-slate-700">
                     <span>Volume:</span>
-                    <span>{Math.round(voiceConfig.volume * 100)}%</span>
+                    <span className="text-emerald-600">{Math.round(voiceConfig.volume * 100)}%</span>
                   </div>
                   <input
                     type="range"
                     min="0.2"
                     max="1.0"
-                    step="0.1"
+                    step="0.05"
                     value={voiceConfig.volume}
                     onChange={(e) => updateVoiceSettings({ volume: parseFloat(e.target.value) })}
                     className="w-full accent-indigo-600 cursor-pointer"
                   />
+                  <p className="text-[9px] text-slate-400">100% = Loud PA</p>
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex justify-between font-bold text-slate-700">
-                    <span>Speech Speed:</span>
-                    <span>{voiceConfig.rate}x</span>
+                    <span>Speed:</span>
+                    <span className="text-indigo-600">{voiceConfig.rate}x</span>
                   </div>
                   <input
                     type="range"
@@ -1967,6 +2029,24 @@ export default function TicketSystem() {
                     onChange={(e) => updateVoiceSettings({ rate: parseFloat(e.target.value) })}
                     className="w-full accent-indigo-600 cursor-pointer"
                   />
+                  <p className="text-[9px] text-slate-400">0.90x = Calm</p>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between font-bold text-slate-700">
+                    <span>Pitch:</span>
+                    <span className="text-rose-600">{voiceConfig.pitch || 1.02}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.85"
+                    max="1.25"
+                    step="0.02"
+                    value={voiceConfig.pitch || 1.02}
+                    onChange={(e) => updateVoiceSettings({ pitch: parseFloat(e.target.value) })}
+                    className="w-full accent-rose-600 cursor-pointer"
+                  />
+                  <p className="text-[9px] text-slate-400">Warm Female Tone</p>
                 </div>
               </div>
 
@@ -2007,14 +2087,14 @@ export default function TicketSystem() {
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={handleTestVoiceCall}
-                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-indigo-200"
+                  className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-rose-200 shadow-xs"
                 >
-                  <Megaphone className="w-3.5 h-3.5" />
-                  <span>Test Sample Voice Call</span>
+                  <Megaphone className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Test Calm Female Voice</span>
                 </button>
 
                 <button

@@ -105,6 +105,8 @@ export interface UnifiedPatientInput {
   };
   symptoms?: string;
   diagnosis?: string;
+  allergies?: string;
+  chronicConditions?: string;
   prescriptions?: PrescriptionItem[];
   referrals?: {
     id: string;

@@ -37,6 +37,25 @@ export interface QueueTicket {
   assignedSpecialistName?: string;
   specialistTitle?: string;
   consultationRoom?: string;
+  targetDepartment?: string;
+  targetClinic?: string;
+  allergies?: string;
+  chronicConditions?: string;
+  vitals?: {
+    temp?: string;
+    bp?: string;
+    pulse?: string;
+    respRate?: string;
+    spo2?: string;
+    rbs?: string;
+    weight?: string;
+    height?: string;
+    bmi?: string;
+    painScale?: string;
+    [key: string]: any;
+  };
+  triageScore?: "GREEN" | "YELLOW" | "RED" | string;
+  triageCompletedAt?: string;
   // Modern Kenyan Journey Extensions
   isResultsReview?: boolean;
   resultsReady?: boolean;
@@ -488,10 +507,15 @@ export interface SecurityLog {
   direction: "entry" | "exit";
   checkpoint: string; // "Main Gate", "Reception Desk", "Emergency Gate", "Staff Gate"
   idOrPhone?: string; // National ID / Passport or phone number
+  nationalId?: string;
+  patientName?: string;
+  phone?: string;
   timestamp: string;
   status: "authorized" | "flagged" | "denied";
   notes?: string;
   officerName: string;
+  receptionStatus?: "pending" | "retrieved" | "registered";
+  receptionTicketNo?: string;
 }
 
 export interface SystemTicket {

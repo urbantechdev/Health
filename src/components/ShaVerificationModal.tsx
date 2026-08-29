@@ -4,6 +4,7 @@ import {
   X,
   Search,
   Fingerprint,
+  Smartphone,
   CheckCircle2,
   AlertCircle,
   RefreshCw,
@@ -17,6 +18,8 @@ import {
   Layers
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import BiometricScannerModal from "./BiometricScannerModal";
+import { BiometricScanResult } from "../lib/biometricService";
 
 interface ShaVerificationModalProps {
   isOpen: boolean;
@@ -42,12 +45,15 @@ export default function ShaVerificationModal({
   // Biometric state
   const [biometricScanning, setBiometricScanning] = useState(false);
   const [biometricVerified, setBiometricVerified] = useState(false);
+  const [isBioModalOpen, setIsBioModalOpen] = useState(false);
+  const [capturedBioData, setCapturedBioData] = useState<BiometricScanResult | null>(null);
 
   // Claim pre-auth state
   const [claimAmount, setClaimAmount] = useState(2500);
   const [claimDiagnosis, setClaimDiagnosis] = useState("General Outpatient Consultation & Diagnostics");
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimResult, setClaimResult] = useState<any | null>(null);
+
 
   useEffect(() => {
     if (isOpen) {
@@ -101,14 +107,16 @@ export default function ShaVerificationModal({
   };
 
   const handleBiometricScan = () => {
-    setBiometricScanning(true);
-    setTimeout(() => {
-      setBiometricScanning(false);
-      setBiometricVerified(true);
-    }, 1500);
+    setIsBioModalOpen(true);
+  };
+
+  const handleBiometricCaptured = (result: BiometricScanResult) => {
+    setCapturedBioData(result);
+    setBiometricVerified(true);
   };
 
   const handleSubmitClaim = async () => {
+
     if (!shaResult?.shaId) return;
     setClaimSubmitting(true);
     try {
@@ -256,9 +264,18 @@ export default function ShaVerificationModal({
                     <Fingerprint className="w-6 h-6" />
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold text-gray-900">Biometric Verification (Smart Fingerprint)</h5>
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-xs font-bold text-gray-900">Biometric Verification (Phone & Optical)</h5>
+                      {capturedBioData?.isPhoneSensor && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[9px] font-bold">
+                          📱 Phone Sensor
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-gray-500">
-                      {biometricVerified ? "✓ Biometric identity matched with National Population Registry" : "Scan patient right index thumbprint on optical scanner"}
+                      {biometricVerified
+                        ? `✓ Identity verified via ${capturedBioData?.deviceUsed || "Biometric Sensor"} (${capturedBioData?.qualityScore || 98}% Quality)`
+                        : "Use Phone Fingerprint Sensor, QR Remote Scan, or USB Scanner"}
                     </p>
                   </div>
                 </div>
@@ -266,17 +283,17 @@ export default function ShaVerificationModal({
                 <button
                   type="button"
                   onClick={handleBiometricScan}
-                  disabled={biometricScanning || biometricVerified}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     biometricVerified
                       ? "bg-emerald-600 text-white"
                       : "bg-cyan-700 hover:bg-cyan-800 text-white shadow-xs"
                   }`}
                 >
-                  {biometricScanning ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Fingerprint className="w-3.5 h-3.5" />}
-                  <span>{biometricScanning ? "Scanning..." : biometricVerified ? "Biometrics Verified" : "Capture Biometrics"}</span>
+                  <Fingerprint className="w-3.5 h-3.5" />
+                  <span>{biometricVerified ? "✓ Verified (Re-Scan)" : "Scan Phone / Sensor"}</span>
                 </button>
               </div>
+
 
               {/* Electronic Claim Pre-Authorization Section */}
               <div className="p-4 bg-cyan-50/50 border border-cyan-200 rounded-2xl space-y-3">
@@ -348,6 +365,15 @@ export default function ShaVerificationModal({
           </button>
         </div>
       </div>
+
+      <BiometricScannerModal
+        isOpen={isBioModalOpen}
+        onClose={() => setIsBioModalOpen(false)}
+        onBiometricCaptured={handleBiometricCaptured}
+        patientName={patientName || shaResult?.fullName || "SHA Beneficiary"}
+        nationalId={nationalId}
+      />
     </div>
   );
 }
+
