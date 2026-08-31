@@ -1378,7 +1378,7 @@ export default function App() {
                   <h1 className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-none font-sans truncate drop-shadow-xs group-hover:text-slate-800 transition-colors duration-200`}>
                     {brandCustomName || tenant.name}
                   </h1>
-                  <span className="px-2 py-0.5 bg-yellow-500/80 hover:bg-yellow-500 text-slate-950 border border-yellow-600/40 text-[10px] sm:text-xs font-black rounded-lg uppercase tracking-wider shrink-0 transition-all duration-200 shadow-xs">
+                  <span className="hidden sm:inline-flex px-2 py-0.5 bg-yellow-500/80 hover:bg-yellow-500 text-slate-950 border border-yellow-600/40 text-[10px] sm:text-xs font-black rounded-lg uppercase tracking-wider shrink-0 transition-all duration-200 shadow-xs">
                     Tier {tenant.type}
                   </span>
                 </div>
@@ -1835,19 +1835,52 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Corporate Clean Mobile Bottom Navigation Bar with Dynamic Shadow Motion Effect */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white border-t border-slate-200/80 shadow-[0_-4px_16px_rgba(234,179,8,0.18)] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 flex items-center justify-around overflow-hidden">
-          {/* Animated Moving Top Edge Shadow Beam for Mobile */}
-          <motion.div
-            className="absolute top-0 h-4 w-48 bg-gradient-to-r from-transparent via-yellow-500/35 to-transparent blur-xs pointer-events-none"
-            initial={{ left: "-40%" }}
-            animate={{ left: "120%" }}
-            transition={{
-              repeat: Infinity,
-              duration: 4.5,
-              ease: "easeInOut",
-            }}
-          />
+        {/* Corporate Clean Mobile Bottom Navigation Bar with Curved Single Wave Design */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden pointer-events-none select-none drop-shadow-[0_-6px_20px_rgba(16,185,129,0.18)]">
+          {/* Prominent Single Wave Top Silhouette */}
+          <div className="w-full h-4 overflow-visible leading-none relative -mb-0.5 pointer-events-none">
+            {/* Animated Moving Wave Beam */}
+            <motion.div
+              className="absolute -top-1 h-4 w-40 bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent blur-xs rounded-full pointer-events-none z-20"
+              initial={{ left: "-40%" }}
+              animate={{ left: "120%" }}
+              transition={{
+                repeat: Infinity,
+                duration: 4.5,
+                ease: "easeInOut",
+              }}
+            />
+            <svg
+              viewBox="0 0 400 20"
+              fill="none"
+              preserveAspectRatio="none"
+              className="w-full h-full block"
+            >
+              <defs>
+                <linearGradient id="mobileSingleWaveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#059669" />
+                  <stop offset="35%" stopColor="#10b981" />
+                  <stop offset="70%" stopColor="#059669" />
+                  <stop offset="100%" stopColor="#10b981" />
+                </linearGradient>
+              </defs>
+              {/* Single Wave Solid Fill connected to white nav body */}
+              <path
+                d="M 0,13 C 100,2 300,18 400,6 L 400,20 L 0,20 Z"
+                fill="#ffffff"
+              />
+              {/* Single Wave Stroke Highlight */}
+              <path
+                d="M 0,13 C 100,2 300,18 400,6"
+                stroke="url(#mobileSingleWaveGradient)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                fill="none"
+              />
+            </svg>
+          </div>
+
+          <nav className="bg-white px-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1.5 flex items-center justify-around overflow-hidden pointer-events-auto relative shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
           {/* 1. Dashboard */}
           {checkTabPermission("dashboard").allowed && (
             <button
@@ -1983,6 +2016,7 @@ export default function App() {
             </div>
           </button>
         </nav>
+      </div>
 
         {/* Mobile Bottom Menu Sheet / All Departments App Launcher Drawer */}
         <AnimatePresence>

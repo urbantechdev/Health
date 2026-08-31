@@ -35,6 +35,9 @@ import {
   ShoppingCart,
   Bed,
   FlaskRound,
+  FlaskConical,
+  Droplets,
+  Zap,
   FilePlus
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
@@ -491,18 +494,191 @@ export default function DoctorsDesk({
     setSearchDrugQuery("");
   };
 
-  const addReferralDraft = () => {
-    if (!referralTestName) return;
-    setDraftReferrals([
-      ...draftReferrals,
+  const addReferralDraft = (testNameOverride?: string, deptOverride?: string, notesOverride?: string) => {
+    const tName = testNameOverride || referralTestName;
+    const dept = deptOverride || referralDept;
+    const notes = notesOverride || referralNotes;
+    if (!tName) return;
+
+    // Avoid duplicate draft test
+    if (draftReferrals.some(r => r.testName.toLowerCase() === tName.toLowerCase() && r.department === dept)) {
+      toast.info(`Test "${tName}" is already in the referral queue.`, "Duplicate Referral");
+      return;
+    }
+
+    setDraftReferrals(prev => [
+      ...prev,
       {
-        department: referralDept,
-        testName: referralTestName,
-        notes: referralNotes,
+        department: dept,
+        testName: tName,
+        notes: notes || `Diagnostic investigation for ${tName}`,
       },
     ]);
-    setReferralTestName("");
-    setReferralNotes("");
+    if (!testNameOverride) {
+      setReferralTestName("");
+      setReferralNotes("");
+    }
+  };
+
+  // Instant 1-Click Wire Patient to Laboratory Queue
+  const handleInstantCueToLab = async (specificTests?: string[], specificNotes?: string) => {
+    if (!selectedPatientId || !selectedPatient) {
+      toast.warning("Please select an active patient to wire to the Laboratory.", "No Patient Selected");
+      return;
+    }
+
+    let testsToOrder = specificTests && specificTests.length > 0
+      ? specificTests
+      : draftReferrals.filter(r => r.department === "laboratory").map(r => r.testName);
+
+    if (testsToOrder.length === 0) {
+      testsToOrder = ["Urinalysis", "Full Haemogram"];
+    }
+
+    setSubmitting(true);
+    try {
+      // 1. Compile referrals and update patient EHR record
+      const compiledReferrals = testsToOrder.map((test, idx) => ({
+        id: `ref-${Date.now()}-${idx}`,
+        department: "laboratory" as const,
+        testName: test,
+        notes: specificNotes || referralNotes || `Clinical Lab Order: ${test}`,
+        status: "pending" as const,
+      }));
+
+      await upsertUnifiedPatientRecord({
+        id: selectedPatientId,
+        patientName: selectedPatient.patientName,
+        nationalId: selectedPatient.nationalId,
+        phone: selectedPatient.phone,
+        age: selectedPatient.age,
+        gender: selectedPatient.gender,
+        bloodType: selectedPatient.bloodType,
+        vitals: { temp, bp, pulse, weight },
+        symptoms: symptoms || "Referred for Laboratory Diagnostics",
+        diagnosis: diagnosis || `Investigation: ${testsToOrder.join(", ")}`,
+        prescriptions: draftPrescriptions,
+        referrals: compiledReferrals,
+        sourceStation: "Doctor's Desk"
+      });
+
+      // 2. Synchronize to Patient's Cart
+      try {
+        await syncDoctorConsultationToCart({
+          patientId: selectedPatientId,
+          patientName: selectedPatient.patientName,
+          nationalId: selectedPatient.nationalId,
+          phone: selectedPatient.phone,
+          ticketNo: selectedPatient.activeTicketNo,
+          doctorName: "Doctor on Duty",
+          isResultsReview,
+          prescriptions: draftPrescriptions.map(p => ({
+            drugName: p.drugName,
+            quantity: p.quantity,
+            dosage: p.dosage,
+            unitPrice: p.price
+          })),
+          referrals: compiledReferrals.map(r => ({
+            testName: r.testName,
+            department: r.department
+          }))
+        });
+      } catch (cartErr) {
+        console.warn("Patient cart auto-sync notice:", cartErr);
+      }
+
+      // 3. Automated Routing logic: Wire instantly to Laboratory Queue
+      const qSnap = await getDocs(
+        query(
+          collection(db, "queue"),
+          where("patientName", "==", selectedPatient.patientName),
+          where("currentDepartment", "==", "doctor")
+        )
+      );
+
+      const baseNum = Math.floor(Math.random() * 900 + 100);
+      let assignedTicketNo = `LAB-${baseNum}`;
+      const assignedStationName = "Laboratory Diagnostic Station (Room 104)";
+      const instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Laboratory`;
+      const routingDetails = `Instantly wired to Lab Dashboard Queue for: ${testsToOrder.join(" & ")}.`;
+
+      if (!qSnap.empty) {
+        const ticketDoc = qSnap.docs[0];
+        const ticketData = ticketDoc.data();
+        const existingNum = ticketData.ticketNo?.includes("-") ? ticketData.ticketNo.split("-")[1] : baseNum;
+        assignedTicketNo = `LAB-${existingNum}`;
+
+        await updateDoc(doc(db, "queue", ticketDoc.id), {
+          currentDepartment: "laboratory",
+          ticketNo: assignedTicketNo,
+          status: "pending",
+          service: "Laboratory Diagnostics",
+          requestedTests: testsToOrder,
+          labTestsOrdered: testsToOrder,
+          notes: `Doctor Order: ${testsToOrder.join(", ")}${diagnosis ? ` (Dx: ${diagnosis})` : ""}`,
+          timestamp: new Date().toISOString(),
+          originDoctorName: "Dr. On Duty"
+        });
+      } else {
+        // Fallback: Create new queue ticket directly
+        await addDoc(collection(db, "queue"), {
+          ticketNo: assignedTicketNo,
+          patientName: selectedPatient.patientName,
+          patientId: selectedPatient.id,
+          nationalId: selectedPatient.nationalId,
+          phone: selectedPatient.phone || "",
+          age: selectedPatient.age || 0,
+          gender: selectedPatient.gender || "Unknown",
+          biometricStatus: "verified",
+          currentDepartment: "laboratory",
+          status: "pending",
+          service: "Laboratory Diagnostics",
+          requestedTests: testsToOrder,
+          labTestsOrdered: testsToOrder,
+          notes: `Doctor Direct Cue: ${testsToOrder.join(", ")}${diagnosis ? ` (Dx: ${diagnosis})` : ""}`,
+          timestamp: new Date().toISOString(),
+          originDoctorName: "Dr. On Duty"
+        });
+      }
+
+      // Audio-visual cues & speech announcement
+      playAudioTone(880, 0.25);
+      setTimeout(() => playAudioTone(1174, 0.35), 260);
+
+      const speechAnnouncement = `Ticket No. ${assignedTicketNo}. ${selectedPatient.patientName}, please proceed immediately to the Laboratory Diagnostic Station for ${testsToOrder.join(" and ")}.`;
+      speakStationAnnouncement(speechAnnouncement);
+
+      setRoutingCue({
+        ticketNo: assignedTicketNo,
+        stationName: assignedStationName,
+        stationDepartment: "laboratory",
+        instructionText: `Ticket No. ${assignedTicketNo}: Go to Laboratory`,
+        patientName: selectedPatient.patientName,
+        nationalId: selectedPatient.nationalId,
+        diagnosis: diagnosis || `Investigation: ${testsToOrder.join(", ")}`,
+        details: routingDetails,
+      });
+
+      toast.success(
+        `Patient ${selectedPatient.patientName} (${assignedTicketNo}) instantly wired to Laboratory Dashboard Queue for ${testsToOrder.join(", ")}!`,
+        "Wired to Lab Queue"
+      );
+
+      // Reset states
+      setSymptoms("");
+      setDiagnosis("");
+      setDraftPrescriptions([]);
+      setDraftReferrals([]);
+      setAiSuggestions([]);
+      setAiSummary(null);
+      setSelectedPatientId(null);
+      onRefreshQueue();
+    } catch (err) {
+      console.error("Instant cue to lab error:", err);
+      toast.error("Failed to wire patient to laboratory. Please check database connection.", "Lab Routing Error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSaveConsultation = async (e: React.FormEvent) => {
@@ -565,13 +741,12 @@ export default function DoctorsDesk({
       }
 
       // 3. Automated Routing logic
-      // Find active queue ticket for this patient (serving in doctor)
+      // Find active queue ticket for this patient (serving or pending in doctor)
       const qSnap = await getDocs(
         query(
           collection(db, "queue"),
           where("patientName", "==", selectedPatient.patientName),
-          where("currentDepartment", "==", "doctor"),
-          where("status", "==", "serving")
+          where("currentDepartment", "==", "doctor")
         )
       );
 
@@ -580,74 +755,132 @@ export default function DoctorsDesk({
       let assignedTicketNo = `BIL-${Math.floor(Math.random() * 900 + 100)}`;
       let instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Billing & Accounts`;
       let routingDetails = "Consultation concluded. Proceed to Billing desk for final invoice clearance.";
+      let ticketId: string | null = null;
+      let baseNum = Math.floor(Math.random() * 900 + 100);
 
       if (!qSnap.empty) {
         const ticketDoc = qSnap.docs[0];
-        const ticketId = ticketDoc.id;
+        ticketId = ticketDoc.id;
         const ticketData = ticketDoc.data();
-        const baseNum = ticketData.ticketNo?.split("-")[1] || Math.floor(Math.random() * 900 + 100);
+        baseNum = ticketData.ticketNo?.split("-")[1] || baseNum;
+      }
 
-        if (draftReferrals.length > 0) {
-          // If e-referrals are present (e.g., Lab or Radiology), auto-route patient to that queue
-          const nextDept = draftReferrals[0].department;
-          let nextPrefix = "LAB";
-          if (nextDept === "radiology") {
-            nextPrefix = "RAD";
-            assignedStationName = "Radiology & Imaging Unit (Room 106)";
-            assignedNextDept = "radiology";
-            routingDetails = `Diagnostic Imaging requested: ${draftReferrals.map(r => r.testName).join(", ")}`;
-          } else if (nextDept === "labour_room") {
-            nextPrefix = "LBR";
-            assignedStationName = "Maternity & Labour Ward (Station 3)";
-            assignedNextDept = "labour_room";
-            routingDetails = `Maternity referral: ${draftReferrals.map(r => r.testName).join(", ")}`;
-          } else if (nextDept === "gyna") {
-            nextPrefix = "GYN";
-            assignedStationName = "Gynaecology Clinic (Room 108)";
-            assignedNextDept = "gyna";
-            routingDetails = `Specialized Gynaecological consultation: ${draftReferrals.map(r => r.testName).join(", ")}`;
-          } else {
-            nextPrefix = "LAB";
-            assignedStationName = "Laboratory Diagnostic Station (Room 104)";
-            assignedNextDept = "laboratory";
-            routingDetails = `Diagnostic Tests ordered: ${draftReferrals.map(r => r.testName).join(", ")}`;
-          }
-          
-          assignedTicketNo = `${nextPrefix}-${baseNum}`;
-          instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to ${assignedStationName.split("(")[0].trim()}`;
+      const labReferralTests = draftReferrals.filter(r => r.department === "laboratory").map(r => r.testName);
 
-          await updateDoc(doc(db, "queue", ticketId), {
-            currentDepartment: nextDept,
-            ticketNo: assignedTicketNo,
-            status: "pending", // place them back to pending queue for lab/rad
-            notes: `Referred by Doctor: ${diagnosis || "Diagnostic referral"}`,
-          });
-        } else if (draftPrescriptions.length > 0) {
-          // If only pharmacy prescription was given, route directly to Pharmacy counter
-          assignedTicketNo = `PHA-${baseNum}`;
-          assignedStationName = "Hospital Pharmacy & POS (Dispensing Counter 1)";
-          assignedNextDept = "pharmacy";
-          instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Pharmacy`;
-          routingDetails = `Prescriptions queued for dispensing (${draftPrescriptions.length} items): ${draftPrescriptions.map(p => p.drugName).join(", ")}`;
-
-          await updateDoc(doc(db, "queue", ticketId), {
-            currentDepartment: "pharmacy",
-            ticketNo: assignedTicketNo,
-            status: "pending",
-            notes: "Prescriptions ready for dispensing",
-          });
+      if (draftReferrals.length > 0) {
+        // If e-referrals are present (e.g., Lab or Radiology), auto-route patient to that queue
+        const nextDept = draftReferrals[0].department;
+        let nextPrefix = "LAB";
+        if (nextDept === "radiology") {
+          nextPrefix = "RAD";
+          assignedStationName = "Radiology & Imaging Unit (Room 106)";
+          assignedNextDept = "radiology";
+          routingDetails = `Diagnostic Imaging requested: ${draftReferrals.map(r => r.testName).join(", ")}`;
+        } else if (nextDept === "labour_room") {
+          nextPrefix = "LBR";
+          assignedStationName = "Maternity & Labour Ward (Station 3)";
+          assignedNextDept = "labour_room";
+          routingDetails = `Maternity referral: ${draftReferrals.map(r => r.testName).join(", ")}`;
+        } else if (nextDept === "gyna") {
+          nextPrefix = "GYN";
+          assignedStationName = "Gynaecology Clinic (Room 108)";
+          assignedNextDept = "gyna";
+          routingDetails = `Specialized Gynaecological consultation: ${draftReferrals.map(r => r.testName).join(", ")}`;
         } else {
-          // No referrals/prescriptions -> direct to Billing or discharge
-          assignedTicketNo = `BIL-${baseNum}`;
-          assignedStationName = "Billing & Accounts Clearance Desk";
-          assignedNextDept = "billing";
-          instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Billing & Accounts`;
-          routingDetails = "Clinical consultation concluded without medications. Proceed to Billing desk for clearance.";
+          nextPrefix = "LAB";
+          assignedStationName = "Laboratory Diagnostic Station (Room 104)";
+          assignedNextDept = "laboratory";
+          routingDetails = `Diagnostic Tests ordered: ${draftReferrals.map(r => r.testName).join(", ")}`;
+        }
+        
+        assignedTicketNo = `${nextPrefix}-${baseNum}`;
+        instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to ${assignedStationName.split("(")[0].trim()}`;
 
-          await updateDoc(doc(db, "queue", ticketId), {
-            currentDepartment: "billing",
-            ticketNo: assignedTicketNo,
-            status: "pending",
+        const updatePayload: any = {
+          currentDepartment: nextDept,
+          ticketNo: assignedTicketNo,
+          status: "pending",
+          service: nextDept === "laboratory" ? "Laboratory Diagnostics" : nextDept === "radiology" ? "Radiology Imaging" : "Specialist Referral",
+          requestedTests: nextDept === "laboratory" ? labReferralTests : draftReferrals.map(r => r.testName),
+          labTestsOrdered: labReferralTests,
+          notes: `Referred by Doctor: ${diagnosis || "Diagnostic referral"}. Tests: ${draftReferrals.map(r => r.testName).join(", ")}`,
+          timestamp: new Date().toISOString(),
+          originDoctorName: "Dr. On Duty"
+        };
+
+        if (ticketId) {
+          await updateDoc(doc(db, "queue", ticketId), updatePayload);
+        } else {
+          await addDoc(collection(db, "queue"), {
+            ...updatePayload,
+            patientName: selectedPatient.patientName,
+            patientId: selectedPatient.id,
+            nationalId: selectedPatient.nationalId,
+            phone: selectedPatient.phone || "",
+            age: selectedPatient.age || 0,
+            gender: selectedPatient.gender || "Unknown",
+            biometricStatus: "verified",
+          });
+        }
+      } else if (draftPrescriptions.length > 0) {
+        // If only pharmacy prescription was given, route directly to Pharmacy counter
+        assignedTicketNo = `PHA-${baseNum}`;
+        assignedStationName = "Hospital Pharmacy & POS (Dispensing Counter 1)";
+        assignedNextDept = "pharmacy";
+        instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Pharmacy`;
+        routingDetails = `Prescriptions queued for dispensing (${draftPrescriptions.length} items): ${draftPrescriptions.map(p => p.drugName).join(", ")}`;
+
+        const pharmaPayload: any = {
+          currentDepartment: "pharmacy",
+          ticketNo: assignedTicketNo,
+          status: "pending",
+          service: "Pharmacy Dispensing",
+          notes: `Prescriptions ready (${draftPrescriptions.length} items)`,
+          timestamp: new Date().toISOString()
+        };
+
+        if (ticketId) {
+          await updateDoc(doc(db, "queue", ticketId), pharmaPayload);
+        } else {
+          await addDoc(collection(db, "queue"), {
+            ...pharmaPayload,
+            patientName: selectedPatient.patientName,
+            patientId: selectedPatient.id,
+            nationalId: selectedPatient.nationalId,
+            phone: selectedPatient.phone || "",
+            age: selectedPatient.age || 0,
+            gender: selectedPatient.gender || "Unknown",
+            biometricStatus: "verified",
+          });
+        }
+      } else {
+        // No referrals/prescriptions -> direct to Billing or discharge
+        assignedTicketNo = `BIL-${baseNum}`;
+        assignedStationName = "Billing & Accounts Clearance Desk";
+        assignedNextDept = "billing";
+        instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Billing & Accounts`;
+        routingDetails = "Clinical consultation concluded without medications. Proceed to Billing desk for clearance.";
+
+        const billPayload: any = {
+          currentDepartment: "billing",
+          ticketNo: assignedTicketNo,
+          status: "pending",
+          service: "Billing & Discharge Clearance",
+          timestamp: new Date().toISOString()
+        };
+
+        if (ticketId) {
+          await updateDoc(doc(db, "queue", ticketId), billPayload);
+        } else {
+          await addDoc(collection(db, "queue"), {
+            ...billPayload,
+            patientName: selectedPatient.patientName,
+            patientId: selectedPatient.id,
+            nationalId: selectedPatient.nationalId,
+            phone: selectedPatient.phone || "",
+            age: selectedPatient.age || 0,
+            gender: selectedPatient.gender || "Unknown",
+            biometricStatus: "verified",
           });
         }
       }
@@ -1442,21 +1675,84 @@ export default function DoctorsDesk({
                 )}
               </div>
 
-              {/* Dynamic Department referrals */}
-              <div className="p-4 border border-gray-150 rounded-xl space-y-4">
-                <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                  <ClipboardList className="w-4.5 h-4.5 text-gray-400" />
-                  <span>2. Dynamic E-Referrals (Diagnostic Pathways)</span>
-                </h3>
+              {/* Dynamic Department referrals & Instant Lab Wiring */}
+              <div className="p-4 border-2 border-blue-100 bg-blue-50/20 rounded-2xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-100 pb-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                      <FlaskConical className="w-4.5 h-4.5 text-blue-600" />
+                      <span>2. Diagnostic Pathways & Ancillary E-Referrals</span>
+                    </h3>
+                    <p className="text-[11px] text-blue-800/80">
+                      Instantly cued patients are transferred in real-time to the Laboratory / Imaging queue.
+                    </p>
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                  {/* Instant 1-Click Lab Wiring Action Button */}
+                  <button
+                    type="button"
+                    id="btn-instant-wire-lab"
+                    onClick={() => handleInstantCueToLab()}
+                    disabled={submitting}
+                    className="px-3.5 py-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                    title="Immediately dispatch patient to Lab Queue with Full Haemogram & Urinalysis"
+                  >
+                    <Zap className="w-4 h-4 text-amber-300 animate-bounce" />
+                    <span>⚡ Instant Wire to Lab Queue</span>
+                  </button>
+                </div>
+
+                {/* Quick Lab Presets Grid */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1">
+                      <Droplets className="w-3 h-3 text-rose-500" />
+                      <span>Frequent Clinical Lab Order Presets:</span>
+                    </label>
+                    <span className="text-[10px] text-blue-600 font-medium">Click pill to queue or instant-order</span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { name: "Urinalysis (Complete Dipstick & Micro)", dept: "laboratory", badge: "Urinalysis", color: "amber" },
+                      { name: "Full Haemogram (CBC + Diff + Film)", dept: "laboratory", badge: "Full Haemogram", color: "rose" },
+                      { name: "Blood Slide for Malaria (BS for MPS)", dept: "laboratory", badge: "BS Malaria", color: "purple" },
+                      { name: "Blood Grouping & Rh Crossmatch", dept: "laboratory", badge: "Blood Grouping", color: "red" },
+                      { name: "Stool Routine & Microscopy", dept: "laboratory", badge: "Stool O/C", color: "emerald" },
+                      { name: "Liver Function Tests (LFTs)", dept: "laboratory", badge: "LFTs", color: "blue" },
+                      { name: "Renal Profile / U&E", dept: "laboratory", badge: "Renal U&E", color: "indigo" },
+                      { name: "Random Blood Sugar (RBS)", dept: "laboratory", badge: "RBS Glucose", color: "teal" },
+                      { name: "Chest X-Ray PA View", dept: "radiology", badge: "CXR", color: "slate" },
+                    ].map((item) => {
+                      const isSelected = draftReferrals.some(r => r.testName.toLowerCase().includes(item.badge.toLowerCase()));
+                      return (
+                        <button
+                          key={item.badge}
+                          type="button"
+                          onClick={() => {
+                            addReferralDraft(item.name, item.dept, `Doctor requested: ${item.name}`);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                            isSelected
+                              ? "bg-blue-600 text-white border-blue-700 shadow-xs"
+                              : "bg-white text-slate-700 border-blue-200 hover:bg-blue-50 hover:border-blue-400"
+                          }`}
+                        >
+                          <span>+ {item.badge}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-1">
                   <div className="md:col-span-3">
                     <label className="text-[10px] text-gray-400 font-bold block mb-1">Target Ancillary</label>
                     <select
                       id="select-referral-dept"
                       value={referralDept}
                       onChange={(e) => setReferralDept(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white"
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white font-medium"
                     >
                       <option value="laboratory">Laboratory (LIS)</option>
                       <option value="radiology">Radiology (DICOM)</option>
@@ -1470,7 +1766,7 @@ export default function DoctorsDesk({
                     <input
                       id="input-referral-test"
                       type="text"
-                      placeholder="e.g. Full Blood Count, Chest X-Ray..."
+                      placeholder="e.g. Urinalysis, Full Haemogram, CXR..."
                       value={referralTestName}
                       onChange={(e) => setReferralTestName(e.target.value)}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
@@ -1483,7 +1779,7 @@ export default function DoctorsDesk({
                       <input
                         id="input-referral-notes"
                         type="text"
-                        placeholder="Clinical rationale..."
+                        placeholder="Clinical rationale or suspicion..."
                         value={referralNotes}
                         onChange={(e) => setReferralNotes(e.target.value)}
                         className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
@@ -1491,11 +1787,11 @@ export default function DoctorsDesk({
                       <button
                         id="btn-add-referral-draft"
                         type="button"
-                        onClick={addReferralDraft}
+                        onClick={() => addReferralDraft()}
                         disabled={!referralTestName}
-                        className="px-3 py-1.5 bg-gray-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                        className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
                       >
-                        Queue Referral
+                        Queue Test
                       </button>
                     </div>
                   </div>
@@ -1503,18 +1799,38 @@ export default function DoctorsDesk({
 
                 {/* Referral list */}
                 {draftReferrals.length > 0 && (
-                  <div className="space-y-2 border-t border-gray-100 pt-3">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">E-Referrals Queue (Dispatched on Save)</p>
+                  <div className="space-y-2 border-t border-blue-200/60 pt-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold text-blue-950 uppercase tracking-wide">
+                        E-Referrals Queue ({draftReferrals.length} Ordered — Dispatched Instantly to Lab Dashboard on Save)
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleInstantCueToLab(draftReferrals.filter(r => r.department === "laboratory").map(r => r.testName))}
+                        className="text-[10px] text-blue-700 font-bold hover:underline flex items-center gap-1"
+                      >
+                        <Zap className="w-3 h-3 text-amber-500" />
+                        <span>Send to Lab Now</span>
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {draftReferrals.map((r, idx) => (
-                        <div key={idx} className="px-3 py-2 border border-blue-100 bg-blue-50/10 rounded-xl text-xs flex items-center justify-between gap-3">
+                        <div key={idx} className="px-3 py-2 border border-blue-200 bg-white rounded-xl text-xs flex items-center justify-between gap-3 shadow-xs">
                           <div>
                             <span className="font-bold text-blue-950 uppercase text-[9px] bg-blue-100 px-1.5 py-0.5 rounded mr-1.5">
                               {r.department}
                             </span>
-                            <span className="font-semibold text-gray-800">{r.testName}</span>
+                            <span className="font-bold text-slate-800">{r.testName}</span>
+                            {r.notes && <span className="text-[10px] text-slate-500 block">{r.notes}</span>}
                           </div>
-                          <span className="text-[10px] text-blue-700 font-semibold italic">Auto routing enabled</span>
+                          <button
+                            type="button"
+                            onClick={() => setDraftReferrals(draftReferrals.filter((_, i) => i !== idx))}
+                            className="text-slate-400 hover:text-rose-600 p-1 text-xs"
+                            title="Remove draft test"
+                          >
+                            ×
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1522,16 +1838,34 @@ export default function DoctorsDesk({
                 )}
               </div>
 
-              {/* Save Button */}
-              <button
-                id="btn-save-consultation"
-                type="submit"
-                disabled={submitting}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-                {submitting ? "Signing Records & Re-routing Patient..." : "Complete Consultation & Dispatch Patient"}
-              </button>
+              {/* Action Buttons: Save Consultation & Instant Lab Dispatch */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2">
+                <button
+                  id="btn-save-consultation"
+                  type="submit"
+                  disabled={submitting}
+                  className="sm:col-span-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>
+                    {submitting
+                      ? "Signing Records & Dispatching Patient..."
+                      : draftReferrals.some(r => r.department === "laboratory")
+                      ? "Complete Consultation & Wire Patient to Lab"
+                      : "Complete Consultation & Dispatch Patient"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleInstantCueToLab()}
+                  disabled={submitting}
+                  className="sm:col-span-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 text-amber-300" />
+                  <span>Wire to Lab Directly</span>
+                </button>
+              </div>
             </form>
           ) : (
             <div className="h-full min-h-[400px] border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center text-center p-6 text-gray-400">

@@ -71,6 +71,9 @@ export interface QueueTicket {
   admissionRequired?: boolean;
   assignedWardName?: string;
   assignedBedNumber?: string;
+  requestedTests?: string[];
+  labTestsOrdered?: string[];
+  labPriority?: "routine" | "urgent" | "stat";
 }
 
 export interface Medication {
