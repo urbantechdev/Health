@@ -79,6 +79,7 @@ interface AdminPanelProps {
   toggles: DepartmentToggles;
   onToggleChange: (toggles: DepartmentToggles) => void;
   currentUserRole?: SystemRole | string;
+  onOpenPolicyTerms?: (defaultTab?: "terms" | "privacy" | "infosec" | "governance" | "signoff") => void;
 }
 
 interface CustomFeature {
@@ -139,7 +140,7 @@ const DEFAULT_FEATURES: CustomFeature[] = [
   }
 ];
 
-export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleChange }: AdminPanelProps) {
+export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleChange, onOpenPolicyTerms }: AdminPanelProps) {
   const [platformFontSize, setPlatformFontSize] = React.useState<string>(() => {
     return localStorage.getItem("platform_font_size") || "base";
   });
@@ -193,11 +194,17 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   React.useEffect(() => {
     const unsubEmployees = onSnapshot(collection(db, "employees"), (snapshot) => {
       const usersList: Employee[] = [];
-      snapshot.forEach((doc) => {
-        usersList.push({ id: doc.id, ...doc.data() } as Employee);
+      const seen = new Set<string>();
+      snapshot.forEach((docSnap) => {
+        const data = { id: docSnap.id, ...docSnap.data() } as Employee;
+        const key = (data.email || "").toLowerCase().trim() || (data.nationalId || "").trim() || docSnap.id;
+        if (!seen.has(key)) {
+          seen.add(key);
+          usersList.push(data);
+        }
       });
       setSystemUsers(usersList);
-      setDbCounts((prev) => ({ ...prev, employees: snapshot.size }));
+      setDbCounts((prev) => ({ ...prev, employees: usersList.length }));
     });
 
     const unsubAudit = onSnapshot(collection(db, "settings_audit_logs"), (snapshot) => {
@@ -747,11 +754,22 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
               <span className="text-gray-500">Location/County:</span>
               <span className="font-semibold text-gray-800">{tenant.county}, Kenya</span>
             </div>
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between items-center text-xs">
               <span className="text-gray-500">Regulations Status:</span>
-              <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> ODPC Compliant
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> ODPC Compliant
+                </span>
+                {onOpenPolicyTerms && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPolicyTerms("privacy")}
+                    className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md text-[10px] font-bold transition-all cursor-pointer"
+                  >
+                    View Policies & DPO
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

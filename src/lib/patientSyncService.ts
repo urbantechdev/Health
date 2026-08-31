@@ -284,3 +284,27 @@ export const subscribeUnifiedPatients = (
     callback(list);
   });
 };
+
+/**
+ * Direct lookup by phone in Firestore EHR patients
+ */
+export const findPatientByPhone = async (phone: string): Promise<MedicalRecord | null> => {
+  try {
+    const cleanPhone = normalizePhone(phone);
+    if (!cleanPhone || cleanPhone.length < 9) return null;
+
+    const snap = await getDocs(collection(db, "patients"));
+    if (snap.empty) return null;
+
+    for (const d of snap.docs) {
+      const pData = { id: d.id, ...d.data() } as MedicalRecord;
+      if (normalizePhone(pData.phone) === cleanPhone) {
+        return pData;
+      }
+    }
+    return null;
+  } catch (err) {
+    console.error("Error finding patient by phone:", err);
+    return null;
+  }
+};

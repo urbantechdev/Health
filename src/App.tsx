@@ -23,7 +23,7 @@ import PatientJourneyTracker from "./components/PatientJourneyTracker";
 import DashboardOverview from "./components/DashboardOverview";
 import DesktopBottomNav from "./components/DesktopBottomNav";
 import MpesaPaymentModal from "./components/MpesaPaymentModal";
-import ShaVerificationModal from "./components/ShaVerificationModal";
+import ShaIntegrationHubModal from "./components/ShaIntegrationHubModal";
 import LogoUploadModal from "./components/LogoUploadModal";
 import UserProfileModal from "./components/UserProfileModal";
 import InternalChatModal from "./components/InternalChatModal";
@@ -34,6 +34,7 @@ import AdmissionDischargeManager from "./components/AdmissionDischargeManager";
 import KenyanHospitalFormsModal, { KenyanFormType } from "./components/KenyanHospitalFormsModal";
 import PatientHistoryLookupModal from "./components/PatientHistoryLookupModal";
 import RolePortalLogin from "./components/RolePortalLogin";
+import SystemPolicyTermsModal from "./components/SystemPolicyTermsModal";
 import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
 import UserGuide from "./components/UserGuide";
@@ -409,6 +410,8 @@ export default function App() {
 
   const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState<boolean>(false);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [showPolicyTermsModal, setShowPolicyTermsModal] = useState<boolean>(false);
+  const [policyTermsDefaultTab, setPolicyTermsDefaultTab] = useState<"terms" | "privacy" | "infosec" | "governance" | "signoff">("privacy");
   const [profileOverride, setProfileOverride] = useState<{
     displayName?: string;
     photoURL?: string;
@@ -975,8 +978,14 @@ export default function App() {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "employees"), (snapshot) => {
       const emps: Employee[] = [];
-      snapshot.forEach((doc) => {
-        emps.push({ id: doc.id, ...doc.data() } as Employee);
+      const seen = new Set<string>();
+      snapshot.forEach((docSnap) => {
+        const data = { id: docSnap.id, ...docSnap.data() } as Employee;
+        const key = (data.email || "").toLowerCase().trim() || (data.nationalId || "").trim() || docSnap.id;
+        if (!seen.has(key)) {
+          seen.add(key);
+          emps.push(data);
+        }
       });
       setEmployees(emps.filter(e => e.status === "active"));
     });
@@ -1241,6 +1250,10 @@ export default function App() {
           hospitalLogoUrl={brandLogoUrl}
           authError={authError}
           onGoogleLogin={handleGoogleLogin}
+          onOpenPolicyTerms={(defaultTab) => {
+            setPolicyTermsDefaultTab(defaultTab || "privacy");
+            setShowPolicyTermsModal(true);
+          }}
           onLoginSuccess={(userProfile, targetTab) => {
             setAuthError(null);
             setSimulatedUser({
@@ -1255,6 +1268,13 @@ export default function App() {
             // Directs to their role dashboard
             setActiveTab(targetTab || "dashboard");
           }}
+        />
+        <SystemPolicyTermsModal
+          isOpen={showPolicyTermsModal}
+          onClose={() => setShowPolicyTermsModal(false)}
+          currentUserRole="Reception"
+          currentUserName="Staff Member"
+          defaultTab={policyTermsDefaultTab}
         />
         <GoogleAuthModal
           isOpen={showGoogleAuthModal}
@@ -2363,6 +2383,10 @@ export default function App() {
                           toggles={toggles}
                           onToggleChange={setToggles}
                           currentUserRole={currentSystemRole}
+                          onOpenPolicyTerms={(defaultTab) => {
+                            setPolicyTermsDefaultTab(defaultTab || "privacy");
+                            setShowPolicyTermsModal(true);
+                          }}
                         />
                       ) : (
                         <div className="p-8 max-w-xl mx-auto my-12 bg-white rounded-3xl border border-rose-200 shadow-xl text-center space-y-4">
@@ -2521,6 +2545,18 @@ export default function App() {
                   <BookOpen className="w-3.5 h-3.5 text-blue-600" />
                   <span>User Guide</span>
                 </button>
+                <button
+                  id="btn-footer-policies-terms"
+                  onClick={() => {
+                    setPolicyTermsDefaultTab("privacy");
+                    setShowPolicyTermsModal(true);
+                  }}
+                  title="View Data Protection (KDPA 2019), System Policies & Terms of Use"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 font-bold border border-slate-300/80 hover:border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95 text-[11px]"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>KDPA Policies & Terms</span>
+                </button>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-500">
                 <span className="flex items-center gap-1 text-slate-600 font-semibold">
@@ -2645,6 +2681,10 @@ export default function App() {
         setShowChatModal(true);
       }}
       unreadChatCount={unreadMessagesCount}
+      onOpenPolicyTerms={(tab) => {
+        setPolicyTermsDefaultTab(tab || "privacy");
+        setShowPolicyTermsModal(true);
+      }}
       onOpenTransfer={() => {
         setTransferInitialPatient(null);
         setTransferInitialTicket(null);
@@ -2720,8 +2760,8 @@ export default function App() {
       }}
     />
 
-    {/* Social Health Authority (SHA) Portal Modal */}
-    <ShaVerificationModal
+    {/* Kenya Digital Health Agency (DHA) & Social Health Authority (SHA) Integration Hub Modal */}
+    <ShaIntegrationHubModal
       isOpen={showShaModal}
       onClose={() => setShowShaModal(false)}
       defaultNationalId={shaModalData.defaultNationalId}
@@ -2783,6 +2823,15 @@ export default function App() {
       onSelectPatientForIntake={(p) => {
         setActiveTab("reception");
       }}
+    />
+
+    {/* Kenya Data Protection Act 2019, InfoSec Policy & Terms of Use Modal */}
+    <SystemPolicyTermsModal
+      isOpen={showPolicyTermsModal}
+      onClose={() => setShowPolicyTermsModal(false)}
+      currentUserRole={currentSystemRole}
+      currentUserName={activeUser?.displayName || loggedInEmployee?.name || "Healthcare Staff"}
+      defaultTab={policyTermsDefaultTab}
     />
 
     {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}

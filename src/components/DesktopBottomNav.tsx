@@ -11,7 +11,8 @@ import {
   Activity,
   X,
   ShoppingCart,
-  Monitor
+  Monitor,
+  Scale
 } from "lucide-react";
 import { SystemRole, getRoleConfig } from "../constants/roles";
 import { downloadReadmeFile } from "../lib/downloadReadme";
@@ -33,6 +34,7 @@ interface DesktopBottomNavProps {
   unreadChatCount?: number;
   onOpenTransfer?: () => void;
   pendingTransfersCount?: number;
+  onOpenPolicyTerms?: (defaultTab?: "terms" | "privacy" | "infosec" | "governance" | "signoff") => void;
   checkTabPermission: (tabId: string) => { allowed: boolean; reason?: string };
 }
 
@@ -52,6 +54,7 @@ export default function DesktopBottomNav({
   unreadChatCount = 0,
   onOpenTransfer,
   pendingTransfersCount = 0,
+  onOpenPolicyTerms,
   checkTabPermission,
 }: DesktopBottomNavProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -403,6 +406,25 @@ export default function DesktopBottomNav({
                 </button>
               </div>
 
+              {/* System Policy, Terms of Use & ODPC Data Protection Center */}
+              {onOpenPolicyTerms && (
+                <div className="relative hidden md:block group">
+                  <div className="absolute -inset-1.5 rounded-2xl bg-emerald-500/30 pointer-events-none opacity-0 group-hover:opacity-80 blur-md transition-opacity duration-300 animate-green-smoke-aura" />
+                  <button
+                    id="desktop-dock-policy-terms-btn"
+                    onClick={() => onOpenPolicyTerms("privacy")}
+                    className="relative z-10 flex items-center gap-2 px-3.5 lg:px-4 py-2.5 lg:py-3 rounded-2xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 text-xs lg:text-sm font-black border border-slate-300/90 hover:border-emerald-300 transition-all cursor-pointer hover:shadow-md active:scale-95 group min-h-[54px] lg:min-h-[62px]"
+                    title="View System Policy, Kenya Data Protection Act (KDPA 2019) & Terms of Use"
+                  >
+                    <Scale className="w-5 h-5 text-emerald-700 group-hover:scale-110 transition-transform" />
+                    <div className="flex flex-col text-left">
+                      <span className="whitespace-nowrap leading-tight">Policies</span>
+                      <span className="text-[10px] text-emerald-700 font-mono font-medium">ODPC / KDPA</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+
               {/* Quick Patient Transfer Modal Launcher */}
               {canAccessTransfers && onOpenTransfer && (
                 <div className="relative hidden xl:block group">
@@ -458,7 +480,7 @@ export default function DesktopBottomNav({
                 </div>
               )}
 
-              {/* SHA / Taifa Care Biometric Pre-Auth Portal Launcher with Green Smoke Shadow */}
+              {/* SHA / Taifa Care & FHIR Digital Health Hub Launcher with Green Smoke Shadow */}
               {canAccessSha && (
                 <div className="relative group">
                   <div className="absolute -inset-2.5 rounded-3xl bg-gradient-to-r from-emerald-500/60 via-green-400/70 to-teal-400/50 pointer-events-none opacity-70 group-hover:opacity-100 blur-lg transition-opacity duration-300 animate-green-smoke-aura" />
@@ -466,15 +488,15 @@ export default function DesktopBottomNav({
                     id="desktop-dock-sha-launcher"
                     onClick={onOpenSha}
                     className="relative z-10 flex items-center gap-2.5 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white px-4 lg:px-5 py-2.5 lg:py-3 rounded-2xl text-xs lg:text-sm font-black border border-emerald-400/60 transition-all duration-200 cursor-pointer active:scale-95 group whitespace-nowrap hover:-translate-y-0.5 overflow-hidden shadow-lg min-h-[54px] lg:min-h-[62px]"
-                    title="Open SHA / Taifa Care Biometric & Pre-Auth Portal"
+                    title="Open Kenya Digital Health Integration Hub (SHA Eligibility, ICD-10/Tariffs, e-Claims & FHIR SHR)"
                   >
                     <span className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
                       <span className="absolute -inset-full w-1/2 bg-gradient-to-r from-transparent via-emerald-300/35 to-transparent animate-green-ray-sweep" />
                     </span>
                     <ShieldCheck className="relative z-10 w-5 h-5 lg:w-6 lg:h-6 text-emerald-100 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
                     <div className="relative z-10 flex flex-col text-left">
-                      <span className="leading-tight">SHA Portal</span>
-                      <span className="text-[10px] text-emerald-200 font-normal">Biometric Pre-Auth</span>
+                      <span className="leading-tight">SHA / FHIR Hub</span>
+                      <span className="text-[10px] text-emerald-200 font-normal">Eligibility • e-Claims • SHR</span>
                     </div>
                   </button>
                 </div>

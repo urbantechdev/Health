@@ -49,14 +49,30 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
   const collectionsToPurge = [
     "patients",
     "queue",
+    "encounters",
     "system_tickets",
     "invoices",
+    "patient_carts",
     "medications",
+    "lab_orders",
     "payroll",
+    "expenses",
     "suppliers",
     "procurement_orders",
+    "procurement_grns",
+    "procurement_requisitions",
+    "procurement_suppliers",
     "notifications",
-    "lab_orders"
+    "internal_messages",
+    "patient_transfers",
+    "security_logs",
+    "security_watchlists",
+    "settings_audit_logs",
+    "system_users",
+    "beds",
+    "wards",
+    "ward_bed_rates",
+    "procedure_tariffs"
   ];
 
   const report: CleanSystemReport = {
@@ -164,34 +180,53 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
 }
 
 /**
- * Ensures all 3 Sovereign Super Admins are created and whitelisted in Firestore
+ * Ensures all Master Super Admins are created, whitelisted, and deduplicated in Firestore
  */
 export async function ensureSuperAdminsExist(): Promise<number> {
   try {
     const empSnap = await getDocs(collection(db, "employees"));
-    const existingEmails = new Set(
-      empSnap.docs
-        .map(d => (d.data() as Employee).email?.toLowerCase().trim())
-        .filter(Boolean)
-    );
+    const seenEmails = new Set<string>();
+    const seenIds = new Set<string>();
+    const toDeleteIds: string[] = [];
+
+    for (const docSnap of empSnap.docs) {
+      const data = docSnap.data() as Employee;
+      const email = data.email?.toLowerCase().trim();
+      const nationalId = data.nationalId?.trim();
+
+      if (email && seenEmails.has(email)) {
+        toDeleteIds.push(docSnap.id);
+      } else if (nationalId && seenIds.has(nationalId)) {
+        toDeleteIds.push(docSnap.id);
+      } else {
+        if (email) seenEmails.add(email);
+        if (nationalId) seenIds.add(nationalId);
+      }
+    }
 
     let addedCount = 0;
     const batch = writeBatch(db);
 
+    // Prune redundant duplicate Firestore documents
+    for (const dupId of toDeleteIds) {
+      batch.delete(doc(db, "employees", dupId));
+    }
+
     for (const seed of MASTER_SUPER_ADMIN_SEEDS) {
-      if (!existingEmails.has(seed.email.toLowerCase())) {
+      if (!seenEmails.has(seed.email.toLowerCase())) {
         const newRef = doc(collection(db, "employees"));
         batch.set(newRef, {
           ...seed,
           createdAt: new Date().toISOString()
         });
+        seenEmails.add(seed.email.toLowerCase());
         addedCount++;
       }
     }
 
-    if (addedCount > 0) {
+    if (toDeleteIds.length > 0 || addedCount > 0) {
       await batch.commit();
-      console.log(`[Firestore Bootstrapper] Provisioned ${addedCount} missing Master Super Admin account(s) into database.`);
+      console.log(`[Firestore Bootstrapper] Deduplicated ${toDeleteIds.length} redundant employee record(s) and seeded ${addedCount} missing admin(s).`);
     }
 
     return addedCount;

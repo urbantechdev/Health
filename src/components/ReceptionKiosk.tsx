@@ -27,11 +27,14 @@ import {
   ChevronDown,
   ChevronUp,
   DoorOpen,
-  Sparkles
+  Sparkles,
+  Phone,
+  PhoneCall,
+  Smartphone
 } from "lucide-react";
 import { Employee, MedicalRecord, SystemTicket, QueueTicket, SecurityLog } from "../types";
 import { createAutoTicket, checkActivePatientEncounter, findPatientByNationalId, DuplicateEncounterCheck } from "../lib/ticketService";
-import { upsertUnifiedPatientRecord, findUnifiedPatient } from "../lib/patientSyncService";
+import { upsertUnifiedPatientRecord, findUnifiedPatient, findPatientByPhone, normalizePhone } from "../lib/patientSyncService";
 import { addChargeToCart } from "../lib/patientCartService";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
@@ -196,6 +199,130 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
 
     return () => clearTimeout(timer);
   }, [nationalId, performIdLookup]);
+
+  // Phone Lookup & Auto-Identification State
+  const [isLookingUpPhone, setIsLookingUpPhone] = useState(false);
+  const [phoneLookupMatch, setPhoneLookupMatch] = useState<{
+    patientName: string;
+    nationalId?: string;
+    source: string;
+    shaStatus?: string;
+    shaId?: string;
+  } | null>(null);
+
+  // Auto-resolve patient identity from Phone Number (EMR -> SHA AfyaLink -> Safaricom M-PESA KYC)
+  const performPhoneLookup = useCallback(async (phoneInput: string, forceToast: boolean = false) => {
+    const cleanPh = normalizePhone(phoneInput);
+    if (!cleanPh || cleanPh.length < 9) {
+      setPhoneLookupMatch(null);
+      return;
+    }
+
+    setIsLookingUpPhone(true);
+    try {
+      // 1. Tier 1: Check Local EMR Patient Database
+      const localMatch = await findPatientByPhone(cleanPh);
+      if (localMatch) {
+        setExistingPatientProfile(localMatch);
+        setPhoneLookupMatch({
+          patientName: localMatch.patientName,
+          nationalId: localMatch.nationalId,
+          source: "Hospital EMR Database",
+          shaStatus: localMatch.shaEligible === "eligible" ? "ACTIVE" : undefined,
+          shaId: localMatch.shaId
+        });
+        setPatientName((prev) => prev || localMatch.patientName);
+        setNationalId((prev) => prev || localMatch.nationalId || "");
+        setAge((prev) => prev || (localMatch.age ? String(localMatch.age) : ""));
+        if (localMatch.gender) setGender(localMatch.gender);
+        if (localMatch.bloodType) setBloodType(localMatch.bloodType);
+        
+        if (forceToast) {
+          toast.success(`Matched ${localMatch.patientName} (EHR Record)`, "Patient Recognized");
+        }
+        setIsLookingUpPhone(false);
+        return;
+      }
+
+      // 2. Tier 2: Check Security Gate Logs
+      const secMatch = securityLogs.find(s => {
+        const p = normalizePhone(s.phone || (s.idOrPhone?.startsWith("07") || s.idOrPhone?.startsWith("01") ? s.idOrPhone : ""));
+        return p === cleanPh;
+      });
+      if (secMatch) {
+        setMatchedSecurityLog(secMatch);
+        const name = secMatch.patientName || secMatch.nameOrPlate || "";
+        const nid = secMatch.nationalId || (secMatch.idOrPhone && !secMatch.idOrPhone.startsWith("07") ? secMatch.idOrPhone : "");
+        setPhoneLookupMatch({
+          patientName: name,
+          nationalId: nid,
+          source: `Security Gate (${secMatch.checkpoint})`
+        });
+        setPatientName((prev) => prev || name);
+        if (nid) setNationalId((prev) => prev || nid);
+        if (forceToast) {
+          toast.success(`Matched ${name} from Security Gate Checkpoint`, "Gate Arrival Linked");
+        }
+        setIsLookingUpPhone(false);
+        return;
+      }
+
+      // 3. Tier 3: Query Safaricom Daraja M-PESA & SHA AfyaLink Gateway API
+      const res = await fetch("/api/integrations/phone-lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: cleanPh })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.found && data.patientName) {
+          setPhoneLookupMatch({
+            patientName: data.patientName,
+            nationalId: data.nationalId,
+            source: data.source || "Safaricom M-PESA KYC",
+            shaStatus: data.shaStatus,
+            shaId: data.shaId
+          });
+          setPatientName((prev) => prev || data.patientName);
+          if (data.nationalId) setNationalId((prev) => prev || data.nationalId);
+          if (data.age) setAge((prev) => prev || String(data.age));
+          if (data.gender) setGender(data.gender);
+          if (data.bloodType) setBloodType(data.bloodType);
+
+          if (data.shaStatus === "ACTIVE") {
+            setShaStatus({
+              eligible: true,
+              shaId: data.shaId,
+              patientName: data.patientName,
+              benefitLimits: { outpatient: 35000, inpatient: 200000 }
+            });
+          }
+
+          if (forceToast) {
+            toast.success(`Resolved ${data.patientName} via ${data.source}`, "Identity Resolved");
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error performing phone auto-lookup:", err);
+    } finally {
+      setIsLookingUpPhone(false);
+    }
+  }, [securityLogs]);
+
+  // Debounced lookup on Phone change
+  useEffect(() => {
+    const cleanPh = normalizePhone(phone);
+    if (cleanPh.length >= 10) {
+      const timer = setTimeout(() => {
+        performPhoneLookup(cleanPh, false);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setPhoneLookupMatch(null);
+    }
+  }, [phone, performPhoneLookup]);
 
   // Biometric state
   const [biometricsCaptured, setBiometricsCaptured] = useState(false);
@@ -801,15 +928,44 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-gray-600">Mobile Phone</label>
-              <input
-                id="input-phone"
-                type="text"
-                placeholder="e.g. 0712345678"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:border-emerald-500 focus:outline-hidden"
-              />
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-gray-600">Mobile Phone</label>
+                {isLookingUpPhone && (
+                  <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" /> Resolving Identity...
+                  </span>
+                )}
+                {phoneLookupMatch && !isLookingUpPhone && (
+                  <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    <CheckCircle className="w-3 h-3 text-emerald-600" /> {phoneLookupMatch.source}
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <Phone className="absolute left-3 top-2.5 w-4.5 h-4.5 text-gray-400" />
+                <input
+                  id="input-phone"
+                  type="text"
+                  placeholder="e.g. 0712345678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className={`w-full pl-10 pr-24 py-2 border rounded-xl text-sm focus:outline-hidden font-mono ${
+                    phoneLookupMatch
+                      ? "border-emerald-400 bg-emerald-50/20 text-emerald-950 focus:border-emerald-500"
+                      : "border-gray-200 focus:border-emerald-500"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => performPhoneLookup(phone, true)}
+                  disabled={isLookingUpPhone || !phone || normalizePhone(phone).length < 9}
+                  className="absolute right-1.5 top-1.5 px-2.5 py-1 bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700 rounded-lg text-[11px] font-bold transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1"
+                  title="Query Safaricom M-PESA & SHA AfyaLink registries by phone number"
+                >
+                  <Search className="w-3 h-3" />
+                  <span>Lookup</span>
+                </button>
+              </div>
             </div>
           </div>
 

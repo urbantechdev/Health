@@ -52,6 +52,7 @@ export interface RolePortalLoginProps {
   authError?: string | null;
   hospitalName?: string;
   hospitalLogoUrl?: string;
+  onOpenPolicyTerms?: (defaultTab?: "terms" | "privacy" | "infosec" | "governance" | "signoff") => void;
 }
 
 interface RoleCardItem {
@@ -87,7 +88,8 @@ export default function RolePortalLogin({
   onGoogleLogin,
   authError,
   hospitalName = "AfyaCare Medical Systems",
-  hospitalLogoUrl
+  hospitalLogoUrl,
+  onOpenPolicyTerms
 }: RolePortalLoginProps) {
   const [selectedBox, setSelectedBox] = useState<string | null>(null);
   const [isStaffExpanded, setIsStaffExpanded] = useState(false);
@@ -873,12 +875,32 @@ export default function RolePortalLogin({
         </AnimatePresence>
       </main>
 
-      {/* Clean Minimal Footer */}
-      <footer className="w-full border-t border-slate-200 bg-white/80 py-4 px-6 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto">
-        <p>© {new Date().getFullYear()} {hospitalName} • Electronic Medical Records & Enterprise HMS</p>
-        <p className="text-[11px] font-semibold text-slate-400 mt-1 sm:mt-0">
-          Role-Based Access Control Active
-        </p>
+      {/* Clean Minimal Footer with Policy & Terms Links */}
+      <footer className="w-full border-t border-slate-200 bg-white/80 py-4 px-6 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 max-w-7xl mx-auto">
+        <p>© {new Date().getFullYear()} {hospitalName} • Electronic Medical Records & Enterprise HMIS</p>
+        <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-500">
+          {onOpenPolicyTerms && (
+            <>
+              <button
+                type="button"
+                onClick={() => onOpenPolicyTerms("privacy")}
+                className="hover:text-emerald-700 underline underline-offset-2 transition-colors cursor-pointer"
+              >
+                Data Protection & Privacy (KDPA 2019)
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => onOpenPolicyTerms("terms")}
+                className="hover:text-emerald-700 underline underline-offset-2 transition-colors cursor-pointer"
+              >
+                Terms of Use
+              </button>
+              <span>•</span>
+            </>
+          )}
+          <span className="text-slate-400">ODPC Reg: ODPC-KE-2026</span>
+        </div>
       </footer>
 
       {/* Authentication / Station Verification Modal */}
