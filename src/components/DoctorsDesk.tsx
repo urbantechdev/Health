@@ -1203,13 +1203,13 @@ export default function DoctorsDesk({
                     id="btn-open-kenyan-forms-hub"
                     type="button"
                     onClick={() => {
-                      setActiveKenyanFormType("sick_sheet");
+                      setActiveKenyanFormType("discharge_summary");
                       setKenyanFormModalOpen(true);
                     }}
                     className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
                   >
-                    <Hospital className="w-4 h-4 text-emerald-200" />
-                    <span>Kenyan Hospital Forms Hub (Sick Sheet, MOH 268, etc.)</span>
+                    <FileText className="w-4 h-4 text-emerald-200" />
+                    <span>Discharge summary & Forms</span>
                   </button>
                 </div>
               </div>
@@ -1688,18 +1688,32 @@ export default function DoctorsDesk({
                     </p>
                   </div>
 
-                  {/* Instant 1-Click Lab Wiring Action Button */}
-                  <button
-                    type="button"
-                    id="btn-instant-wire-lab"
-                    onClick={() => handleInstantCueToLab()}
-                    disabled={submitting}
-                    className="px-3.5 py-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer shrink-0 disabled:opacity-50"
-                    title="Immediately dispatch patient to Lab Queue with Full Haemogram & Urinalysis"
-                  >
-                    <Zap className="w-4 h-4 text-amber-300 animate-bounce" />
-                    <span>⚡ Instant Wire to Lab Queue</span>
-                  </button>
+                  {/* Instant 1-Click Lab Wiring Action Buttons */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      id="btn-wire-standard-lab"
+                      onClick={() => handleInstantCueToLab(["Urinalysis", "Full Haemogram"], "Doctor Order: Standard Diagnostic Workup (Urinalysis & Full Haemogram)")}
+                      disabled={submitting}
+                      className="px-3 py-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                      title="Immediately dispatch patient to Lab Queue with Urinalysis & Full Haemogram"
+                    >
+                      <Zap className="w-4 h-4 text-amber-300 animate-bounce" />
+                      <span>⚡ Wire Urinalysis & Full Haemogram</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="btn-instant-wire-lab"
+                      onClick={() => handleInstantCueToLab()}
+                      disabled={submitting}
+                      className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                      title="Dispatch selected queued referrals to Lab"
+                    >
+                      <FlaskConical className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Send Selected to Lab</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Quick Lab Presets Grid */}
@@ -1707,9 +1721,9 @@ export default function DoctorsDesk({
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1">
                       <Droplets className="w-3 h-3 text-rose-500" />
-                      <span>Frequent Clinical Lab Order Presets:</span>
+                      <span>Frequent Clinical Lab Order Presets (Click to add or wire):</span>
                     </label>
-                    <span className="text-[10px] text-blue-600 font-medium">Click pill to queue or instant-order</span>
+                    <span className="text-[10px] text-blue-600 font-medium">Auto-populates Lab Worksheet</span>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">

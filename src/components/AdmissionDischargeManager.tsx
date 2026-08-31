@@ -13,6 +13,7 @@ import {
   EncounterLabRequest,
   EncounterBillItem,
   EncounterNursingNote,
+  EncounterDoctorNote,
   WardBed,
   HospitalWard,
   MedicalRecord,
@@ -30,6 +31,7 @@ import {
   completeEncounterLabRequest,
   dispenseEncounterPrescription,
   addEncounterNursingNote,
+  addEncounterDoctorNote,
   addEncounterBillItem,
   payEncounterBill,
   signDoctorClinicalDischarge,
@@ -90,16 +92,18 @@ export default function AdmissionDischargeManager() {
     labRequests: EncounterLabRequest[];
     billItems: EncounterBillItem[];
     nursingNotes: EncounterNursingNote[];
+    doctorNotes: EncounterDoctorNote[];
   }>({
     vitals: [],
     prescriptions: [],
     labRequests: [],
     billItems: [],
-    nursingNotes: []
+    nursingNotes: [],
+    doctorNotes: []
   });
 
   // UI Active Sub-tab in Detail Inspector
-  const [activeTab, setActiveTab] = useState<"vitals" | "prescriptions" | "labs" | "billing" | "nursing" | "discharge">("discharge");
+  const [activeTab, setActiveTab] = useState<"vitals" | "prescriptions" | "labs" | "billing" | "nursing" | "doctor_notes" | "transfers" | "discharge">("discharge");
   const [filterStatus, setFilterStatus] = useState<string>("ALL_ACTIVE");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -203,6 +207,14 @@ export default function AdmissionDischargeManager() {
 
   const [nurseNoteText, setNurseNoteText] = useState("");
   const [nurseShift, setNurseShift] = useState<"Morning" | "Afternoon" | "Night">("Morning");
+
+  // Doctor's Notes & Ward Rounds state
+  const [doctorNoteText, setDoctorNoteText] = useState("");
+  const [doctorNoteCategory, setDoctorNoteCategory] = useState<"Ward Round Review" | "Treatment Plan" | "Specialist Consultation" | "Clinical Progress" | "Procedure / Intervention" | "Emergency Assessment" | "General">("Ward Round Review");
+  const [doctorNoteDoctorName, setDoctorNoteDoctorName] = useState("Dr. Beatrice Omwamba (Consultant)");
+  const [doctorNoteKmpdc, setDoctorNoteKmpdc] = useState("KMPDC-A.48921");
+  const [doctorNoteClinicalPlan, setDoctorNoteClinicalPlan] = useState("");
+  const [doctorNoteOrders, setDoctorNoteOrders] = useState("");
 
   // Initialize wards on mount
   useEffect(() => {
@@ -409,6 +421,34 @@ export default function AdmissionDischargeManager() {
       toast.success("Nursing handover note logged.", "Note Saved");
     } catch (err: any) {
       toast.error(err.message, "Error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Add Doctor's Ward Round / Clinical Note
+  const handleAddDoctorNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEncounterId || !doctorNoteText.trim()) {
+      toast.warning("Please enter the doctor's clinical findings or ward round review.", "Missing Notes");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await addEncounterDoctorNote(selectedEncounterId, {
+        note: doctorNoteText.trim(),
+        category: doctorNoteCategory,
+        doctorName: doctorNoteDoctorName.trim() || selectedEncounter?.attendingDoctorName || "Attending Medical Officer",
+        doctorKmpdc: doctorNoteKmpdc.trim() || "KMPDC-A.48921",
+        clinicalPlan: doctorNoteClinicalPlan.trim() || undefined,
+        orders: doctorNoteOrders.trim() || undefined
+      });
+      setDoctorNoteText("");
+      setDoctorNoteClinicalPlan("");
+      setDoctorNoteOrders("");
+      toast.success("Doctor's clinical ward round note and orders logged.", "Doctor Note Saved");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save doctor note.", "Error");
     } finally {
       setActionLoading(false);
     }
@@ -847,11 +887,12 @@ export default function AdmissionDischargeManager() {
                 {[
                   { id: "discharge", label: "Discharge Clearance", icon: ShieldCheck },
                   { id: "transfers", label: `Bed & Ward Transfers (${selectedEncounter.bedTransfers?.length || (selectedEncounter.assignedBed ? 1 : 0)})`, icon: Bed },
+                  { id: "doctor_notes", label: `Doctor's Notes (${subcollections.doctorNotes?.length || 0})`, icon: Stethoscope },
+                  { id: "nursing", label: `Nursing Notes (${subcollections.nursingNotes.length})`, icon: FileText },
                   { id: "vitals", label: `Vitals (${subcollections.vitals.length})`, icon: Heart },
                   { id: "prescriptions", label: `Prescriptions (${subcollections.prescriptions.length})`, icon: ShoppingBag },
                   { id: "labs", label: `Lab Orders (${subcollections.labRequests.length})`, icon: FlaskRound },
-                  { id: "billing", label: `Charge Sheet (${subcollections.billItems.length})`, icon: CreditCard },
-                  { id: "nursing", label: `Nursing Notes (${subcollections.nursingNotes.length})`, icon: FileText }
+                  { id: "billing", label: `Charge Sheet (${subcollections.billItems.length})`, icon: CreditCard }
                 ].map((t) => {
                   const Icon = t.icon;
                   const isActive = activeTab === t.id;
@@ -1498,6 +1539,233 @@ export default function AdmissionDischargeManager() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: DOCTOR'S NOTES & WARD ROUNDS */}
+              {activeTab === "doctor_notes" && (
+                <div className="space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                        <Stethoscope className="w-4 h-4 text-emerald-600" />
+                        <span>Doctor's Clinical Notes & Ward Rounds Subcollection</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 font-mono">
+                        /encounters/{selectedEncounter.id}/doctorNotes • Bedside rounds, treatment revisions & specialist consults
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 text-[10px] font-black rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        Attending: {selectedEncounter.attendingDoctorName || "Doctor on Duty"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Add Doctor Note / Ward Round Review Box */}
+                  <form onSubmit={handleAddDoctorNote} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                        <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                        Log Attending Doctor Bedside Round / Review
+                      </span>
+
+                      {/* Note Category Selector */}
+                      <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
+                        {(
+                          [
+                            "Ward Round Review",
+                            "Treatment Plan",
+                            "Specialist Consultation",
+                            "Clinical Progress",
+                            "Procedure / Intervention",
+                            "Emergency Assessment"
+                          ] as const
+                        ).map((cat) => (
+                          <button
+                            type="button"
+                            key={cat}
+                            onClick={() => setDoctorNoteCategory(cat)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer shrink-0 transition-all ${
+                              doctorNoteCategory === cat
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          Attending Doctor / Specialist Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={doctorNoteDoctorName}
+                          onChange={(e) => setDoctorNoteDoctorName(e.target.value)}
+                          placeholder="e.g. Dr. Beatrice Omwamba"
+                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          KMPDC / Practitioner License No.
+                        </label>
+                        <input
+                          type="text"
+                          value={doctorNoteKmpdc}
+                          onChange={(e) => setDoctorNoteKmpdc(e.target.value)}
+                          placeholder="e.g. KMPDC-A.48921"
+                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-mono text-slate-800 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                        Clinical Assessment & Examination Findings <span className="text-rose-500">*</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        required
+                        value={doctorNoteText}
+                        onChange={(e) => setDoctorNoteText(e.target.value)}
+                        placeholder="Document patient clinical status, systemic examination, response to treatment, auscultation, wound status..."
+                        className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          Clinical Treatment Plan
+                        </label>
+                        <input
+                          type="text"
+                          value={doctorNoteClinicalPlan}
+                          onChange={(e) => setDoctorNoteClinicalPlan(e.target.value)}
+                          placeholder="e.g. Step down IV fluids, transition to oral antibiotics, review CXR tomorrow"
+                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          New Ward & Nursing Orders
+                        </label>
+                        <input
+                          type="text"
+                          value={doctorNoteOrders}
+                          onChange={(e) => setDoctorNoteOrders(e.target.value)}
+                          placeholder="e.g. Maintain strict fluid balance chart, Q4H blood glucose monitoring"
+                          className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-mono text-emerald-900 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Auto-timestamps note and appends to inpatient medical chart
+                      </span>
+                      <button
+                        type="submit"
+                        disabled={actionLoading || !doctorNoteText.trim()}
+                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black cursor-pointer transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-sm active:scale-95"
+                      >
+                        <Stethoscope className="w-3.5 h-3.5" />
+                        <span>{actionLoading ? "Saving Doctor Note..." : "Save Doctor Note & Orders"}</span>
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Doctor Notes History Timeline */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                      <span>Doctor Review History & Ward Round Notes ({subcollections.doctorNotes?.length || 0})</span>
+                      <span className="text-[10px] font-mono text-slate-400 font-normal">Real-time synchronized</span>
+                    </h4>
+
+                    {(!subcollections.doctorNotes || subcollections.doctorNotes.length === 0) ? (
+                      <div className="p-8 bg-white rounded-2xl border border-dashed border-slate-200 text-center text-slate-400 text-xs space-y-2">
+                        <Stethoscope className="w-8 h-8 mx-auto text-slate-300" />
+                        <p className="font-bold text-slate-700">No Doctor's Notes Logged Yet</p>
+                        <p className="text-[11px] text-slate-500">
+                          Use the form above to record attending consultant rounds, treatment plans, or specialist consults.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {subcollections.doctorNotes.map((n: EncounterDoctorNote) => {
+                          const categoryColor =
+                            n.category === "Specialist Consultation"
+                              ? "bg-purple-100 text-purple-800 border-purple-200"
+                              : n.category === "Emergency Assessment"
+                              ? "bg-rose-100 text-rose-800 border-rose-200"
+                              : n.category === "Treatment Plan"
+                              ? "bg-teal-100 text-teal-800 border-teal-200"
+                              : n.category === "Procedure / Intervention"
+                              ? "bg-amber-100 text-amber-800 border-amber-200"
+                              : "bg-blue-100 text-blue-800 border-blue-200";
+
+                          return (
+                            <div key={n.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2.5 text-xs">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-100 pb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2.5 py-0.5 text-[10px] font-black uppercase rounded-lg border ${categoryColor}`}>
+                                    {n.category || "Ward Round Review"}
+                                  </span>
+                                  <span className="font-black text-slate-900 flex items-center gap-1">
+                                    <Stethoscope className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    {n.doctorName}
+                                  </span>
+                                  {n.doctorKmpdc && (
+                                    <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                      {n.doctorKmpdc}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] font-mono text-slate-400">
+                                  {new Date(n.timestamp).toLocaleString()}
+                                </span>
+                              </div>
+
+                              <div>
+                                <p className="text-slate-800 leading-relaxed whitespace-pre-line font-medium">
+                                  {n.note}
+                                </p>
+                              </div>
+
+                              {(n.clinicalPlan || n.orders) && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-100 text-[11px]">
+                                  {n.clinicalPlan && (
+                                    <div>
+                                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
+                                        Clinical Treatment Plan
+                                      </span>
+                                      <p className="text-slate-700 font-medium">{n.clinicalPlan}</p>
+                                    </div>
+                                  )}
+                                  {n.orders && (
+                                    <div>
+                                      <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700 block mb-0.5">
+                                        Ward & Nursing Orders
+                                      </span>
+                                      <p className="font-mono text-emerald-950 font-bold">{n.orders}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

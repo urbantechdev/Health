@@ -140,10 +140,10 @@ export default function PrintDocument({
               <div className="text-center space-y-1 border-b border-dashed border-slate-400 pb-3">
                 <div className="inline-flex items-center justify-center gap-1 font-sans font-black text-sm tracking-tight text-slate-950">
                   <ShieldCheck className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
-                  <span>AFYA BORA MEDICAL CLINIC</span>
+                  <span>TASSIAHILL HOSPITAL</span>
                 </div>
                 <p className="text-[11px] font-bold text-slate-800">KRA PIN: P051189432K</p>
-                <p className="text-[10px] text-slate-600">AFYA CENTRE 12TH FLR, NAIROBI</p>
+                <p className="text-[10px] text-slate-600">TASSIA HILL COMPLEX, NAIROBI</p>
                 <p className="text-[10px] text-slate-600">TEL: +254 (0) 711 943 210</p>
                 <div className="pt-1">
                   <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded font-bold text-[9px] tracking-wider uppercase inline-block border border-emerald-300">
@@ -257,7 +257,7 @@ export default function PrintDocument({
 
               {/* Footer */}
               <div className="text-center text-[9px] text-slate-500 space-y-0.5 pt-1">
-                <p className="font-bold text-slate-700">*** THANK YOU FOR VISITING AFYA BORA CLINIC ***</p>
+                <p className="font-bold text-slate-700">*** THANK YOU FOR VISITING TASSIAHILL HOSPITAL ***</p>
                 <p>PROMPT PAYMENT & COMPLIANCE APPRECIATED • GET WELL SOON!</p>
               </div>
             </div>
@@ -270,7 +270,7 @@ export default function PrintDocument({
             >
               {/* Security Watermark for Screen View */}
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] select-none z-0">
-                <span className="text-6xl font-black rotate-45 text-slate-950">AFYA BORA CLINIC</span>
+                <span className="text-6xl font-black rotate-45 text-slate-950">TASSIAHILL HOSPITAL</span>
               </div>
 
               <div className="relative z-10 flex flex-col justify-between h-full space-y-8">
@@ -279,10 +279,10 @@ export default function PrintDocument({
                 <div className="border-b-2 border-slate-950 pb-6">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
-                      <h1 className="text-2xl font-black tracking-tight text-slate-950">AFYA BORA MEDICAL CLINIC</h1>
+                      <h1 className="text-2xl font-black tracking-tight text-slate-950">TASSIAHILL HOSPITAL</h1>
                       <p className="text-xs text-slate-500 font-semibold tracking-wide uppercase mt-1">Ministry of Health Reg: Reg No. ODPC-KE-2026</p>
-                      <p className="text-xs text-slate-500">12th Floor, Afya Centre, Tom Mboya St, Nairobi, Kenya</p>
-                      <p className="text-xs text-slate-500">Tel: +254 (0) 711 943 210 | Email: info@afyaboraclinic.co.ke</p>
+                      <p className="text-xs text-slate-500">Tassia Hill Complex, Fedha/Embakasi East, Nairobi, Kenya</p>
+                      <p className="text-xs text-slate-500">Tel: +254 (0) 711 943 210 | Email: info@tassiahillhospital.co.ke</p>
                     </div>
                     <div className="text-right flex flex-col items-start md:items-end">
                       <span className="px-3 py-1 bg-slate-150 text-slate-800 rounded-full text-[10px] font-bold tracking-wider uppercase">

@@ -87,7 +87,7 @@ export default function RolePortalLogin({
   onLoginSuccess,
   onGoogleLogin,
   authError,
-  hospitalName = "AfyaCare Medical Systems",
+  hospitalName = "Tassiahill Hospital",
   hospitalLogoUrl,
   onOpenPolicyTerms
 }: RolePortalLoginProps) {

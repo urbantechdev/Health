@@ -2,7 +2,10 @@ import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { db } from "../lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
-import { QueueTicket, Medication, Invoice, Employee, SystemRole } from "../types";
+import { QueueTicket, Medication, Invoice, Employee, SystemRole, MedicalRecord } from "../types";
+import PatientDailyHistoryStatement from "./PatientDailyHistoryStatement";
+import PatientHistoryLookupModal from "./PatientHistoryLookupModal";
+import PrintDocument from "./PrintDocument";
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -43,7 +46,8 @@ import {
   Layers,
   ArrowUpRight,
   ClipboardList,
-  Shield
+  Shield,
+  FileSpreadsheet
 } from "lucide-react";
 
 interface DashboardOverviewProps {
@@ -64,9 +68,19 @@ export default function DashboardOverview({
   currentEmployee = null
 }: DashboardOverviewProps) {
   const [tickets, setTickets] = useState<QueueTicket[]>([]);
+  const [patients, setPatients] = useState<MedicalRecord[]>([]);
   const [meds, setMeds] = useState<Medication[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+
+  // History Lookup Modal state
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyPatientId, setHistoryPatientId] = useState("");
+
+  // Print Document state
+  const [printDocOpen, setPrintDocOpen] = useState(false);
+  const [printDocType, setPrintDocType] = useState<"receipt" | "statement">("statement");
+  const [printReceiptData, setPrintReceiptData] = useState<Invoice | null>(null);
 
   useEffect(() => {
     // 1. Queue Listener
@@ -78,7 +92,16 @@ export default function DashboardOverview({
       setTickets(ticketsData);
     });
 
-    // 2. Medications Listener
+    // 2. Patients Listener
+    const unsubPatients = onSnapshot(collection(db, "patients"), (snapshot) => {
+      const patData: MedicalRecord[] = [];
+      snapshot.forEach((doc) => {
+        patData.push({ id: doc.id, ...doc.data() } as MedicalRecord);
+      });
+      setPatients(patData);
+    });
+
+    // 3. Medications Listener
     const unsubMeds = onSnapshot(collection(db, "medications"), (snapshot) => {
       const medsData: Medication[] = [];
       snapshot.forEach((doc) => {
@@ -87,7 +110,7 @@ export default function DashboardOverview({
       setMeds(medsData);
     });
 
-    // 3. Invoices Listener
+    // 4. Invoices Listener
     const unsubInvoices = onSnapshot(collection(db, "invoices"), (snapshot) => {
       const invoicesData: Invoice[] = [];
       snapshot.forEach((doc) => {
@@ -96,7 +119,7 @@ export default function DashboardOverview({
       setInvoices(invoicesData);
     });
 
-    // 4. Employees Listener
+    // 5. Employees Listener
     const unsubEmployees = onSnapshot(collection(db, "employees"), (snapshot) => {
       const empData: Employee[] = [];
       snapshot.forEach((doc) => {
@@ -107,6 +130,7 @@ export default function DashboardOverview({
 
     return () => {
       unsubQueue();
+      unsubPatients();
       unsubMeds();
       unsubInvoices();
       unsubEmployees();
@@ -147,6 +171,23 @@ export default function DashboardOverview({
       </div>
     </div>
   );
+
+  // Handlers for Patient History Modal & Printing
+  const handleOpenPatientHistory = (patId: string) => {
+    setHistoryPatientId(patId);
+    setHistoryModalOpen(true);
+  };
+
+  const handlePrintPatientDocument = (docType: "statement" | "receipt" | "sick_sheet", data: any) => {
+    if (docType === "receipt" && data?.invoice) {
+      setPrintReceiptData(data.invoice);
+      setPrintDocType("receipt");
+    } else {
+      setPrintReceiptData(data?.invoice || null);
+      setPrintDocType("statement");
+    }
+    setPrintDocOpen(true);
+  };
 
   // Determine user identity
   const userName = currentEmployee?.name || currentUserEmail?.split("@")[0] || currentUserRole;
@@ -264,7 +305,7 @@ export default function DashboardOverview({
               </h3>
               <button 
                 onClick={() => onNavigateToTab("doctor")}
-                className="text-[11px] font-bold text-cyan-600 hover:underline uppercase"
+                className="text-[11px] font-bold text-cyan-600 hover:underline uppercase cursor-pointer"
               >
                 Open Clinician Desk &rarr;
               </button>
@@ -313,6 +354,30 @@ export default function DashboardOverview({
             </div>
           </div>
         </div>
+
+        {/* Unified Patient Visit History & Statement Section for Doctor View */}
+        <PatientDailyHistoryStatement
+          tickets={tickets}
+          patients={patients}
+          invoices={invoices}
+          onOpenPatientHistory={handleOpenPatientHistory}
+          onPrintPatientDocument={handlePrintPatientDocument}
+          facilityName={tenant.name}
+        />
+
+        {/* Global Modals */}
+        <PatientHistoryLookupModal
+          isOpen={historyModalOpen}
+          onClose={() => setHistoryModalOpen(false)}
+          initialSearchId={historyPatientId}
+        />
+
+        <PrintDocument
+          isOpen={printDocOpen}
+          onClose={() => setPrintDocOpen(false)}
+          type={printDocType}
+          receiptData={printReceiptData}
+        />
       </div>
     );
   }
@@ -540,6 +605,30 @@ export default function DashboardOverview({
             Open Registration Kiosk &rarr;
           </button>
         </div>
+
+        {/* Unified Patient Visit History & Statement Section for Reception */}
+        <PatientDailyHistoryStatement
+          tickets={tickets}
+          patients={patients}
+          invoices={invoices}
+          onOpenPatientHistory={handleOpenPatientHistory}
+          onPrintPatientDocument={handlePrintPatientDocument}
+          facilityName={tenant.name}
+        />
+
+        {/* Global Modals */}
+        <PatientHistoryLookupModal
+          isOpen={historyModalOpen}
+          onClose={() => setHistoryModalOpen(false)}
+          initialSearchId={historyPatientId}
+        />
+
+        <PrintDocument
+          isOpen={printDocOpen}
+          onClose={() => setPrintDocOpen(false)}
+          type={printDocType}
+          receiptData={printReceiptData}
+        />
       </div>
     );
   }
@@ -726,6 +815,30 @@ export default function DashboardOverview({
             <p className="text-xs text-slate-500 mt-2">Transmitted government insurance claims</p>
           </motion.div>
         </div>
+
+        {/* Unified Patient Visit History & Statement Section for Finance */}
+        <PatientDailyHistoryStatement
+          tickets={tickets}
+          patients={patients}
+          invoices={invoices}
+          onOpenPatientHistory={handleOpenPatientHistory}
+          onPrintPatientDocument={handlePrintPatientDocument}
+          facilityName={tenant.name}
+        />
+
+        {/* Global Modals */}
+        <PatientHistoryLookupModal
+          isOpen={historyModalOpen}
+          onClose={() => setHistoryModalOpen(false)}
+          initialSearchId={historyPatientId}
+        />
+
+        <PrintDocument
+          isOpen={printDocOpen}
+          onClose={() => setPrintDocOpen(false)}
+          type={printDocType}
+          receiptData={printReceiptData}
+        />
       </div>
     );
   }
@@ -978,6 +1091,30 @@ export default function DashboardOverview({
           </div>
         </div>
       </div>
+
+      {/* Daily Patient Visit History & Financial Statement Ledger */}
+      <PatientDailyHistoryStatement
+        tickets={tickets}
+        patients={patients}
+        invoices={invoices}
+        onOpenPatientHistory={handleOpenPatientHistory}
+        onPrintPatientDocument={handlePrintPatientDocument}
+        facilityName={tenant.name}
+      />
+
+      {/* Global Modals */}
+      <PatientHistoryLookupModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        initialSearchId={historyPatientId}
+      />
+
+      <PrintDocument
+        isOpen={printDocOpen}
+        onClose={() => setPrintDocOpen(false)}
+        type={printDocType}
+        receiptData={printReceiptData}
+      />
     </div>
   );
 }

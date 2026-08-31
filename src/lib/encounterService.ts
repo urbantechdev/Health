@@ -22,6 +22,7 @@ import {
   EncounterLabRequest,
   EncounterBillItem,
   EncounterNursingNote,
+  EncounterDoctorNote,
   HospitalWard,
   WardBed,
   AdmissionType,
@@ -200,6 +201,21 @@ export const createHospitalEncounter = async (
     timestamp: nowIso
   };
   await setDoc(doc(db, "encounters", encounterId, "nursingNotes", noteDoc.id), noteDoc);
+
+  // 4B. Initial Doctor's Admission Note in Subcollection (/encounters/{encounterId}/doctorNotes)
+  const docNoteDoc: EncounterDoctorNote = {
+    id: `doc-note-${Date.now()}`,
+    note: params.initialSymptoms
+      ? `Admission clinical evaluation: ${params.initialSymptoms}. Working diagnosis: ${params.initialDiagnosis || "Pending investigation"}.`
+      : `Patient admitted for ${params.initialDiagnosis || "inpatient care and monitoring"}.`,
+    category: "Ward Round Review",
+    doctorName: params.attendingDoctorName || "Attending Medical Officer",
+    doctorId: params.attendingDoctorId || "",
+    clinicalPlan: "Admit to ward, initiate vital signs monitoring, routine bedside evaluation and clinical workup.",
+    orders: "Monitor Q4H vitals, maintain hydration, review pending diagnostic results.",
+    timestamp: nowIso
+  };
+  await setDoc(doc(db, "encounters", encounterId, "doctorNotes", docNoteDoc.id), docNoteDoc);
 
   // 5. Update Master Patient record with activeEncounterId
   if (params.patientId) {
@@ -483,6 +499,31 @@ export const addEncounterNursingNote = async (
   };
 
   await setDoc(doc(db, "encounters", encounterId, "nursingNotes", noteId), noteDoc);
+  return noteId;
+};
+
+// Add Doctor's Note / Ward Round Note to /encounters/{encounterId}/doctorNotes
+export const addEncounterDoctorNote = async (
+  encounterId: string,
+  note: {
+    note: string;
+    category?: "Ward Round Review" | "Treatment Plan" | "Specialist Consultation" | "Clinical Progress" | "Procedure / Intervention" | "Emergency Assessment" | "General";
+    doctorName: string;
+    doctorId?: string;
+    doctorKmpdc?: string;
+    clinicalPlan?: string;
+    orders?: string;
+  }
+): Promise<string> => {
+  const nowIso = new Date().toISOString();
+  const noteId = `doc-note-${Date.now()}`;
+  const noteDoc: EncounterDoctorNote = {
+    ...note,
+    id: noteId,
+    timestamp: nowIso
+  };
+
+  await setDoc(doc(db, "encounters", encounterId, "doctorNotes", noteId), noteDoc);
   return noteId;
 };
 
@@ -1077,6 +1118,7 @@ export const subscribeEncounterSubcollections = (
     labRequests: EncounterLabRequest[];
     billItems: EncounterBillItem[];
     nursingNotes: EncounterNursingNote[];
+    doctorNotes: EncounterDoctorNote[];
   }) => void
 ): (() => void) => {
   if (!encounterId) return () => {};
@@ -1086,7 +1128,8 @@ export const subscribeEncounterSubcollections = (
     prescriptions: [] as EncounterPrescription[],
     labRequests: [] as EncounterLabRequest[],
     billItems: [] as EncounterBillItem[],
-    nursingNotes: [] as EncounterNursingNote[]
+    nursingNotes: [] as EncounterNursingNote[],
+    doctorNotes: [] as EncounterDoctorNote[]
   };
 
   const unsubVitals = onSnapshot(collection(db, "encounters", encounterId, "vitals"), (s) => {
@@ -1129,11 +1172,20 @@ export const subscribeEncounterSubcollections = (
     callback({ ...currentData });
   });
 
+  const unsubDocNotes = onSnapshot(collection(db, "encounters", encounterId, "doctorNotes"), (s) => {
+    const list: EncounterDoctorNote[] = [];
+    s.forEach(d => list.push({ id: d.id, ...d.data() } as EncounterDoctorNote));
+    list.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+    currentData.doctorNotes = list;
+    callback({ ...currentData });
+  });
+
   return () => {
     unsubVitals();
     unsubRx();
     unsubLabs();
     unsubBills();
     unsubNotes();
+    unsubDocNotes();
   };
 };

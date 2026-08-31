@@ -508,9 +508,10 @@ export default function App() {
     if (brandCustomName) {
       document.title = brandCustomName;
     } else {
-      document.title = "HMS";
+      const tierLabel = tenant.type === "hospital_level_4" ? "HMIS Level 4" : tenant.type === "hospital_level_5" ? "HMIS Level 5" : "HMIS Tier Clinic";
+      document.title = tierLabel;
     }
-  }, [brandFontId, brandThemeColor, brandFaviconUrl, brandCustomName, brandBlockEdgeColor]);
+  }, [brandFontId, brandThemeColor, brandFaviconUrl, brandCustomName, brandBlockEdgeColor, tenant.type]);
 
   // Synchronize font size changes and branding edits from AdminPanel
   useEffect(() => {
@@ -1376,14 +1377,22 @@ export default function App() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <h1 className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-none font-sans truncate drop-shadow-xs group-hover:text-slate-800 transition-colors duration-200`}>
-                    {brandCustomName || tenant.name}
+                    {brandCustomName || "HMIS"}
                   </h1>
-                  <span className="hidden sm:inline-flex px-2 py-0.5 bg-yellow-500/80 hover:bg-yellow-500 text-slate-950 border border-yellow-600/40 text-[10px] sm:text-xs font-black rounded-lg uppercase tracking-wider shrink-0 transition-all duration-200 shadow-xs">
-                    Tier {tenant.type}
+                  <span className="hidden sm:inline-flex px-2.5 py-0.5 bg-yellow-500/90 hover:bg-yellow-500 text-slate-950 border border-yellow-600/40 text-[10px] sm:text-xs font-black rounded-lg uppercase tracking-wider shrink-0 transition-all duration-200 shadow-xs">
+                    {tenant.type === "hospital_level_4" 
+                      ? "Level 4" 
+                      : tenant.type === "hospital_level_5" 
+                      ? "Level 5" 
+                      : "Tier Clinic"}
                   </span>
                 </div>
                 <p className={`text-xs sm:text-sm font-bold truncate hidden sm:block mt-0.5 tracking-wide ${currentHeaderStyle.textClass || "text-slate-800"}`}>
-                  Hospital ERP Management System
+                  {tenant.type === "hospital_level_4" 
+                    ? "HMIS Level 4 Sub-County Hospital ERP" 
+                    : tenant.type === "hospital_level_5" 
+                    ? "HMIS Level 5 Referral Hospital ERP" 
+                    : "HMIS Tier Clinic Management System"}
                 </p>
               </div>
             </div>
@@ -2301,7 +2310,7 @@ export default function App() {
                 <h2 className="text-xs font-black uppercase tracking-wide text-slate-800 truncate">
                   {navItems.find(n => n.id === activeTab)?.label}
                 </h2>
-                <p className="text-[9px] text-slate-400 font-medium truncate">AfyaCare Live Workspace</p>
+                <p className="text-[9px] text-slate-400 font-medium truncate">HMIS Live Workspace</p>
               </div>
             </div>
             <button

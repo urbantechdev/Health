@@ -557,9 +557,9 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
     onTenantChange({
       id: tenant.id,
-      name: type === "clinic" ? "HMS" : type === "hospital_level_4" ? "Mama Lucy Level 4 Hospital" : "Kenyatta National Referral Hospital",
+      name: "HMIS",
       type,
-      county: type === "clinic" ? "Nairobi" : type === "hospital_level_4" ? "Kiambu" : "Nairobi County",
+      county: tenant.county || "Nairobi",
     });
 
     onToggleChange(defaultToggles);
@@ -569,7 +569,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       fieldName: "Facility Classification Tier",
       oldValue: oldTier,
       newValue: type,
-      reason: `Hospital tier classification updated from ${oldTier} to ${type}. Modules synchronized.`,
+      reason: `HMIS tier classification updated from ${oldTier} to ${type}. Modules synchronized.`,
     });
   };
 

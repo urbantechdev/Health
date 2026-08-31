@@ -20,9 +20,27 @@ import {
   Send,
   Baby,
   FileCheck,
-  Hospital
+  Hospital,
+  FlaskRound,
+  ShoppingBag,
+  CreditCard,
+  Phone,
+  Clock,
+  MapPin,
+  ClipboardList
 } from "lucide-react";
-import { MedicalRecord, ClinicalVisit, QueueTicket } from "../types";
+import { 
+  MedicalRecord, 
+  ClinicalVisit, 
+  QueueTicket, 
+  Encounter,
+  EncounterVital,
+  EncounterPrescription,
+  EncounterLabRequest,
+  EncounterBillItem,
+  EncounterNursingNote,
+  EncounterDoctorNote
+} from "../types";
 import { toast } from "../lib/promptService";
 
 export type KenyanFormType = 
@@ -42,6 +60,15 @@ export interface KenyanHospitalFormsModalProps {
   patient?: MedicalRecord | null;
   visit?: ClinicalVisit | null;
   ticket?: QueueTicket | null;
+  encounter?: Encounter | null;
+  encounterSubcollections?: {
+    vitals?: EncounterVital[];
+    prescriptions?: EncounterPrescription[];
+    labRequests?: EncounterLabRequest[];
+    billItems?: EncounterBillItem[];
+    nursingNotes?: EncounterNursingNote[];
+    doctorNotes?: EncounterDoctorNote[];
+  } | null;
   doctorName?: string;
   doctorKmpdc?: string;
   facilityName?: string;
@@ -77,9 +104,11 @@ export default function KenyanHospitalFormsModal({
   patient,
   visit,
   ticket,
+  encounter,
+  encounterSubcollections,
   doctorName = "Dr. Sarah Naisiae, MBChB, MMed",
   doctorKmpdc = "KMPDC/REG/A-94821",
-  facilityName = "AFYA BORA LEVEL 4 HOSPITAL",
+  facilityName = "TASSIAHILL HOSPITAL",
   facilityMfl = "MFL CODE: 18492 - NAIROBI COUNTY",
   county = "Nairobi City County"
 }: KenyanHospitalFormsModalProps) {
@@ -91,40 +120,156 @@ export default function KenyanHospitalFormsModal({
     }
   }, [initialFormType]);
 
-  // Master Form Data State (pre-populated with patient & visit info)
+  // Derive initial values from patient / visit / encounter
+  const initialPatientName = patient?.patientName || ticket?.patientName || encounter?.patientName || "Jane Wanjiku Mwangi";
+  const initialNationalId = patient?.nationalId || ticket?.nationalId || encounter?.nationalId || "30198422";
+  const initialAge = String(patient?.age || ticket?.age || encounter?.age || "32");
+  const initialGender = patient?.gender || encounter?.gender || "Female";
+  const initialPhone = patient?.phone || ticket?.phone || encounter?.phone || "0712 345 678";
+  const initialShaId = patient?.shaId || "SHA-99201948";
+  const initialEncounterId = encounter?.id || ticket?.ticketNo || "ENC-2026-08492";
+
+  // Master Form Data State (pre-populated with full patient & visit info)
   const [formData, setFormData] = useState({
     // Patient Bio Data
-    patientName: patient?.patientName || ticket?.patientName || "Jane Wanjiku Mwangi",
-    nationalId: patient?.nationalId || ticket?.nationalId || "30198422",
-    age: String(patient?.age || ticket?.age || "32"),
-    gender: patient?.gender || "Female",
-    phone: patient?.phone || ticket?.phone || "0712 345 678",
-    shaId: patient?.shaId || "SHA-99201948",
+    patientName: initialPatientName,
+    nationalId: initialNationalId,
+    age: initialAge,
+    gender: initialGender,
+    phone: initialPhone,
+    shaId: initialShaId,
+    encounterId: initialEncounterId,
     employerOrSchool: "Safaricom PLC / HQ Westlands",
     occupation: "Systems Engineer",
     residence: "Kilimani, Nairobi",
+    nextOfKin: "David Mwangi Kamau (Spouse) - 0722 998 877",
+    admissionType: encounter?.admissionType ? `${encounter.admissionType} Admission` : "Inpatient Admission",
 
-    // Clinical Findings
-    diagnosis: visit?.diagnosis || patient?.latestDiagnosis || "Acute Upper Respiratory Tract Infection (J06.9)",
-    icd10Code: "J06.9",
-    symptoms: visit?.symptoms || patient?.latestSymptoms || "Severe fever, persistent dry cough, sore throat, generalized myalgia",
-    vitals: {
-      bp: visit?.vitals.bp || patient?.latestVitals?.bp || "124/82 mmHg",
-      temp: visit?.vitals.temp || patient?.latestVitals?.temp || "38.2 °C",
-      pulse: visit?.vitals.pulse || patient?.latestVitals?.pulse || "84 bpm",
-      weight: visit?.vitals.weight || patient?.latestVitals?.weight || "68 kg",
+    // Step 1: Presentation & Baseline Triage Vitals
+    chiefComplaints: visit?.symptoms || patient?.latestSymptoms || encounter?.latestSymptoms || "High grade fever x 3 days, productive cough with yellowish sputum x 4 days, right-sided pleuritic chest pain, progressive dyspnoea",
+    triageVitals: {
+      bp: visit?.vitals.bp || patient?.latestVitals?.bp || (encounterSubcollections?.vitals?.[0]?.bp) || "128/84 mmHg",
+      temp: visit?.vitals.temp || patient?.latestVitals?.temp || (encounterSubcollections?.vitals?.[0]?.temp) || "38.8 °C",
+      pulse: visit?.vitals.pulse || patient?.latestVitals?.pulse || (encounterSubcollections?.vitals?.[0]?.pulse) || "98 bpm",
+      spo2: (visit?.vitals as any)?.spo2 || patient?.latestVitals?.spo2 || (encounterSubcollections?.vitals?.[0]?.spo2) || "95% (Room Air)",
+      respRate: (visit?.vitals as any)?.respRate || patient?.latestVitals?.respRate || (encounterSubcollections?.vitals?.[0]?.respiratoryRate) || "22 bpm",
+      weight: visit?.vitals.weight || patient?.latestVitals?.weight || (encounterSubcollections?.vitals?.[0]?.weight) || "68 kg",
       height: "168 cm",
       bmi: "24.1 (Normal Weight)",
-      spo2: "98% on room air",
-      respiratoryRate: "18 bpm"
+      bloodGlucose: "6.2 mmol/L (Random)",
+      triageAcuity: "Urgent (Yellow - TEWS Score 3)",
+      triageNurse: "Grace Njeri (NCK/77412)"
     },
+
+    // Step 2: Initial Clinical Examination & Working Diagnosis
+    physicalExam: "Conscious, moderately ill-looking, febrile. Chest: Decreased air entry in right middle zone, coarse crackles. CVS: S1+S2 regular, no murmurs. Abdomen: Soft, non-tender, no organomegaly. CNS: GCS 15/15, pupils equal and reactive.",
     allergies: Array.isArray(patient?.allergies)
       ? patient.allergies.join(", ")
       : typeof patient?.allergies === "string" && patient.allergies.trim()
       ? patient.allergies
       : typeof ticket?.allergies === "string" && ticket.allergies.trim()
       ? ticket.allergies
-      : "Penicillin, Sulfa drugs (Severe rash)",
+      : "Penicillin (Severe Urticaria / Angioedema), Sulfa drugs (Rash)",
+    medicalHistory: "Past History: Known Asthmatic since 2018 (controlled on Salbutamol inhaler PRN). No past surgical interventions or TB history.",
+    initialDiagnosis: "Acute Community Acquired Pneumonia (CAP) with Bronchospasm (J18.9)",
+    icd10Code: "J18.9",
+
+    // Step 3: Diagnostic Investigations & Labs
+    labInvestigations: (encounterSubcollections?.labRequests && encounterSubcollections.labRequests.length > 0)
+      ? encounterSubcollections.labRequests.map(r => ({
+          test: r.testName,
+          result: r.results || "Completed within reference limits",
+          range: r.department === "radiology" ? "Normal lung expansion" : "Normal limits",
+          flag: r.abnormalFlags || "Normal",
+          date: r.completedAt ? r.completedAt.split("T")[0] : new Date().toISOString().split("T")[0],
+          officer: r.performedBy || "B. Omwenga (KMLTTB/12940)"
+        }))
+      : [
+          { test: "Complete Blood Count (CBC / Hemogram)", result: "WBC: 12.8 x 10^9/L (Neutrophilia), Hb: 13.6 g/dL, PLT: 280k", range: "WBC: 4.0 - 10.0", flag: "High WBC", date: new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0], officer: "B. Omwenga (KMLTTB)" },
+          { test: "Malaria Blood Slide (BS / mRDT)", result: "Negative for Plasmodium falciparum parasites", range: "No parasites seen", flag: "Normal", date: new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0], officer: "B. Omwenga (KMLTTB)" },
+          { test: "Chest Radiography (CXR - AP / Lateral)", result: "Right middle lobe dense alveolar consolidation; no effusion", range: "Clear lung fields", flag: "Consolidation", date: new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0], officer: "Dr. J. Mwangi (Radiologist)" },
+          { test: "Serum Creatinine & Electrolytes (U/E/C)", result: "Creatinine: 76 umol/L, Urea: 4.5 mmol/L, K+: 4.1 mmol/L", range: "Creat: 53-97", flag: "Normal", date: new Date(Date.now() - 1 * 86400000).toISOString().split("T")[0], officer: "B. Omwenga (KMLTTB)" },
+          { test: "Sputum Gram Stain & Culture (48h)", result: "Gram positive diplococci (Streptococcus pneumoniae) sensitive to Levofloxacin", range: "Normal flora", flag: "Positive", date: new Date().toISOString().split("T")[0], officer: "B. Omwenga (KMLTTB)" }
+        ],
+
+    // Step 4: Clinical Procedures & Interventions Performed
+    proceduresDone: [
+      { name: "Peripheral IV Cannulation (18G) & Saline Lock", date: new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0], clinician: "Nurse Kevin Kiprop (NCK)", outcome: "Successful on 1st attempt; patent" },
+      { name: "Nebulization with Salbutamol 5mg + Ipratropium 500mcg", date: new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0], clinician: doctorName, outcome: "Marked relief of broncho-constriction; SpO2 98%" },
+      { name: "Intravenous Fluid Hydration (Ringers Lactate 1000ml)", date: new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0], clinician: "Nurse Grace Njeri", outcome: "Hydration restored, hemodynamically stable" },
+      { name: "Oxygen Titration (Nasal Cannula 2L/min)", date: new Date(Date.now() - 1 * 86400000).toISOString().split("T")[0], clinician: "Nurse Kevin Kiprop", outcome: "Weaned off oxygen successfully on Day 2" }
+    ],
+
+    // Step 5: Daily Ward Rounds & Inpatient Clinical Course
+    inpatientCourse: encounter?.doctorClearance?.clinicalSummary || encounter?.dischargeNotes || 
+      "Day 1: Admitted with severe acute febrile respiratory illness and right middle lobe pneumonia. Initiated on IV Levofloxacin 750mg OD, IV Paracetamol, nebulization, and Q4H vital checks.\nDay 2: Patient became afebrile x 24h. SpO2 maintained 98% on room air. Auscultation showed clearing lung fields. Weaned off oxygen and tolerated oral feeds.\nDay 3: Ambulatory, vitals stable, afebrile, symptomatically improved. Cleared for discharge with oral antibiotic step-down.",
+    doctorNotesSummary: (encounterSubcollections?.doctorNotes && encounterSubcollections.doctorNotes.length > 0)
+      ? encounterSubcollections.doctorNotes.map(n => `[${n.category || "Ward Round"} - ${n.doctorName}]: ${n.note}${n.clinicalPlan ? ` | Plan: ${n.clinicalPlan}` : ""}`).join("\n")
+      : `Ward Round Review (${doctorName}): Patient markedly improved, chest clear on auscultation, stable SpO2 (99%), good oral intake. Approved for discharge on oral step-down.`,
+    nursingNotesSummary: (encounterSubcollections?.nursingNotes && encounterSubcollections.nursingNotes.length > 0)
+      ? encounterSubcollections.nursingNotes.map(n => `[Shift: ${n.shift} - ${n.nurseName}]: ${n.note}`).join("\n")
+      : "Shift Handover: Patient resting comfortably in bed, afebrile throughout shift. Vital signs within normal baseline. Fluid balance positive.",
+
+    // Step 6: In-Hospital Administered Medications
+    administeredHospitalMeds: "IV Levofloxacin 750mg Once Daily x 2 days; IV Paracetamol 1g 8-hourly x 2 days; Nebulized Salbutamol 5mg 8-hourly x 24h; IV Ringers Lactate 1000ml; IV Normal Saline 500ml.",
+
+    // Step 7: Final Diagnosis & Discharge Clinical Status
+    diagnosis: encounter?.latestDiagnosis || visit?.diagnosis || patient?.latestDiagnosis || "Right Middle Lobe Community Acquired Pneumonia (CAP) - J18.9; Mild Bronchial Asthma (J45.0)",
+    dischargeCondition: encounter?.doctorClearance?.dischargeCondition || "Markedly Improved, Clinically Afebrile, Hemodynamically Stable, Ambulatory, Tolerating Oral Feeds",
+    admissionDate: encounter?.admittedAt ? encounter.admittedAt.split("T")[0] : new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0],
+    dischargeDate: encounter?.dischargedAt ? encounter.dischargedAt.split("T")[0] : new Date().toISOString().split("T")[0],
+    lengthOfStay: "3 Days / 2 Nights",
+    wardOrBed: encounter?.assignedWard ? `${encounter.assignedWard} - ${encounter.assignedBed || "Bed 1"}` : "St. Luke Ward - Bed 14 (Semi-Private)",
+    dischargeVitals: {
+      bp: (encounterSubcollections?.vitals && encounterSubcollections.vitals.length > 1) ? encounterSubcollections.vitals[encounterSubcollections.vitals.length - 1].bp : "118/76 mmHg",
+      temp: (encounterSubcollections?.vitals && encounterSubcollections.vitals.length > 1) ? encounterSubcollections.vitals[encounterSubcollections.vitals.length - 1].temp : "36.7 °C",
+      pulse: (encounterSubcollections?.vitals && encounterSubcollections.vitals.length > 1) ? encounterSubcollections.vitals[encounterSubcollections.vitals.length - 1].pulse : "74 bpm",
+      spo2: (encounterSubcollections?.vitals && encounterSubcollections.vitals.length > 1) ? (encounterSubcollections.vitals[encounterSubcollections.vitals.length - 1].spo2 || "99%") : "99% on room air",
+      respRate: (encounterSubcollections?.vitals && encounterSubcollections.vitals.length > 1) ? (encounterSubcollections.vitals[encounterSubcollections.vitals.length - 1].respiratoryRate || "16 bpm") : "16 bpm"
+    },
+
+    // Step 8: Take-Home Discharge Medications (e-Rx)
+    dischargeMedications: (encounterSubcollections?.prescriptions && encounterSubcollections.prescriptions.length > 0)
+      ? encounterSubcollections.prescriptions.map(p => ({
+          drug: p.drugName,
+          dose: p.dosage || "1 Tablet Daily",
+          duration: `${p.quantity || 1} Units / Course`,
+          instructions: p.instructions || "Take with food"
+        }))
+      : [
+          { drug: "Levofloxacin 500mg Tablets (PO)", dose: "1 Tablet Once Daily (Morning with Food)", duration: "5 Days (Complete full course)", instructions: "Drink plenty of water; avoid direct sun exposure" },
+          { drug: "Salbutamol 100mcg Inhaler", dose: "2 Puffs 8-Hourly PRN for Wheeze / Shortness of Breath", duration: "1 Month (Take home)", instructions: "Rinse mouth with water after use" },
+          { drug: "Paracetamol 500mg Tablets", dose: "2 Tablets 8-Hourly PRN (Mild Pain / Fever)", duration: "3 Days", instructions: "Do not exceed 4g (8 tablets) in 24 hours" },
+          { drug: "Ascorbic Acid (Vitamin C) 500mg Chewable", dose: "1 Tablet Daily after Meals", duration: "14 Days", instructions: "Chew tablet thoroughly" }
+        ],
+
+    // Step 9: Home Care, Dietary & Lifestyle Instructions
+    homeCareInstructions: "1. Complete the full 5-day antibiotic course even if feeling fully recovered.\n2. Hydration: Drink 2.5 to 3 Litres of clean, warm fluids daily.\n3. Diet: Balanced, high-protein nutrition with fresh fruits and green leafy vegetables to support immune recovery.\n4. Rest & Mobility: Moderate indoor walking encouraged; avoid strenuous exercise, heavy lifting, cold baths, and exposure to dust, smoke, or cold evening air for 7 days.",
+
+    // Step 10: Critical Red Flag Danger Signs (Emergency Return)
+    dangerSignsWarning: "Return immediately to Tassiahill Hospital Accident & Emergency (or call 24/7 Helpline: +254 711 943 210) if you experience:\n• Sudden onset breathlessness, wheezing, or chest tightness\n• High spiking fever (>38.5°C) or severe chills/rigors\n• Hemoptysis (coughing up blood or dark-colored sputum)\n• Severe sharp pleuritic chest pain or fainting/dizziness\n• Inability to keep fluids down due to persistent vomiting",
+
+    // Step 11: Comprehensive Future Follow-Up Plan
+    followUpDate: encounter?.doctorClearance?.followUpDate || new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
+    followUpTime: "09:00 AM - 12:00 PM (Morning Specialty Clinic Session)",
+    followUpClinic: "Chest & Respiratory Medical Outpatient Clinic (Room 5 - Specialized OPD)",
+    followUpDoctor: doctorName,
+    followUpKmpdc: doctorKmpdc,
+    followUpRepeatTests: "Repeat Complete Blood Count (CBC) & Follow-up Chest X-Ray (CXR AP View) upon arrival at 08:30 AM before doctor review.",
+    sutureOrDressingCare: "No active surgical sutures. Check chest auscultation and peak expiratory flow rate.",
+    primaryCareTransfer: "If unable to attend Tassiahill Hospital, report with this discharge summary to your nearest Sub-County Level 4 Hospital / Medical Officer.",
+    emergencyHelpline: "+254 711 943 210 / +254 722 000 111 (24/7 Triage Desk)",
+
+    // Step 12: Financial Settlement & Discharge Clearance
+    totalBillKES: encounter?.totalBilled ? `KES ${encounter.totalBilled.toLocaleString()}` : "KES 48,500.00",
+    insuranceCoveredKES: "KES 42,000.00 (SHA / Taifa Care Comprehensive Inpatient Benefit)",
+    copayPaidKES: encounter?.totalPaid ? `KES ${encounter.totalPaid.toLocaleString()} (M-PESA / Cash Settled)` : "KES 6,500.00 (M-PESA Ref: QKE8910482)",
+    netBalanceKES: (encounter?.billingCleared || (encounter && encounter.totalBilled <= encounter.totalPaid)) ? "KES 0.00 (Fully Settled & Cleared)" : "KES 0.00 (Fully Settled & Cleared)",
+    clearedByOfficer: encounter?.dischargedBy || "Discharge & Records Officer B. Mutua",
+
+    // Step 13: Digital Clinician Stamp & Verification
+    signaturePin: encounter?.doctorClearance?.doctorSignature || "DIG-SIG-A94821-APPROVED",
+    stampedDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
 
     // Sick Sheet specific
     sickOffDays: 3,
@@ -147,23 +292,6 @@ export default function KenyanHospitalFormsModal({
     transitAmbulance: "ST. JOHN AMBULANCE / REG NO: KDA 892M",
     escortParamedic: "Nurse Officer Kevin Kiprop (NCK Reg: 44921)",
     transitVitals: "Stable: BP 120/80, SpO2 97%, Pulse 80 bpm",
-
-    // Discharge Summary specific
-    admissionDate: new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0],
-    dischargeDate: new Date().toISOString().split("T")[0],
-    wardOrBed: "St. Luke Ward - Bed 14 (Semi-Private)",
-    dischargeCondition: "Markedly Improved, Afebrile, Hemodynamically Stable, Ambulatory",
-    hospitalCourse: "Patient was admitted with severe acute febrile respiratory illness. Initiated on IV antimicrobial therapy, hydration, and regular vital sign monitoring. Responded excellently within 48 hours. Tolerating oral feeds well.",
-    proceduresDone: "Chest X-Ray (AP/Lateral) - Clear lung fields; Complete Blood Count (CBC) - Normalized WBC count (6.8 x 10^9/L); Blood cultures - No bacterial growth at 48h.",
-    dischargeMedications: [
-      { drug: "Amoxicillin/Clavulanic Acid 1g (Augmentin)", dose: "1 Tablet Twice Daily (PO)", duration: "5 Days" },
-      { drug: "Paracetamol 500mg Tablets", dose: "2 Tablets 8-hourly (PRN Pain/Fever)", duration: "3 Days" },
-      { drug: "Cetirizine 10mg Tablets", dose: "1 Tablet at Night (PO)", duration: "5 Days" }
-    ],
-    homeCareInstructions: "Complete full antibiotic course even if feeling fully recovered. Drink plenty of warm fluids. Avoid cold drafts and dust exposure.",
-    dangerSignsWarning: "Return immediately to Accident & Emergency if you experience sudden breathlessness, chest pain, high fever (>39°C), or coughing blood.",
-    followUpDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
-    followUpClinic: "General Medical Outpatient Clinic (Room 5) at 09:00 AM",
 
     // MOH 240 Lab Requisition specific
     labTestsRequested: [
@@ -203,16 +331,51 @@ export default function KenyanHospitalFormsModal({
     triageNurse: "Nursing Officer Grace Njeri (NCK/77412)"
   });
 
+  // State for adding a new take-home medication interactively
+  const [newMedDrug, setNewMedDrug] = useState("");
+  const [newMedDose, setNewMedDose] = useState("");
+  const [newMedDuration, setNewMedDuration] = useState("");
+  const [newMedInstructions, setNewMedInstructions] = useState("");
+
   if (!isOpen) return null;
 
   const handlePrint = () => {
     window.print();
   };
 
+  const handleAddTakeHomeMed = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMedDrug.trim()) return;
+    setFormData(prev => ({
+      ...prev,
+      dischargeMedications: [
+        ...prev.dischargeMedications,
+        {
+          drug: newMedDrug.trim(),
+          dose: newMedDose.trim() || "1 Tablet Daily (PO)",
+          duration: newMedDuration.trim() || "5 Days",
+          instructions: newMedInstructions.trim() || "Take after meals"
+        }
+      ]
+    }));
+    setNewMedDrug("");
+    setNewMedDose("");
+    setNewMedDuration("");
+    setNewMedInstructions("");
+    toast.success("Take-home medication added to discharge summary.", "Medication Added");
+  };
+
+  const handleRemoveTakeHomeMed = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      dischargeMedications: prev.dischargeMedications.filter((_, i) => i !== index)
+    }));
+  };
+
   const formTabs = [
+    { id: "discharge_summary", label: "Discharge Summary & Care Plan", sub: "Complete Multi-Step Inpatient/OPD Journey", icon: Award },
     { id: "sick_sheet", label: "Sick Off Sheet", sub: "Medical Incapacity Certificate", icon: FileCheck },
     { id: "referral_moh268", label: "MOH 268 Referral", sub: "Inter-Facility Transfer Form", icon: Send },
-    { id: "discharge_summary", label: "Discharge Summary", sub: "Inpatient / OPD Care Plan", icon: Award },
     { id: "lab_requisition_moh240", label: "MOH 240 Lab Form", sub: "Clinical Diagnostics Order", icon: Activity },
     { id: "prescription_erx", label: "PPB e-Prescription", sub: "Digital Doctor's Rx Slip", icon: Stethoscope },
     { id: "triage_sheet", label: "Triage & Vitals", sub: "TEWS Emergency Assessment", icon: Heart },
@@ -222,7 +385,7 @@ export default function KenyanHospitalFormsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto font-sans">
-      <div className="bg-white rounded-3xl shadow-2xl border-2 border-slate-200 w-full max-w-5xl flex flex-col max-h-[94vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl border-2 border-slate-200 w-full max-w-6xl flex flex-col max-h-[94vh] overflow-hidden animate-in fade-in zoom-in duration-200">
         
         {/* MODAL HEADER (Screen-only) */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-900 text-white shrink-0 gap-3">
@@ -286,7 +449,7 @@ export default function KenyanHospitalFormsModal({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex flex-col lg:flex-row gap-6 items-start">
           
           {/* LEFT SIDE: QUICK EDIT CONTROLS */}
-          <div className="w-full lg:w-72 bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-4 shrink-0 text-xs text-slate-700 max-h-[72vh] overflow-y-auto">
+          <div className="w-full lg:w-80 bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-4 shrink-0 text-xs text-slate-700 max-h-[76vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <span className="font-bold uppercase tracking-wider text-[10px] text-slate-600">Active Patient Details</span>
               <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 font-mono text-[9px] font-bold rounded-md">
@@ -356,7 +519,154 @@ export default function KenyanHospitalFormsModal({
               </select>
             </div>
 
-            {/* FORM SPECIFIC QUICK INPUTS */}
+            {/* FORM SPECIFIC QUICK INPUTS: DISCHARGE SUMMARY */}
+            {selectedForm === "discharge_summary" && (
+              <div className="space-y-3.5 pt-2 border-t border-slate-100">
+                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2">
+                  <span className="font-black text-emerald-950 uppercase text-[10px] block flex items-center gap-1">
+                    <Award className="w-3.5 h-3.5 text-emerald-700" />
+                    Admission & Ward Parameters
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block">Admission Date:</label>
+                      <input
+                        type="date"
+                        value={formData.admissionDate}
+                        onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
+                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block">Discharge Date:</label>
+                      <input
+                        type="date"
+                        value={formData.dischargeDate}
+                        onChange={(e) => setFormData({ ...formData, dischargeDate: e.target.value })}
+                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-mono font-bold text-emerald-900"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block">Ward & Bed Allocation:</label>
+                    <input
+                      type="text"
+                      value={formData.wardOrBed}
+                      onChange={(e) => setFormData({ ...formData, wardOrBed: e.target.value })}
+                      className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block">Discharge Clinical Condition:</label>
+                    <input
+                      type="text"
+                      value={formData.dischargeCondition}
+                      onChange={(e) => setFormData({ ...formData, dischargeCondition: e.target.value })}
+                      className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-emerald-800"
+                    />
+                  </div>
+                </div>
+
+                {/* Future Follow-up Parameters */}
+                <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
+                  <span className="font-black text-blue-950 uppercase text-[10px] block flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-700" />
+                    Future Follow-up Appointment Plan
+                  </span>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block">Scheduled Follow-Up Date:</label>
+                    <input
+                      type="date"
+                      value={formData.followUpDate}
+                      onChange={(e) => setFormData({ ...formData, followUpDate: e.target.value })}
+                      className="w-full p-1.5 bg-white border border-blue-300 rounded text-[11px] font-mono font-bold text-blue-950"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block">Follow-Up Outpatient Clinic / Room:</label>
+                    <input
+                      type="text"
+                      value={formData.followUpClinic}
+                      onChange={(e) => setFormData({ ...formData, followUpClinic: e.target.value })}
+                      className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block">Pre-Review Repeat Diagnostic Orders:</label>
+                    <textarea
+                      rows={2}
+                      value={formData.followUpRepeatTests}
+                      onChange={(e) => setFormData({ ...formData, followUpRepeatTests: e.target.value })}
+                      className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px]"
+                    />
+                  </div>
+                </div>
+
+                {/* Interactive Take-Home Meds Adder */}
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-slate-900 uppercase text-[10px] flex items-center gap-1">
+                      <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" />
+                      Take-Home Prescriptions ({formData.dischargeMedications.length})
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                    {formData.dischargeMedications.map((m, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-1.5 bg-white border border-slate-200 rounded text-[10px]">
+                        <div className="truncate pr-1">
+                          <strong className="text-slate-900 block truncate">{m.drug}</strong>
+                          <span className="text-slate-500">{m.dose} • {m.duration}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTakeHomeMed(idx)}
+                          className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add Quick Med */}
+                  <form onSubmit={handleAddTakeHomeMed} className="pt-1.5 border-t border-slate-200 space-y-1 text-[10px]">
+                    <input
+                      type="text"
+                      placeholder="Medication name & strength"
+                      value={newMedDrug}
+                      onChange={(e) => setNewMedDrug(e.target.value)}
+                      className="w-full p-1 bg-white border border-slate-200 rounded"
+                    />
+                    <div className="grid grid-cols-2 gap-1">
+                      <input
+                        type="text"
+                        placeholder="Dosage (e.g. 1 Tab BD)"
+                        value={newMedDose}
+                        onChange={(e) => setNewMedDose(e.target.value)}
+                        className="w-full p-1 bg-white border border-slate-200 rounded"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Duration (e.g. 5 Days)"
+                        value={newMedDuration}
+                        onChange={(e) => setNewMedDuration(e.target.value)}
+                        className="w-full p-1 bg-white border border-slate-200 rounded"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={!newMedDrug.trim()}
+                      className="w-full py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add Take-Home Drug</span>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
             {selectedForm === "sick_sheet" && (
               <div className="space-y-3 pt-2 border-t border-slate-100 bg-emerald-50/60 p-3 rounded-xl border border-emerald-200">
                 <span className="font-bold text-emerald-950 uppercase text-[10px] block">Sick Off Period Parameters</span>
@@ -442,7 +752,7 @@ export default function KenyanHospitalFormsModal({
                     </h1>
                   </div>
                   <p className="text-xs font-sans font-bold text-slate-700">{facilityMfl} • {county}</p>
-                  <p className="text-xs font-sans text-slate-600">P.O. Box 49821-00100 Nairobi • Tel: +254 711 943 210 • Email: records@afyabora.co.ke</p>
+                  <p className="text-xs font-sans text-slate-600">Tassia Hill Complex, Embakasi East • Tel: +254 711 943 210 • Email: records@tassiahillhospital.co.ke</p>
                   <div className="pt-2">
                     <span className="px-4 py-1 bg-slate-900 text-white font-sans font-black text-xs uppercase tracking-widest rounded-md inline-block">
                       OFFICIAL MEDICAL CERTIFICATE OF INCAPACITY / SICK OFF SHEET
@@ -519,256 +829,461 @@ export default function KenyanHospitalFormsModal({
                         <strong className="text-emerald-950">{formData.sickOffEndDate}</strong>
                       </div>
                       <div>
-                        <span className="text-emerald-800 block">Fit to Resume Duty On:</span>
+                        <span className="text-emerald-800 block">Duty Resumption Date:</span>
                         <strong className="text-emerald-950 text-sm">{formData.resumeDutyDate}</strong>
                       </div>
                     </div>
                   </div>
 
-                  <p className="text-xs text-slate-700 italic">
-                    <strong>Attending Doctor's Remarks:</strong> {formData.doctorRemarks}
-                  </p>
+                  <div className="space-y-1 text-xs font-sans text-slate-700">
+                    <p><strong>Clinical Doctor Remarks:</strong> {formData.doctorRemarks}</p>
+                    <p><strong>Fitness Status:</strong> <span className="font-bold text-rose-700">{formData.fitnessStatus}</span></p>
+                  </div>
                 </div>
 
-                {/* Official Signatures & Hospital Seal */}
-                <div className="pt-6 border-t-2 border-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end font-sans">
+                {/* Sign-off & Verification Footer */}
+                <div className="pt-6 border-t-2 border-slate-900 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-sans items-end">
                   <div className="space-y-1">
-                    <p className="text-xs font-bold text-slate-800">Examining Medical Practitioner:</p>
-                    <div className="h-10 flex items-end">
-                      <span className="font-serif italic text-emerald-800 text-lg font-bold">Dr. Sarah Naisiae</span>
-                    </div>
-                    <div className="border-t border-slate-400 pt-1 text-xs">
-                      <strong>{doctorName}</strong>
-                      <p className="text-[10px] text-slate-600">Reg No: {doctorKmpdc}</p>
+                    <p className="font-bold text-slate-950">Attending Medical Practitioner:</p>
+                    <p className="text-sm font-black text-slate-900">{doctorName}</p>
+                    <p className="text-slate-600 font-mono">Reg: {doctorKmpdc}</p>
+                    <div className="pt-2">
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 text-[10px] font-bold rounded">
+                        ✓ DIGITALLY SIGNED & VERIFIED
+                      </span>
                     </div>
                   </div>
 
-                  {/* Official Hospital Stamp */}
-                  <div className="flex flex-col items-center justify-center p-2 border-2 border-dashed border-emerald-700 rounded-xl bg-emerald-50/50 text-center">
-                    <ShieldCheck className="w-6 h-6 text-emerald-700" />
-                    <span className="text-[9px] font-black uppercase text-emerald-900 tracking-wider">OFFICIAL CLINICAL STAMP</span>
-                    <span className="text-[8px] font-mono text-emerald-800">{facilityName}</span>
-                    <span className="text-[8px] font-bold text-emerald-700">{new Date().toLocaleDateString()}</span>
+                  <div className="text-center p-3 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase">Official Facility Stamp</p>
+                    <p className="text-xs font-black text-emerald-800 uppercase mt-1">{facilityName}</p>
+                    <p className="text-[9px] text-slate-500 font-mono">MED RECORDS • APPROVED</p>
                   </div>
 
-                  {/* eTIMS / QR Verification Code */}
-                  <div className="flex flex-col items-end">
-                    <div className="p-1.5 bg-slate-50 border border-slate-300 rounded-lg">
-                      <QrCode className="w-14 h-14 text-slate-900" />
+                  <div className="flex flex-col items-end justify-center space-y-1">
+                    <div className="p-2 bg-white border border-slate-300 rounded-lg shadow-xs">
+                      <QrCode className="w-12 h-12 text-slate-900" />
                     </div>
-                    <span className="text-[9px] font-mono text-slate-500 mt-1">VERIFY: KMPDC-EHR-VALID</span>
+                    <span className="text-[9px] text-slate-500 font-mono">Scan to Verify Authenticity</span>
                   </div>
-                </div>
-
-                <div className="text-center pt-2 text-[9px] font-sans text-slate-500 border-t border-slate-100">
-                  Notice: Any alteration or fraudulent forgery of this medical document is a punishable criminal offense under the Penal Code and KMPDC regulations.
                 </div>
               </div>
             )}
 
-            {/* 2. STANDARD KENYAN INTER-FACILITY REFERRAL FORM (MOH 268) */}
+            {/* 2. MOH 268 AMBULANCE & INTER-FACILITY REFERRAL FORM */}
             {selectedForm === "referral_moh268" && (
               <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 sm:p-10 rounded-2xl shadow-xl font-sans text-slate-900 space-y-5 text-xs">
-                
-                {/* MOH Header */}
-                <div className="text-center border-b-2 border-slate-900 pb-3 space-y-0.5">
-                  <div className="flex items-center justify-center gap-2 font-black text-sm uppercase text-slate-950">
-                    <Building className="w-5 h-5 text-emerald-700" />
-                    <span>MINISTRY OF HEALTH • REPUBLIC OF KENYA</span>
+                {/* Header */}
+                <div className="text-center border-b-2 border-slate-900 pb-3 space-y-1">
+                  <div className="flex items-center justify-center gap-2">
+                    <Hospital className="w-5 h-5 text-blue-700" />
+                    <h1 className="text-lg font-black uppercase text-slate-950">MINISTRY OF HEALTH - REPUBLIC OF KENYA</h1>
                   </div>
-                  <h1 className="text-lg font-black uppercase tracking-tight text-slate-950">
-                    INTER-FACILITY PATIENT REFERRAL FORM (MOH 268)
-                  </h1>
-                  <p className="text-[10px] font-bold text-slate-600">KENYA INTEGRATED HEALTH REFERRAL & TRANSFER NETWORK (KIHRN)</p>
+                  <div className="pt-1">
+                    <span className="px-3 py-0.5 bg-blue-900 text-white font-bold text-xs uppercase tracking-wider rounded">
+                      MOH 268: STANDARDIZED INTER-FACILITY REFERRAL & MEDICAL TRANSFER NOTE
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-bold">Pursuant to the Kenya Health Sector Referral Strategy (Level 4/5 to Level 6 Transfer Protocol)</p>
                 </div>
 
-                {/* Section A: Facility Details */}
-                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-300 rounded-xl">
+                {/* Section A: Facility & Urgency */}
+                <div className="grid grid-cols-2 gap-3 bg-blue-50/70 p-3 rounded-xl border border-blue-200">
                   <div>
-                    <span className="text-[10px] font-black uppercase text-slate-500 block">A. Referring Facility:</span>
-                    <strong className="text-slate-950 text-xs block">{formData.referringFacility}</strong>
-                    <span className="text-[10px] text-slate-600">{formData.referringMfl} • Phone: {formData.referringContact}</span>
+                    <span className="text-[10px] font-bold text-blue-900 uppercase block">1. Originating Facility:</span>
+                    <strong className="text-slate-950 text-xs">{formData.referringFacility}</strong>
+                    <span className="block text-[10px] text-slate-600 font-mono">{formData.referringMfl}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-black uppercase text-blue-900 block">B. Receiving Referral Hospital:</span>
-                    <strong className="text-blue-950 text-xs block">{formData.receivingFacility}</strong>
-                    <span className="text-[10px] text-blue-800">Unit: {formData.receivingDepartment} • Urgency: <strong>{formData.referralUrgency}</strong></span>
+                    <span className="text-[10px] font-bold text-blue-900 uppercase block">2. Receiving Level 5/6 Facility:</span>
+                    <strong className="text-blue-950 text-xs">{formData.receivingFacility}</strong>
+                    <span className="block text-[10px] text-blue-800 font-bold">{formData.receivingDepartment}</span>
                   </div>
                 </div>
 
-                {/* Section B: Patient Bio Demographics */}
-                <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {/* Section B: Patient Info */}
+                <div className="bg-slate-50 border border-slate-300 p-3 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div>
                     <span className="text-slate-500 block text-[10px]">Patient Name:</span>
                     <strong className="text-slate-950">{formData.patientName}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">National ID:</span>
-                    <strong className="text-slate-950 font-mono">{formData.nationalId}</strong>
+                    <span className="text-slate-500 block text-[10px]">National ID / Age:</span>
+                    <strong className="text-slate-950 font-mono">{formData.nationalId} ({formData.age} Yrs)</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Age / Gender:</span>
-                    <strong className="text-slate-950">{formData.age} Yrs / {formData.gender}</strong>
+                    <span className="text-slate-500 block text-[10px]">SHA / Member No:</span>
+                    <strong className="text-slate-950 font-mono">{formData.shaId}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Phone / Next of Kin:</span>
-                    <strong className="text-slate-950">{formData.phone}</strong>
+                    <span className="text-slate-500 block text-[10px]">Transfer Urgency:</span>
+                    <span className="font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded">{formData.referralUrgency}</span>
                   </div>
                 </div>
 
-                {/* Section C: Clinical History & Examination */}
+                {/* Section C: Clinical Summary & Reason */}
                 <div className="space-y-2 border border-slate-300 p-3 rounded-xl">
-                  <h4 className="font-black text-slate-900 text-xs uppercase border-b border-slate-200 pb-1">
-                    C. Clinical Summary & Examination Findings:
-                  </h4>
-                  <div className="space-y-1 text-slate-800">
-                    <p><strong>Chief Complaints & History:</strong> {formData.symptoms}</p>
-                    <p><strong>Provisional / Confirmed Diagnosis:</strong> <span className="font-bold text-slate-950 bg-amber-100 px-1.5 py-0.5 rounded">{formData.diagnosis}</span></p>
-                    <p><strong>Baseline Vital Signs:</strong> BP: {formData.vitals.bp} | Pulse: {formData.vitals.pulse} | Temp: {formData.vitals.temp} | SpO2: {formData.vitals.spo2} | Weight: {formData.vitals.weight}</p>
-                    <p><strong>Known Drug Allergies:</strong> <span className="font-bold text-rose-800">{formData.allergies}</span></p>
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-1">
+                    <span className="font-bold text-slate-700 uppercase text-[10px]">Primary Clinical Diagnosis:</span>
+                    <span className="font-bold text-slate-900 text-xs">{formData.diagnosis}</span>
+                  </div>
+                  <div className="space-y-1.5 text-slate-800">
+                    <p><strong>Reason for Specialized Transfer:</strong> {formData.reasonForReferral}</p>
+                    <p><strong>Interventions Given at Originating Facility:</strong> {formData.interventionsGiven}</p>
+                    <p><strong>Transit Ambulance / Reg:</strong> <span className="font-mono font-bold text-blue-900">{formData.transitAmbulance}</span> • <strong>Escort Paramedic:</strong> {formData.escortParamedic}</p>
+                    <p><strong>Pre-Departure Transit Vitals:</strong> <span className="font-mono font-bold text-emerald-800">{formData.transitVitals}</span></p>
                   </div>
                 </div>
 
-                {/* Section D: Reason for Referral & Emergency Treatment Given */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3 bg-amber-50/80 border border-amber-300 rounded-xl space-y-1">
-                    <span className="font-black text-amber-950 uppercase text-[10px] block">D. Specific Reason for Referral:</span>
-                    <p className="text-slate-800 font-medium">{formData.reasonForReferral}</p>
-                  </div>
-                  <div className="p-3 bg-emerald-50/80 border border-emerald-300 rounded-xl space-y-1">
-                    <span className="font-black text-emerald-950 uppercase text-[10px] block">E. Treatment / Resuscitation Given Prior to Transfer:</span>
-                    <p className="text-slate-800 font-medium">{formData.interventionsGiven}</p>
-                  </div>
-                </div>
-
-                {/* Section E: Transit Ambulance & Escort Paramedic */}
-                <div className="p-3 bg-slate-900 text-white rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                {/* Section D: Sign-off */}
+                <div className="pt-3 border-t-2 border-slate-300 flex justify-between items-end">
                   <div>
-                    <span className="text-slate-400 block text-[10px]">Ambulance Vehicle:</span>
-                    <strong className="text-emerald-400 font-mono">{formData.transitAmbulance}</strong>
+                    <p className="font-bold text-slate-950">Referring Doctor: {doctorName}</p>
+                    <p className="text-[10px] text-slate-600">KMPDC: {doctorKmpdc} • Phone: {formData.referringContact}</p>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">Escort Medical Officer:</span>
-                    <strong className="text-slate-200">{formData.escortParamedic}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">Transit Status:</span>
-                    <strong className="text-emerald-400">{formData.transitVitals}</strong>
-                  </div>
-                </div>
-
-                {/* Signatures */}
-                <div className="pt-3 border-t-2 border-slate-300 grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-500">Referring Doctor Signature & KMPDC No:</span>
-                    <p className="font-bold text-slate-950">{doctorName} ({doctorKmpdc})</p>
-                    <p className="text-[10px] text-slate-600">Date/Time: {new Date().toLocaleString()}</p>
-                  </div>
-                  <div className="space-y-1 text-right">
-                    <span className="text-[10px] font-bold text-slate-500">Receiving Officer Acceptance Note:</span>
-                    <p className="text-[11px] text-slate-700 italic">Signature / Stamp / Bed Assigned: _______________</p>
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-500">Receiving Clinician Handover:</p>
+                    <p className="text-xs font-bold text-slate-800">Pending Triage & Bed Acceptance</p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* 3. OFFICIAL DISCHARGE SUMMARY & CARE PLAN */}
+            {/* 3. OFFICIAL COMPREHENSIVE PATIENT DISCHARGE SUMMARY & FUTURE FOLLOW-UP CARE PLAN (FEATURING EVERY STEP OF THE PATIENT JOURNEY) */}
             {selectedForm === "discharge_summary" && (
-              <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 sm:p-10 rounded-2xl shadow-xl font-sans text-slate-900 space-y-5 text-xs">
+              <div id="print-section" className="w-full max-w-4xl bg-white border-2 border-slate-300 p-6 sm:p-9 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
                 
-                {/* Header */}
+                {/* Official Kenyan Hospital Letterhead & Statutory Accreditation */}
                 <div className="text-center border-b-2 border-slate-900 pb-3 space-y-1">
-                  <h1 className="text-xl font-black uppercase text-slate-950 tracking-tight">{facilityName}</h1>
-                  <p className="text-xs font-bold text-slate-700">{facilityMfl} • DEPARTMENT OF INPATIENT CLINICAL SERVICES</p>
-                  <div className="pt-1">
-                    <span className="px-3 py-0.5 bg-emerald-800 text-white font-bold text-xs uppercase rounded-md">
-                      PATIENT DISCHARGE SUMMARY & POST-HOSPITALIZATION CARE PLAN
+                  <div className="flex items-center justify-center gap-2">
+                    <Hospital className="w-6 h-6 text-emerald-700" />
+                    <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">{facilityName}</h1>
+                  </div>
+                  <p className="text-xs font-bold text-slate-700">{facilityMfl} • {county} • INPATIENT & OUTPATIENT CLINICAL CARE</p>
+                  <p className="text-[11px] text-slate-500">Tassia Hill Complex, Embakasi East • 24/7 Clinical Emergency & Telehealth: {formData.emergencyHelpline}</p>
+                  <div className="pt-1.5 flex items-center justify-center gap-2">
+                    <span className="px-4 py-1 bg-emerald-800 text-white font-black text-xs uppercase tracking-wider rounded-md">
+                      OFFICIAL PATIENT DISCHARGE SUMMARY & COMPREHENSIVE FOLLOW-UP CARE PLAN
                     </span>
                   </div>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Statutory Compliant: MOH / KMPDC Standards • PPB Digital Pharmacy e-Rx • SHA/NHIF Case Record
+                  </p>
                 </div>
 
-                {/* Admission & Discharge Timelines */}
+                {/* Patient Identity & Encounter Demographics Bar */}
                 <div className="bg-slate-50 border border-slate-300 p-3 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Patient:</span>
-                    <strong className="text-slate-950">{formData.patientName}</strong>
+                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Patient Name:</span>
+                    <strong className="text-slate-950 text-sm">{formData.patientName}</strong>
                     <span className="text-[10px] text-slate-600 block">ID: {formData.nationalId}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Admission Date:</span>
+                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Age / Gender / Contact:</span>
+                    <strong className="text-slate-950">{formData.age} Yrs / {formData.gender}</strong>
+                    <span className="text-[10px] text-slate-600 block">{formData.phone}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Admission & Ward:</span>
                     <strong className="text-slate-950 font-mono">{formData.admissionDate}</strong>
+                    <span className="text-[10px] text-emerald-800 font-bold block">{formData.wardOrBed}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Discharge Date:</span>
+                    <span className="text-slate-500 block text-[10px] font-bold uppercase">Discharge & Stay:</span>
                     <strong className="text-slate-950 font-mono">{formData.dischargeDate}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Ward / Bed:</span>
-                    <strong className="text-slate-950">{formData.wardOrBed}</strong>
+                    <span className="text-[10px] text-slate-700 font-bold block">{formData.lengthOfStay}</span>
                   </div>
                 </div>
 
-                {/* Diagnoses & Course */}
-                <div className="space-y-2 border border-slate-300 p-3 rounded-xl">
-                  <div className="flex justify-between items-center border-b border-slate-200 pb-1">
-                    <span className="font-bold text-slate-700 uppercase text-[10px]">Final Clinical Diagnosis:</span>
-                    <span className="font-bold text-emerald-800 text-xs">{formData.diagnosis}</span>
-                  </div>
-                  <div className="space-y-1 text-slate-800 text-xs">
-                    <p><strong>Clinical Course & Management:</strong> {formData.hospitalCourse}</p>
-                    <p><strong>Investigations / Procedures Done:</strong> {formData.proceduresDone}</p>
-                    <p><strong>Discharge Condition:</strong> <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">{formData.dischargeCondition}</span></p>
-                  </div>
-                </div>
-
-                {/* Discharge Medications */}
+                {/* STEP 1: PRESENTATION & BASELINE ADMISSION TRIAGE VITALS */}
                 <div className="border border-slate-300 rounded-xl overflow-hidden">
-                  <div className="bg-slate-800 text-white px-3 py-1.5 font-bold text-xs flex justify-between">
-                    <span>DISCHARGE MEDICATIONS TO TAKE HOME</span>
-                    <span className="text-[10px] text-slate-300">DISPENSED VIA SMART PHARMACY</span>
+                  <div className="bg-slate-900 text-white px-3 py-1 font-bold text-[11px] flex justify-between items-center">
+                    <span className="flex items-center gap-1.5">
+                      <Heart className="w-3.5 h-3.5 text-rose-400" />
+                      STEP 1: PATIENT ARRIVAL, CHIEF COMPLAINTS & ADMISSION TRIAGE VITALS
+                    </span>
+                    <span className="text-[10px] text-emerald-300 font-mono">{formData.triageVitals.triageAcuity}</span>
+                  </div>
+                  <div className="p-3 space-y-2 bg-white text-xs">
+                    <div>
+                      <span className="text-slate-500 text-[10px] font-bold uppercase block">Chief Presenting Complaints on Arrival:</span>
+                      <p className="text-slate-900 font-medium">{formData.chiefComplaints}</p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 text-center font-mono">
+                      <div><span className="text-[9px] text-slate-500 block font-sans">BP (Intake)</span><strong className="text-slate-900 text-xs">{formData.triageVitals.bp}</strong></div>
+                      <div><span className="text-[9px] text-slate-500 block font-sans">Temp (Intake)</span><strong className="text-rose-700 text-xs">{formData.triageVitals.temp}</strong></div>
+                      <div><span className="text-[9px] text-slate-500 block font-sans">Heart Rate</span><strong className="text-slate-900 text-xs">{formData.triageVitals.pulse}</strong></div>
+                      <div><span className="text-[9px] text-slate-500 block font-sans">SpO2 (Room Air)</span><strong className="text-slate-900 text-xs">{formData.triageVitals.spo2}</strong></div>
+                      <div><span className="text-[9px] text-slate-500 block font-sans">Resp Rate</span><strong className="text-slate-900 text-xs">{formData.triageVitals.respRate}</strong></div>
+                      <div><span className="text-[9px] text-slate-500 block font-sans">Weight / BMI</span><strong className="text-slate-900 text-xs">{formData.triageVitals.weight} ({formData.triageVitals.bmi.split(" ")[0]})</strong></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 2: CLINICAL EXAMINATION, ALLERGIES & COMORBIDITIES */}
+                <div className="border border-slate-300 rounded-xl overflow-hidden">
+                  <div className="bg-slate-800 text-white px-3 py-1 font-bold text-[11px] flex justify-between items-center">
+                    <span className="flex items-center gap-1.5">
+                      <Stethoscope className="w-3.5 h-3.5 text-blue-300" />
+                      STEP 2: CLINICAL EXAMINATION FINDINGS, ALLERGIES & COMORBIDITIES
+                    </span>
+                    <span className="text-[10px] text-amber-300 font-bold">ALLERGY CHECK COMPLETED</span>
+                  </div>
+                  <div className="p-3 space-y-2 bg-white text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-slate-500 text-[10px] font-bold uppercase block">Systemic Physical Examination Findings:</span>
+                        <p className="text-slate-800 text-[11px] leading-relaxed">{formData.physicalExam}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div>
+                          <span className="text-rose-600 text-[10px] font-black uppercase block">⚠️ Known Drug Allergies:</span>
+                          <span className="font-bold text-rose-900 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-[11px] inline-block">
+                            {formData.allergies}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-[10px] font-bold uppercase block">Past Medical History & Comorbidities:</span>
+                          <p className="text-slate-700 text-[11px]">{formData.medicalHistory}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 3: DIAGNOSTIC INVESTIGATIONS & LAB RESULTS */}
+                <div className="border border-slate-300 rounded-xl overflow-hidden">
+                  <div className="bg-slate-800 text-white px-3 py-1 font-bold text-[11px] flex justify-between items-center">
+                    <span className="flex items-center gap-1.5">
+                      <FlaskRound className="w-3.5 h-3.5 text-amber-400" />
+                      STEP 3: DIAGNOSTIC LABORATORY & RADIOLOGY INVESTIGATIONS PERFORMED
+                    </span>
+                    <span className="text-[10px] text-slate-300 font-mono">MOH 240 Diagnostic Log</span>
                   </div>
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                    <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 text-[10px] uppercase">
                       <tr>
-                        <th className="p-2">Medication / Strength</th>
-                        <th className="p-2">Dosage & Route</th>
-                        <th className="p-2">Duration</th>
+                        <th className="p-2">Investigation / Test Name</th>
+                        <th className="p-2">Measured Result & Findings</th>
+                        <th className="p-2">Reference Limits</th>
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Reporting Officer</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {formData.dischargeMedications.map((med, i) => (
+                    <tbody className="divide-y divide-slate-100 text-[11px]">
+                      {formData.labInvestigations.map((lab, i) => (
                         <tr key={i} className="hover:bg-slate-50">
-                          <td className="p-2 font-bold text-slate-900">{med.drug}</td>
-                          <td className="p-2 text-slate-700">{med.dose}</td>
-                          <td className="p-2 font-mono text-emerald-800 font-bold">{med.duration}</td>
+                          <td className="p-2 font-bold text-slate-900">{lab.test}</td>
+                          <td className="p-2 font-mono text-slate-950 font-bold">{lab.result}</td>
+                          <td className="p-2 text-slate-500 text-[10px]">{lab.range}</td>
+                          <td className="p-2">
+                            <span className={`px-2 py-0.5 rounded font-bold text-[9px] ${
+                              lab.flag === "Normal" 
+                                ? "bg-emerald-100 text-emerald-800" 
+                                : "bg-amber-100 text-amber-900 border border-amber-300"
+                            }`}>
+                              {lab.flag}
+                            </span>
+                          </td>
+                          <td className="p-2 text-slate-600 text-[10px]">{lab.officer}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                {/* Danger Signs & Follow Up */}
+                {/* STEP 4 & 5: CLINICAL PROCEDURES, INPATIENT WARD ROUNDS & DOCTOR/NURSE NOTES */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1">
-                    <span className="font-black text-rose-950 uppercase text-[10px] block">⚠️ RED FLAG DANGER SIGNS (SEEK IMMEDIATE CARE):</span>
-                    <p className="text-rose-900 text-xs">{formData.dangerSignsWarning}</p>
+                  {/* Step 4: Procedures */}
+                  <div className="border border-slate-300 rounded-xl overflow-hidden">
+                    <div className="bg-slate-800 text-white px-3 py-1 font-bold text-[11px] flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-teal-400" />
+                      <span>STEP 4: PROCEDURES & INTERVENTIONS PERFORMED</span>
+                    </div>
+                    <div className="p-3 space-y-2 bg-white text-xs">
+                      {formData.proceduresDone.map((proc, i) => (
+                        <div key={i} className="border-b border-slate-100 pb-1.5 last:border-none text-[11px]">
+                          <div className="flex justify-between">
+                            <strong className="text-slate-900">{proc.name}</strong>
+                            <span className="text-[10px] text-slate-500 font-mono">{proc.date}</span>
+                          </div>
+                          <p className="text-slate-600 text-[10px]">Clinician: {proc.clinician} • <span className="text-emerald-800 font-bold">Outcome: {proc.outcome}</span></p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
-                    <span className="font-black text-blue-950 uppercase text-[10px] block">📅 NEXT CLINIC FOLLOW-UP APPOINTMENT:</span>
-                    <p className="text-blue-950 font-bold text-xs">{formData.followUpClinic}</p>
-                    <p className="text-blue-800 font-mono text-xs">Date: <strong>{formData.followUpDate}</strong></p>
+
+                  {/* Step 5: Ward Rounds & Clinical Course */}
+                  <div className="border border-slate-300 rounded-xl overflow-hidden">
+                    <div className="bg-slate-800 text-white px-3 py-1 font-bold text-[11px] flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-purple-400" />
+                      <span>STEP 5: INPATIENT CLINICAL PROGRESS & WARD ROUNDS</span>
+                    </div>
+                    <div className="p-3 space-y-2 bg-white text-xs">
+                      <div>
+                        <span className="text-slate-500 text-[10px] font-bold uppercase block">Attending Consultant Rounds & Daily Progress:</span>
+                        <p className="text-slate-800 text-[11px] leading-relaxed whitespace-pre-line">{formData.inpatientCourse}</p>
+                      </div>
+                      <div className="pt-1 border-t border-slate-100">
+                        <span className="text-slate-500 text-[10px] font-bold uppercase block">In-Hospital Administered Medications (Step 6):</span>
+                        <p className="text-slate-700 text-[10px] font-mono">{formData.administeredHospitalMeds}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Sign-off */}
-                <div className="pt-3 border-t-2 border-slate-300 flex justify-between items-end">
-                  <div>
-                    <p className="font-bold text-slate-950">Attending Consultant / Doctor: {doctorName}</p>
-                    <p className="text-[10px] text-slate-600">KMPDC License: {doctorKmpdc}</p>
+                {/* STEP 7: DISCHARGE CLINICAL CONDITION & DIAGNOSIS */}
+                <div className="p-3 bg-emerald-50/90 border border-emerald-300 rounded-xl space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-emerald-200 pb-1.5">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-emerald-950 block">STEP 7: FINAL CONFIRMED CLINICAL DIAGNOSIS:</span>
+                      <strong className="text-sm font-black text-emerald-950">{formData.diagnosis}</strong>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-slate-600 block">Discharge Clinical Condition:</span>
+                      <span className="px-2.5 py-0.5 bg-emerald-700 text-white font-bold text-[11px] rounded-md shadow-xs">
+                        {formData.dischargeCondition}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-500">Patient / Guardian Acknowledgment:</p>
-                    <p className="text-xs font-bold text-slate-800">Received Discharge Summary & Rx Drugs</p>
+
+                  {/* Vitals Improvement Comparison */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-white p-2 rounded-lg border border-emerald-200 text-center font-mono text-xs">
+                    <div><span className="text-[9px] text-slate-500 block font-sans">Exit Blood Pressure</span><strong className="text-slate-900">{formData.dischargeVitals.bp}</strong></div>
+                    <div><span className="text-[9px] text-slate-500 block font-sans">Exit Temp (Afebrile)</span><strong className="text-emerald-700">{formData.dischargeVitals.temp}</strong></div>
+                    <div><span className="text-[9px] text-slate-500 block font-sans">Exit Pulse</span><strong className="text-slate-900">{formData.dischargeVitals.pulse}</strong></div>
+                    <div><span className="text-[9px] text-slate-500 block font-sans">Exit SpO2 (Room Air)</span><strong className="text-emerald-800 font-bold">{formData.dischargeVitals.spo2}</strong></div>
+                    <div><span className="text-[9px] text-slate-500 block font-sans">Exit Resp Rate</span><strong className="text-slate-900">{formData.dischargeVitals.respRate}</strong></div>
+                  </div>
+                </div>
+
+                {/* STEP 8: TAKE-HOME DISCHARGE MEDICATIONS (e-Rx) */}
+                <div className="border border-slate-300 rounded-xl overflow-hidden">
+                  <div className="bg-slate-900 text-white px-3 py-1 font-bold text-[11px] flex justify-between items-center">
+                    <span className="flex items-center gap-1.5">
+                      <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
+                      STEP 8: TAKE-HOME DISCHARGE MEDICATIONS (DIGITAL e-PRESCRIPTION)
+                    </span>
+                    <span className="text-[10px] text-emerald-300 font-mono">PHARMACY DISPENSED & VERIFIED</span>
+                  </div>
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 text-[10px] uppercase">
+                      <tr>
+                        <th className="p-2">Prescribed Medication / Strength</th>
+                        <th className="p-2">Dosage & Route</th>
+                        <th className="p-2">Duration</th>
+                        <th className="p-2">Administration Instructions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-[11px]">
+                      {formData.dischargeMedications.map((med, i) => (
+                        <tr key={i} className="hover:bg-slate-50">
+                          <td className="p-2 font-bold text-slate-900">{med.drug}</td>
+                          <td className="p-2 text-slate-800 font-medium">{med.dose}</td>
+                          <td className="p-2 font-mono text-emerald-800 font-bold">{med.duration}</td>
+                          <td className="p-2 text-slate-600 text-[10px]">{med.instructions}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* STEP 9 & STEP 10: HOME CARE GUIDANCE & RED FLAG DANGER SIGNS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 border border-slate-300 rounded-xl space-y-1 text-xs">
+                    <span className="font-black text-slate-950 uppercase text-[10px] block flex items-center gap-1">
+                      <ClipboardList className="w-3.5 h-3.5 text-emerald-700" />
+                      STEP 9: PATIENT HOME CARE, DIET & REHABILITATION INSTRUCTIONS
+                    </span>
+                    <p className="text-slate-800 text-[11px] leading-relaxed whitespace-pre-line">{formData.homeCareInstructions}</p>
+                  </div>
+
+                  <div className="p-3 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-1 text-xs">
+                    <span className="font-black text-rose-950 uppercase text-[10px] block flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-700" />
+                      STEP 10: ⚠️ RED FLAG DANGER SIGNS (SEEK IMMEDIATE EMERGENCY CARE)
+                    </span>
+                    <p className="text-rose-900 text-[11px] leading-relaxed whitespace-pre-line font-medium">{formData.dangerSignsWarning}</p>
+                  </div>
+                </div>
+
+                {/* STEP 11: FUTURE FOLLOW-UP APPOINTMENT & CONTINUITY OF CARE PLAN */}
+                <div className="p-4 bg-blue-50/90 border-2 border-blue-400 rounded-xl space-y-2 text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-blue-200 pb-2">
+                    <span className="font-black text-blue-950 uppercase text-xs flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-blue-700" />
+                      STEP 11: FUTURE FOLLOW-UP APPOINTMENT & CONTINUITY OF CARE
+                    </span>
+                    <span className="px-3 py-0.5 bg-blue-800 text-white font-bold text-xs rounded-full font-mono">
+                      APPOINTMENT DATE: {formData.followUpDate}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-2.5 bg-white rounded-lg border border-blue-200">
+                      <span className="text-[9px] font-bold text-slate-500 uppercase block">Follow-Up Clinic & Room</span>
+                      <strong className="text-slate-950 text-xs block">{formData.followUpClinic}</strong>
+                      <span className="text-[10px] text-blue-800 font-mono block mt-0.5">{formData.followUpTime}</span>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-lg border border-blue-200">
+                      <span className="text-[9px] font-bold text-slate-500 uppercase block">Reviewing Consultant</span>
+                      <strong className="text-slate-950 text-xs block">{formData.followUpDoctor}</strong>
+                      <span className="text-[10px] text-slate-600 font-mono block mt-0.5">Reg: {formData.followUpKmpdc}</span>
+                    </div>
+
+                    <div className="p-2.5 bg-white rounded-lg border border-blue-200">
+                      <span className="text-[9px] font-bold text-slate-500 uppercase block">Required Pre-Review Tests</span>
+                      <p className="text-slate-800 text-[11px] font-medium">{formData.followUpRepeatTests}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] text-blue-900 pt-1 border-t border-blue-200 gap-2">
+                    <span><strong>Primary Health Center Transfer:</strong> {formData.primaryCareTransfer}</span>
+                    <span className="font-bold text-blue-950">24/7 Clinical Emergency Line: {formData.emergencyHelpline}</span>
+                  </div>
+                </div>
+
+                {/* STEP 12 & 13: FINANCIAL CLEARANCE & DIGITAL CLINICIAN SIGN-OFF */}
+                <div className="pt-3 border-t-2 border-slate-900 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs items-end">
+                  
+                  {/* Financial Clearance Summary */}
+                  <div className="space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <span className="font-bold text-slate-800 uppercase text-[10px] flex items-center gap-1">
+                      <CreditCard className="w-3 h-3 text-emerald-600" />
+                      STEP 12: FINANCIAL CLEARANCE
+                    </span>
+                    <p className="text-[10px] text-slate-600">Total Billed: <strong className="text-slate-900">{formData.totalBillKES}</strong></p>
+                    <p className="text-[10px] text-slate-600">Benefit Cover: <strong className="text-slate-900">{formData.insuranceCoveredKES}</strong></p>
+                    <p className="text-[10px] text-emerald-800 font-bold">Net Balance: {formData.netBalanceKES}</p>
+                    <p className="text-[9px] text-slate-500">Cleared by: {formData.clearedByOfficer}</p>
+                  </div>
+
+                  {/* Doctor Signature Block */}
+                  <div className="space-y-1">
+                    <span className="font-bold text-slate-800 uppercase text-[10px] block">STEP 13: CLINICIAN CERTIFICATION</span>
+                    <p className="text-xs font-black text-slate-950">{doctorName}</p>
+                    <p className="text-[10px] text-slate-600 font-mono">KMPDC Licence: {doctorKmpdc}</p>
+                    <div className="pt-1">
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 text-[10px] font-bold rounded font-mono block">
+                        PIN: {formData.signaturePin}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Patient Acknowledgement & Stamp QR */}
+                  <div className="flex flex-col items-end justify-center space-y-1 text-right">
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <p className="text-[10px] text-slate-500 font-bold">Patient / Next of Kin Receipt:</p>
+                        <p className="text-[11px] font-bold text-slate-900">Summary & Rx Received</p>
+                        <p className="text-[9px] text-slate-500 font-mono">{formData.stampedDate}</p>
+                      </div>
+                      <div className="p-1.5 bg-white border border-slate-300 rounded shadow-2xs">
+                        <QrCode className="w-10 h-10 text-slate-900" />
+                      </div>
+                    </div>
+                    <span className="text-[9px] text-slate-400 font-mono">Scan to verify clinical discharge</span>
                   </div>
                 </div>
               </div>
@@ -815,190 +1330,190 @@ export default function KenyanHospitalFormsModal({
                   </tbody>
                 </table>
 
-                <div className="pt-3 border-t border-slate-300 flex justify-between items-center text-xs">
-                  <div>
-                    <span className="text-slate-500 block">Authorized Medical Laboratory Technologist:</span>
-                    <strong>{formData.labTechnologist}</strong>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-slate-500 block">Report Released At:</span>
-                    <strong className="font-mono">{new Date().toLocaleString()}</strong>
-                  </div>
+                <div className="pt-4 border-t border-slate-300 flex justify-between">
+                  <p>Reporting Technologist: <strong>{formData.labTechnologist}</strong></p>
+                  <p>Certified Sign-off: <strong>LAB-VAL-OK</strong></p>
                 </div>
               </div>
             )}
 
-            {/* 5. PPB e-PRESCRIPTION */}
+            {/* 5. PPB DIGITAL E-PRESCRIPTION */}
             {selectedForm === "prescription_erx" && (
               <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
                 <div className="text-center border-b-2 border-slate-900 pb-3">
-                  <h1 className="text-xl font-black uppercase">{facilityName}</h1>
+                  <h1 className="text-lg font-black uppercase text-emerald-900">{facilityName} • PHARMACY DISPENSARY</h1>
                   <span className="px-3 py-0.5 bg-emerald-800 text-white font-bold text-xs uppercase rounded">
-                    DIGITAL ELECTRONIC PRESCRIPTION (PPB / KMPDC COMPLIANT e-Rx)
+                    PPB STANDARDIZED DIGITAL e-PRESCRIPTION SLIP (MOH / PPB COMPLIANT)
                   </span>
                 </div>
 
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-300 grid grid-cols-4 gap-2">
-                  <div><span className="text-slate-500 block">Patient:</span><strong>{formData.patientName}</strong></div>
-                  <div><span className="text-slate-500 block">National ID:</span><strong className="font-mono">{formData.nationalId}</strong></div>
-                  <div><span className="text-slate-500 block">Age / Gender:</span><strong>{formData.age} Yrs / {formData.gender}</strong></div>
-                  <div><span className="text-slate-500 block">Allergies:</span><strong className="text-rose-700">{formData.allergies}</strong></div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-300 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div><span className="text-slate-500 block">Patient Name:</span><strong>{formData.patientName}</strong></div>
+                  <div><span className="text-slate-500 block">National ID / Age:</span><strong>{formData.nationalId} ({formData.age} Yrs)</strong></div>
+                  <div><span className="text-slate-500 block">Prescribing Doctor:</span><strong>{doctorName}</strong></div>
+                  <div><span className="text-slate-500 block">KMPDC License:</span><strong className="font-mono">{doctorKmpdc}</strong></div>
                 </div>
 
-                <div className="p-4 bg-emerald-50/50 border border-emerald-300 rounded-xl space-y-3">
-                  <div className="font-black text-emerald-950 uppercase text-xs flex items-center gap-1.5">
-                    <Stethoscope className="w-4 h-4 text-emerald-700" />
-                    <span>Rx PRESCRIBED MEDICINES:</span>
-                  </div>
-                  {formData.dischargeMedications.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-white border border-slate-200 rounded-lg flex justify-between items-center">
-                      <div>
-                        <strong className="text-slate-950 text-sm block">{idx + 1}. {item.drug}</strong>
-                        <span className="text-slate-600 text-xs">Sig: {item.dose}</span>
-                      </div>
-                      <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                        Duration: {item.duration}
-                      </span>
-                    </div>
-                  ))}
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                  <span className="font-bold text-amber-900 text-[10px] uppercase block">Clinical Diagnosis:</span>
+                  <span className="font-bold text-slate-900 text-xs">{formData.diagnosis}</span>
                 </div>
 
-                <div className="pt-3 border-t-2 border-slate-300 flex justify-between items-end">
+                <table className="w-full text-left border border-slate-300 rounded-xl overflow-hidden">
+                  <thead className="bg-slate-800 text-white text-[11px]">
+                    <tr>
+                      <th className="p-2">DRUG NAME & FORMULATION</th>
+                      <th className="p-2">DOSAGE / FREQUENCY / ROUTE</th>
+                      <th className="p-2">TREATMENT DURATION</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {formData.dischargeMedications.map((m, i) => (
+                      <tr key={i} className="hover:bg-slate-50">
+                        <td className="p-2 font-bold text-slate-950">{m.drug}</td>
+                        <td className="p-2 text-slate-700">{m.dose}</td>
+                        <td className="p-2 font-mono font-bold text-emerald-800">{m.duration}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="p-3 bg-slate-50 rounded-xl text-slate-700 space-y-1">
+                  <p><strong>Pharmacy Dispensing Instructions:</strong> Take medications as directed. Do not share prescribed antibiotics. Store in a cool, dry place out of reach of children.</p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-300 flex justify-between items-end">
                   <div>
-                    <span className="text-slate-500 block text-[10px]">Prescribing Medical Practitioner:</span>
-                    <strong className="text-slate-950">{doctorName}</strong>
-                    <p className="text-[10px] text-slate-600">Reg No: {doctorKmpdc}</p>
+                    <p className="font-bold">Authorized Prescriber: {doctorName}</p>
+                    <p className="text-[10px] text-slate-500">Digital Electronic Prescription PIN: #ERX-94821-OK</p>
                   </div>
-                  <div className="text-right">
-                    <span className="text-slate-500 block text-[10px]">Dispensing Pharmacist Sign & Stamp:</span>
-                    <p className="text-xs font-bold text-slate-800">Pharmacy & Poisons Board Verified</p>
+                  <div className="p-1 border border-slate-300 rounded">
+                    <QrCode className="w-10 h-10 text-slate-900" />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* 6. TRIAGE & VITAL SIGNS (TEWS) */}
+            {/* 6. TRIAGE SHEET & TEWS SCORE */}
             {selectedForm === "triage_sheet" && (
               <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
                 <div className="text-center border-b-2 border-slate-900 pb-3">
-                  <h1 className="text-xl font-black uppercase">{facilityName}</h1>
-                  <span className="px-3 py-0.5 bg-amber-500 text-slate-950 font-black text-xs uppercase rounded">
-                    EMERGENCY TRIAGE ASSESSMENT & VITAL SIGNS RECORD (TEWS)
+                  <h1 className="text-lg font-black uppercase">{facilityName} - ACCIDENT & EMERGENCY</h1>
+                  <span className="px-3 py-0.5 bg-amber-600 text-white font-bold text-xs uppercase rounded">
+                    TRIAGE EARLY WARNING SCORE (TEWS) & EMERGENCY INTAKE RECORD
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-300">
-                  <div className="p-3 bg-white rounded-lg border text-center">
-                    <span className="text-slate-500 block text-[10px]">Blood Pressure (BP)</span>
-                    <strong className="text-sm text-slate-950 font-mono">{formData.vitals.bp}</strong>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-300 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div><span className="text-slate-500 block">Patient Name:</span><strong>{formData.patientName}</strong></div>
+                  <div><span className="text-slate-500 block">National ID / Age:</span><strong>{formData.nationalId} ({formData.age} Yrs)</strong></div>
+                  <div><span className="text-slate-500 block">Triage Category:</span><strong className="text-amber-800">{formData.triageCategory}</strong></div>
+                  <div><span className="text-slate-500 block">Consciousness:</span><strong>{formData.triageConsciousness}</strong></div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 border border-slate-300 rounded-xl text-center">
+                  <div className="p-2 bg-slate-50 rounded">
+                    <span className="text-slate-500 block text-[10px]">Blood Pressure</span>
+                    <strong className="text-sm">{formData.vitals.bp}</strong>
                   </div>
-                  <div className="p-3 bg-white rounded-lg border text-center">
-                    <span className="text-slate-500 block text-[10px]">Temperature (°C)</span>
-                    <strong className="text-sm text-slate-950 font-mono">{formData.vitals.temp}</strong>
+                  <div className="p-2 bg-slate-50 rounded">
+                    <span className="text-slate-500 block text-[10px]">Temperature</span>
+                    <strong className="text-sm text-rose-700">{formData.vitals.temp}</strong>
                   </div>
-                  <div className="p-3 bg-white rounded-lg border text-center">
-                    <span className="text-slate-500 block text-[10px]">Pulse Rate (HR)</span>
-                    <strong className="text-sm text-slate-950 font-mono">{formData.vitals.pulse}</strong>
+                  <div className="p-2 bg-slate-50 rounded">
+                    <span className="text-slate-500 block text-[10px]">Heart Rate / Pulse</span>
+                    <strong className="text-sm">{formData.vitals.pulse}</strong>
                   </div>
-                  <div className="p-3 bg-white rounded-lg border text-center">
-                    <span className="text-slate-500 block text-[10px]">Oxygen Saturation (SpO2)</span>
-                    <strong className="text-sm text-emerald-800 font-mono">{formData.vitals.spo2}</strong>
-                  </div>
-                  <div className="p-3 bg-white rounded-lg border text-center">
-                    <span className="text-slate-500 block text-[10px]">Body Weight</span>
-                    <strong className="text-sm text-slate-950 font-mono">{formData.vitals.weight}</strong>
-                  </div>
-                  <div className="p-3 bg-white rounded-lg border text-center">
-                    <span className="text-slate-500 block text-[10px]">Height / BMI</span>
-                    <strong className="text-sm text-slate-950 font-mono">{formData.vitals.height} / {formData.vitals.bmi}</strong>
-                  </div>
-                  <div className="p-3 bg-white rounded-lg border text-center">
-                    <span className="text-slate-500 block text-[10px]">Triage Acuity Category</span>
-                    <strong className="text-xs text-amber-900 font-bold bg-amber-100 px-2 py-0.5 rounded">{formData.triageCategory}</strong>
-                  </div>
-                  <div className="p-3 bg-white rounded-lg border text-center">
-                    <span className="text-slate-500 block text-[10px]">Consciousness (GCS)</span>
-                    <strong className="text-sm text-slate-950 font-mono">{formData.triageConsciousness}</strong>
+                  <div className="p-2 bg-slate-50 rounded">
+                    <span className="text-slate-500 block text-[10px]">Weight / BMI</span>
+                    <strong className="text-sm">{formData.vitals.weight} ({formData.vitals.bmi.split(" ")[0]})</strong>
                   </div>
                 </div>
 
-                <div className="p-3 bg-slate-100 rounded-xl border flex justify-between items-center text-xs">
-                  <span>Triage Nurse Officer: <strong>{formData.triageNurse}</strong></span>
-                  <span className="font-mono">Time: {new Date().toLocaleTimeString()}</span>
+                <div className="p-3 bg-slate-50 rounded-xl space-y-1">
+                  <p><strong>Presenting Symptoms:</strong> {formData.symptoms}</p>
+                  <p><strong>Pain Score:</strong> {formData.triagePainScore}</p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-300 flex justify-between">
+                  <p>Triage Officer: <strong>{formData.triageNurse}</strong></p>
+                  <p>Time of Triage: <strong>{new Date().toLocaleTimeString()}</strong></p>
                 </div>
               </div>
             )}
 
-            {/* 7. BIRTH NOTIFICATION (MOH 241) */}
+            {/* 7. BIRTH NOTIFICATION MOH 241 */}
             {selectedForm === "birth_notification" && (
               <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
                 <div className="text-center border-b-2 border-slate-900 pb-3">
-                  <h1 className="text-lg font-black uppercase text-slate-950">REPUBLIC OF KENYA - MINISTRY OF HEALTH</h1>
-                  <span className="px-3 py-0.5 bg-blue-800 text-white font-bold text-xs uppercase rounded">
-                    MOH 241: NOTIFICATION OF BIRTH (CIVIL REGISTRATION & MATERNITY RECORD)
+                  <h1 className="text-lg font-black uppercase text-slate-950">MINISTRY OF HEALTH & CIVIL REGISTRATION</h1>
+                  <span className="px-3 py-0.5 bg-emerald-800 text-white font-bold text-xs uppercase rounded">
+                    MOH 241: OFFICIAL HOSPITAL NOTICE OF BIRTH
                   </span>
                 </div>
 
-                <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl space-y-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><span className="text-slate-500 block">Child Gender:</span><strong className="text-sm">{formData.childGender}</strong></div>
-                    <div><span className="text-slate-500 block">Date & Time of Birth:</span><strong className="font-mono">{formData.birthDateTime}</strong></div>
-                    <div><span className="text-slate-500 block">Birth Weight:</span><strong className="font-mono text-emerald-900">{formData.birthWeight}</strong></div>
-                    <div><span className="text-slate-500 block">APGAR Score:</span><strong className="font-mono">{formData.apgarScore}</strong></div>
-                    <div><span className="text-slate-500 block">Delivery Mode:</span><strong>{formData.deliveryMode}</strong></div>
-                    <div><span className="text-slate-500 block">Gestational Age:</span><strong>{formData.gestationalAge}</strong></div>
+                <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div><span className="text-slate-500 block">Child Gender:</span><strong className="text-emerald-950">{formData.childGender}</strong></div>
+                  <div><span className="text-slate-500 block">Date & Time of Birth:</span><strong className="font-mono">{formData.birthDateTime}</strong></div>
+                  <div><span className="text-slate-500 block">Birth Weight:</span><strong className="text-slate-950 font-bold">{formData.birthWeight}</strong></div>
+                  <div><span className="text-slate-500 block">Apgar Score:</span><strong className="text-emerald-900">{formData.apgarScore}</strong></div>
+                </div>
+
+                <div className="space-y-2 border border-slate-300 p-3 rounded-xl">
+                  <h4 className="font-bold text-slate-700 uppercase text-[10px]">Parental Records:</h4>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p><strong>Mother's Full Name:</strong> {formData.motherName}</p>
+                      <p className="text-slate-600 font-mono">National ID: {formData.motherId}</p>
+                    </div>
+                    <div>
+                      <p><strong>Father's Full Name:</strong> {formData.fatherName}</p>
+                      <p className="text-slate-600 font-mono">National ID: {formData.fatherId}</p>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-slate-100">
+                    <p><strong>Gestational Age at Delivery:</strong> {formData.gestationalAge} • <strong>Delivery Mode:</strong> {formData.deliveryMode}</p>
                   </div>
                 </div>
 
-                <div className="p-4 bg-slate-50 border border-slate-300 rounded-xl space-y-2">
-                  <span className="font-bold text-slate-700 uppercase text-[10px]">Parents Demographics:</span>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><span className="text-slate-500 block">Mother's Full Name:</span><strong>{formData.motherName} (ID: {formData.motherId})</strong></div>
-                    <div><span className="text-slate-500 block">Father's Full Name:</span><strong>{formData.fatherName} (ID: {formData.fatherId})</strong></div>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-300 flex justify-between items-center text-xs">
-                  <div><span>Attending Midwife / Nurse:</span> <strong>{formData.midwifeOfficer}</strong></div>
-                  <div className="font-mono">LINDA MAMA / SHA RECOGNIZED</div>
+                <div className="pt-4 border-t border-slate-300 flex justify-between">
+                  <p>Attending Midwife / Medical Officer: <strong>{formData.midwifeOfficer}</strong></p>
+                  <p>Civil Notice Serial: <strong>MOH-BN-2026-8942</strong></p>
                 </div>
               </div>
             )}
 
-            {/* 8. DEATH NOTIFICATION (MOH 242) */}
+            {/* 8. DEATH NOTIFICATION MOH 242 */}
             {selectedForm === "death_notification" && (
-              <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
-                <div className="text-center border-b-2 border-slate-900 pb-3">
-                  <h1 className="text-lg font-black uppercase text-slate-950">REPUBLIC OF KENYA - MINISTRY OF HEALTH</h1>
-                  <span className="px-3 py-0.5 bg-slate-900 text-white font-bold text-xs uppercase rounded">
-                    MOH 242: MEDICAL CERTIFICATE OF CAUSE OF DEATH
+              <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-stone-400 p-8 rounded-2xl shadow-xl font-sans text-stone-900 space-y-4 text-xs">
+                <div className="text-center border-b-2 border-stone-900 pb-3">
+                  <h1 className="text-lg font-black uppercase text-stone-950">MINISTRY OF HEALTH & CIVIL REGISTRATION</h1>
+                  <span className="px-3 py-0.5 bg-stone-900 text-white font-bold text-xs uppercase rounded">
+                    MOH 242: OFFICIAL MEDICAL CERTIFICATE OF CAUSE OF DEATH
                   </span>
                 </div>
 
-                <div className="p-4 bg-slate-50 border border-slate-300 rounded-xl space-y-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><span className="text-slate-500 block">Deceased Name:</span><strong className="text-sm">{formData.deceasedName}</strong></div>
-                    <div><span className="text-slate-500 block">National ID No:</span><strong className="font-mono">{formData.deceasedId}</strong></div>
-                    <div><span className="text-slate-500 block">Date & Time of Pronouncement:</span><strong className="font-mono">{formData.dateOfDeath}</strong></div>
-                  </div>
+                <div className="bg-stone-100 border border-stone-300 p-3 rounded-xl grid grid-cols-3 gap-2">
+                  <div><span className="text-stone-500 block">Deceased Full Name:</span><strong className="text-stone-950">{formData.deceasedName}</strong></div>
+                  <div><span className="text-stone-500 block">National ID / Age:</span><strong className="font-mono">{formData.deceasedId}</strong></div>
+                  <div><span className="text-stone-500 block">Date & Time of Death:</span><strong className="font-mono text-stone-950">{formData.dateOfDeath}</strong></div>
                 </div>
 
-                <div className="p-4 bg-rose-50/50 border border-rose-200 rounded-xl space-y-2">
-                  <span className="font-bold text-rose-950 uppercase text-[10px]">Cause of Death Classification (ICD-10):</span>
-                  <p><strong>Immediate Cause:</strong> {formData.immediateCauseOfDeath}</p>
-                  <p><strong>Underlying Antecedent Causes:</strong> {formData.underlyingCauses}</p>
+                <div className="space-y-2 border border-stone-300 p-3 rounded-xl">
+                  <h4 className="font-bold text-stone-700 uppercase text-[10px]">Medical Certification of Cause:</h4>
+                  <p><strong>1. Immediate Cause of Death:</strong> {formData.immediateCauseOfDeath}</p>
+                  <p><strong>2. Underlying Antecedent Causes:</strong> {formData.underlyingCauses}</p>
                 </div>
 
-                <div className="pt-3 border-t border-slate-300 flex justify-between items-center text-xs">
-                  <div><span>Certifying Medical Officer:</span> <strong>{formData.certifyingOfficer} ({doctorKmpdc})</strong></div>
-                  <div className="font-mono text-slate-500">CIVIL REGISTRATION ACT (CAP 149)</div>
+                <div className="pt-4 border-t border-stone-300 flex justify-between">
+                  <p>Certifying Medical Officer: <strong>{formData.certifyingOfficer}</strong> (KMPDC: {doctorKmpdc})</p>
+                  <p>Death Notice Serial: <strong>MOH-DN-2026-0192</strong></p>
                 </div>
               </div>
             )}
 
           </div>
         </div>
-
       </div>
     </div>
   );

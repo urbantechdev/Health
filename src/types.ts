@@ -371,6 +371,18 @@ export interface EncounterNursingNote {
   timestamp: string;
 }
 
+export interface EncounterDoctorNote {
+  id: string;
+  note: string;
+  category?: "Ward Round Review" | "Treatment Plan" | "Specialist Consultation" | "Clinical Progress" | "Procedure / Intervention" | "Emergency Assessment" | "General";
+  doctorName: string;
+  doctorId?: string;
+  doctorKmpdc?: string;
+  clinicalPlan?: string;
+  orders?: string;
+  timestamp: string;
+}
+
 export interface WardBed {
   id: string;
   bedNumber: string; // e.g. "Bed-1", "Bed-2"

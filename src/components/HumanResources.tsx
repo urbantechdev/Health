@@ -41,6 +41,15 @@ import PrintDocument from "./PrintDocument";
 import { toast, modernConfirm } from "../lib/promptService";
 
 export const DEPARTMENT_SPECIALTIES: Record<string, string[]> = {
+  reception: [
+    "Front Desk Receptionist",
+    "Patient Registration Officer",
+    "Customer Care & Triage Receptionist",
+    "SHA / NHIF Verification Clerk",
+    "Records & Registration Officer",
+    "Lead Receptionist / Front Desk Supervisor",
+    "Other Reception Specialist"
+  ],
   medical: [
     "General Practitioner (GP)",
     "Consulting Physician",
@@ -778,9 +787,18 @@ export default function HumanResources() {
                     <label className="font-bold text-gray-600">Department</label>
                     <select
                       value={empDept}
-                      onChange={(e) => setEmpDept(e.target.value)}
+                      onChange={(e) => {
+                        const newDept = e.target.value;
+                        setEmpDept(newDept);
+                        const specs = DEPARTMENT_SPECIALTIES[newDept] || [];
+                        if (specs.length > 0) {
+                          setEmpSpecialty(specs[0]);
+                          setEmpRole(specs[0]);
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-200 bg-gray-50/50 rounded-xl focus:outline-hidden focus:border-emerald-500 font-semibold text-gray-800 animate-fade-in"
                     >
+                      <option value="reception">Reception & Front Desk</option>
                       <option value="medical">Medical Practice (Clinical)</option>
                       <option value="gynaecology">Obstetrics & Gynecology (OB-GYN)</option>
                       <option value="dentistry">Dentistry (Dental Practice)</option>
@@ -937,6 +955,7 @@ export default function HumanResources() {
                     className="px-3 py-1.5 border border-gray-200 bg-gray-50 rounded-xl text-xs font-semibold focus:outline-hidden text-gray-700"
                   >
                     <option value="all">All Depts</option>
+                    <option value="reception">Reception</option>
                     <option value="medical">Medical</option>
                     <option value="gynaecology">Gynecology</option>
                     <option value="dentistry">Dentistry</option>
@@ -1254,14 +1273,14 @@ export default function HumanResources() {
               >
                 {/* Security Watermark for Screen View */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] select-none z-0">
-                  <span className="text-5xl font-black rotate-45 text-slate-950 uppercase">AFYA BORA CLINIC</span>
+                  <span className="text-5xl font-black rotate-45 text-slate-950 uppercase">TASSIAHILL HOSPITAL</span>
                 </div>
 
                 <div className="relative z-10 space-y-8">
                   {/* Clinic Header Block */}
                   <div className="flex items-start justify-between border-b-2 border-slate-900 pb-6">
                     <div>
-                      <h2 className="text-xl font-black tracking-tight text-slate-950">AFYA BORA CLINIC</h2>
+                      <h2 className="text-xl font-black tracking-tight text-slate-950">TASSIAHILL HOSPITAL</h2>
                       <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Healthcare Management System Staff Register</p>
                       <p className="text-[10px] text-gray-400 font-medium">Registry Code: ODPC-KE-2026 / MOH-STAFF-REG</p>
                     </div>
