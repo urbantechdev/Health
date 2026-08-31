@@ -28,6 +28,7 @@ import {
   Filter
 } from "lucide-react";
 import { toast } from "../lib/promptService";
+import HaemogramDocument from "./HaemogramDocument";
 
 interface AncillaryLabsProps {
   toggles: any;
@@ -52,6 +53,7 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
 
   // Active Lab Worksheet Sub-tab
   const [activeLabTab, setActiveLabTab] = useState<"urinalysis" | "haemogram" | "blood_group" | "biochem" | "serology" | "custom">("urinalysis");
+  const [showHaemogramDocModal, setShowHaemogramDocModal] = useState(false);
 
   // --- 1. URINALYSIS STATE ---
   const [urinalysisData, setUrinalysisData] = useState({
@@ -1388,9 +1390,17 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
                           </div>
                         </div>
 
-                        {/* Quick 1-Click CBC Presets */}
+                        {/* Quick 1-Click CBC Presets & Document Preview */}
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-bold text-rose-900 uppercase">Quick Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowHaemogramDocModal(true)}
+                            className="px-2.5 py-1 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-[10px] font-black flex items-center gap-1 cursor-pointer shadow-xs mr-1"
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>Preview Document (A4)</span>
+                          </button>
+                          <span className="text-[10px] font-bold text-rose-900 uppercase">Presets:</span>
                           <button
                             type="button"
                             onClick={() => applyHaemogramPreset("normal")}
@@ -2222,6 +2232,24 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
           )}
         </div>
       </div>
+      {/* Official Full Haemogram Document Modal */}
+      {showHaemogramDocModal && (
+        <HaemogramDocument
+          mode="modal"
+          isOpen={showHaemogramDocModal}
+          onClose={() => setShowHaemogramDocModal(false)}
+          data={{ ...haemogramData, bloodGroup: exactBloodType, crossmatchStatus }}
+          patientMeta={{
+            name: matchedPatient?.patientName || selectedTicket?.patientName || "Walk-in Patient",
+            age: matchedPatient?.age || 30,
+            gender: matchedPatient?.gender || "Adult",
+            patientNo: matchedPatient?.nationalId || matchedPatient?.patientNumber || selectedTicket?.ticketNo || "LAB-OPD-99",
+            facilityName: "AfyaCare Diagnostic & Laboratory Center",
+            doctor: "Attending Medical Officer",
+            date: new Date().toISOString().replace("T", " ").substring(0, 16)
+          }}
+        />
+      )}
     </div>
   );
 }

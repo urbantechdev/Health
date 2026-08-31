@@ -1,6 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { Invoice, MedicalRecord, ClinicalVisit, PayrollRecord, ExpenseItem } from "../types";
-import { Printer, X, ShieldCheck, CheckCircle2, QrCode, FileText, Receipt, ClipboardList, Activity, TrendingUp, TrendingDown } from "lucide-react";
+import {
+  Printer,
+  Download,
+  X,
+  ShieldCheck,
+  CheckCircle2,
+  QrCode,
+  FileText,
+  Receipt,
+  ClipboardList,
+  Activity,
+  TrendingUp,
+  TrendingDown,
+  Loader2
+} from "lucide-react";
+import { printElement, downloadElementAsPdf } from "../lib/printUtils";
 
 interface PrintDocumentProps {
   isOpen: boolean;
@@ -32,6 +47,9 @@ export default function PrintDocument({
   statementData,
 }: PrintDocumentProps) {
   const [receiptFormat, setReceiptFormat] = useState<"etr" | "a4">("etr");
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   useEffect(() => {
     // Disable scrolling of parent when modal is open
@@ -47,8 +65,56 @@ export default function PrintDocument({
 
   if (!isOpen) return null;
 
-  const handlePrint = () => {
-    window.print();
+  const getDocTitle = () => {
+    switch (type) {
+      case "receipt":
+        return `KRA_eTIMS_Invoice_${receiptData?.id || "REC"}`;
+      case "prescription":
+        return `Prescription_${prescriptionData?.patient?.name || "Patient"}_${new Date().toISOString().slice(0, 10)}`;
+      case "payslip":
+        return `Staff_Payslip_${payslipData?.employeeName || "Employee"}_${payslipData?.month || ""}_${payslipData?.year || ""}`;
+      case "statement":
+        return `Financial_Statement_${new Date().toISOString().slice(0, 10)}`;
+      default:
+        return "Hospital_Document";
+    }
+  };
+
+  const handlePrint = async () => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      await printElement("print-section", {
+        title: getDocTitle(),
+        paperSize: type === "receipt" && receiptFormat === "etr" ? "receipt80mm" : "a4"
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTimeout(() => setPrinting(false), 600);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    setDownloadSuccess(false);
+    try {
+      const ok = await downloadElementAsPdf("print-section", {
+        fileName: `${getDocTitle()}.pdf`,
+        title: getDocTitle(),
+        format: "a4",
+        scale: 2
+      });
+      if (ok) {
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   // Helper to calculate eTIMS taxes if not pre-provided
@@ -57,7 +123,7 @@ export default function PrintDocument({
   const netAmount = totalAmount - taxAmount;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto font-sans">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto font-sans">
       {/* Modal Container */}
       <div className="bg-white rounded-3xl shadow-2xl border border-gray-150 w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
         
@@ -103,14 +169,55 @@ export default function PrintDocument({
               </div>
             )}
 
+            {/* Print Button */}
             <button
               id="btn-trigger-print-dialog"
+              disabled={printing}
               onClick={handlePrint}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/10 cursor-pointer"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/10 cursor-pointer disabled:opacity-60"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print / Save PDF</span>
+              {printing ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Printing...</span>
+                </>
+              ) : (
+                <>
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Document</span>
+                </>
+              )}
             </button>
+
+            {/* Download Full Multi-Page PDF Button */}
+            <button
+              id="btn-trigger-download-pdf"
+              disabled={downloading}
+              onClick={handleDownloadPdf}
+              className={`px-3.5 py-2 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-60 ${
+                downloadSuccess
+                  ? "bg-emerald-800 text-white"
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              }`}
+            >
+              {downloading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving PDF...</span>
+                </>
+              ) : downloadSuccess ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>PDF Downloaded</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Full PDF</span>
+                </>
+              )}
+            </button>
+
             <button
               id="btn-close-print-preview"
               onClick={onClose}
@@ -122,9 +229,11 @@ export default function PrintDocument({
         </div>
 
         {/* Informative Note (Screen-only) */}
-        <div className="bg-emerald-50 text-emerald-950 px-6 py-2.5 text-xs font-semibold flex items-center gap-2 shrink-0">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>PRO-TIP: Select "Save as PDF" in the destination options of your system's print dialog to download this document as an official PDF file.</span>
+        <div className="bg-emerald-50 text-emerald-950 px-6 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 shrink-0 border-b border-emerald-100">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>High-precision print output & multi-page PDF export enabled with full official KRA/eTIMS stamps and digital verification codes.</span>
+          </div>
         </div>
 
         {/* Printable Section Container */}

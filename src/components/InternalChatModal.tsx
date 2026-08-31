@@ -365,7 +365,7 @@ export default function InternalChatModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center sm:p-4 bg-slate-950/70 backdrop-blur-xs font-sans animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center sm:p-4 bg-slate-950/75 backdrop-blur-xs font-sans animate-in fade-in duration-200">
       <div 
         id="internal-chat-modal"
         className="bg-white border-0 sm:border sm:border-slate-200 rounded-none sm:rounded-3xl w-full max-w-5xl h-full h-[100dvh] sm:h-[92vh] sm:max-h-[850px] shadow-2xl flex flex-col overflow-hidden"

@@ -291,18 +291,61 @@ a[role="button"]:active,
 }
 
 @media print {
-  /* Hide all elements on screen */
-  body * {
-    visibility: hidden !important;
+  /* Reset document and viewport for multi-page print */
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 100% !important;
   }
-  
-  /* Make only the print-section and its descendants visible */
-  #print-section, #print-section * {
+
+  /* Reset modal containers so they don't clip multi-page documents */
+  .fixed, .overflow-y-auto, .overflow-hidden, .max-h-\[90vh\], .max-h-\[92vh\] {
+    position: static !important;
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide screen-only interactive elements */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Reveal printable containers */
+  #print-section,
+  #print-section *,
+  #kenyan-hospital-forms-printable,
+  #kenyan-hospital-forms-printable *,
+  #haemogram-printable-sheet,
+  #haemogram-printable-sheet *,
+  #patient-history-statement,
+  #patient-history-statement *,
+  #patient-history-lookup-printable,
+  #patient-history-lookup-printable *,
+  #staff-payslip-print-section,
+  #staff-payslip-print-section *,
+  #hospital-discharge-gatepass,
+  #hospital-discharge-gatepass *,
+  [data-printable="true"],
+  [data-printable="true"] * {
     visibility: visible !important;
   }
-  
-  /* Reset document flow and sizing to maximize standard printable space */
-  #print-section {
+
+  #print-section,
+  #kenyan-hospital-forms-printable,
+  #haemogram-printable-sheet,
+  #patient-history-statement,
+  #patient-history-lookup-printable,
+  #staff-payslip-print-section,
+  #hospital-discharge-gatepass,
+  [data-printable="true"] {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
@@ -314,11 +357,32 @@ a[role="button"]:active,
     margin: 0 !important;
     background: white !important;
     color: black !important;
+    overflow: visible !important;
+    height: auto !important;
   }
 
-  /* Prevent page split inside elements */
-  tr, img, svg {
+  /* Hide print buttons, searchbars, navs, backdrops */
+  .no-print,
+  [data-no-print="true"],
+  button,
+  nav,
+  aside,
+  input,
+  select,
+  [role="button"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Proper page break behavior for multi-page hospital documents */
+  table, tr, td, th, img, svg, fieldset, .print-card, .avoid-break, .page-break-inside-avoid {
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .force-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
   }
 }
 

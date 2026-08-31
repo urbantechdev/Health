@@ -44,6 +44,8 @@ import PrintDocument from "./PrintDocument";
 import KenyanHospitalFormsModal, { KenyanFormType, COMMON_ICD10_KENYA } from "./KenyanHospitalFormsModal";
 import PatientHistoryLookupModal from "./PatientHistoryLookupModal";
 import PatientCartPOSModal from "./PatientCartPOSModal";
+import HaemogramDocument from "./HaemogramDocument";
+import { isHaemogramReport } from "../lib/haemogramParser";
 import { syncDoctorConsultationToCart } from "../lib/patientCartService";
 import { DEFAULT_HOSPITAL_WARDS, createHospitalEncounter } from "../lib/encounterService";
 import { toast } from "../lib/promptService";
@@ -1343,22 +1345,56 @@ export default function DoctorsDesk({
                   </div>
 
                   {/* Rendered diagnostic values */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {latestDiagnosticResults.length > 0 ? (
-                      latestDiagnosticResults.slice(0, 4).map((res, rIdx) => (
-                        <div key={rIdx} className="p-2.5 bg-white/10 backdrop-blur-xs rounded-xl border border-white/15 text-xs space-y-1">
-                          <div className="flex justify-between items-center text-[10px] text-indigo-200">
-                            <span className="font-bold uppercase tracking-wider">{res.dept}</span>
-                            <span>{res.date}</span>
+                      latestDiagnosticResults.slice(0, 4).map((res, rIdx) => {
+                        const isHaemogram =
+                          isHaemogramReport(res.findings) ||
+                          res.test.toLowerCase().includes("haemogram") ||
+                          res.test.toLowerCase().includes("cbc");
+
+                        if (isHaemogram) {
+                          return (
+                            <div key={rIdx} className="col-span-1 md:col-span-2">
+                              <HaemogramDocument
+                                data={res.findings}
+                                patientMeta={{
+                                  name: selectedPatient?.patientName,
+                                  age: selectedPatient?.age,
+                                  gender: selectedPatient?.gender,
+                                  patientNo: selectedPatient?.nationalId || selectedPatient?.patientNumber || selectedPatient?.phone,
+                                  date: res.date,
+                                  doctor: "Dr. On Duty",
+                                  facilityName: "AfyaCare Diagnostic Center"
+                                }}
+                                mode="inline"
+                              />
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={rIdx} className="p-3.5 bg-white text-slate-900 rounded-2xl border border-indigo-200 text-xs space-y-2 shadow-xs">
+                            <div className="flex justify-between items-center text-[10px] text-slate-500">
+                              <span className="font-bold uppercase tracking-wider px-2 py-0.5 bg-indigo-50 text-indigo-800 rounded">
+                                {res.dept}
+                              </span>
+                              <span className="font-mono">{res.date}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <p className="font-black text-slate-900 text-xs">{res.test}</p>
+                              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                Verified Result
+                              </span>
+                            </div>
+                            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-slate-800 font-medium text-xs leading-relaxed whitespace-pre-line">
+                              {res.findings}
+                            </div>
                           </div>
-                          <p className="font-bold text-white text-xs">{res.test}</p>
-                          <p className="font-mono text-emerald-300 text-[11px] bg-slate-950/60 p-1.5 rounded-lg border border-white/10 whitespace-pre-line">
-                            {res.findings}
-                          </p>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
-                      <div className="col-span-2 p-2.5 bg-white/10 rounded-xl text-xs text-indigo-200">
+                      <div className="col-span-2 p-3.5 bg-white/10 rounded-xl text-xs text-indigo-200">
                         {activeServingTicket?.labSummary || activeServingTicket?.notes || "Diagnostic parameters returned and attached to encounter record."}
                       </div>
                     )}
@@ -1903,7 +1939,7 @@ export default function DoctorsDesk({
 
       {/* Dynamic Audio-Visual Triage Routing Modal */}
       {routingCue && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border-2 border-emerald-500 overflow-hidden">
             {/* Header Banner */}
             <div className="p-6 bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-900 text-white relative">
@@ -2049,7 +2085,7 @@ export default function DoctorsDesk({
 
       {/* Direct Inpatient Ward Admission Modal (Kenyan OPD -> IPD Handshake) */}
       {showAdmissionModal && selectedPatient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border border-gray-100 overflow-hidden">
             <div className="p-6 bg-gradient-to-r from-amber-700 via-orange-800 to-slate-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-3">

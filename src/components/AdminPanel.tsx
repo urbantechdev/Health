@@ -551,7 +551,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       doctor: true,
       pharmacy: true,
       billing: true,
-      laboratory: type !== "clinic",
+      laboratory: true, // Lab feature enabled across Tier Clinic, Level 4 & Level 5
       radiology: type === "hospital_level_5",
     };
 
@@ -716,7 +716,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                 }`}
               >
                 <span className="block text-sm">Clinic</span>
-                <span className="text-[10px] opacity-75">Basic Care</span>
+                <span className="text-[10px] opacity-75">Primary & Labs</span>
               </button>
               <button
                 id="btn-tier-l4"

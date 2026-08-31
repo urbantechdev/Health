@@ -10,8 +10,9 @@ import {
   addDoc,
   deleteDoc
 } from "firebase/firestore";
-import { QueueTicket, MedicalRecord, Invoice, Medication, ClinicalVisit } from "../types";
+import { QueueTicket, MedicalRecord, Invoice, Medication, ClinicalVisit, Employee } from "../types";
 import { findUnifiedPatient } from "../lib/patientSyncService";
+import StationRoutingPromptModal, { TargetStationType } from "./StationRoutingPromptModal";
 import {
   Activity,
   User,
@@ -39,6 +40,8 @@ import {
   ExternalLink
 } from "lucide-react";
 import { toast } from "../lib/promptService";
+import HaemogramDocument from "./HaemogramDocument";
+import { isHaemogramReport } from "../lib/haemogramParser";
 
 interface PatientJourneyTrackerProps {
   onNavigateTab?: (tab: string) => void;
@@ -49,11 +52,22 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [medications, setMedications] = useState<Medication[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [routingInProgress, setRoutingInProgress] = useState<string | null>(null);
   const [journeyLogs, setJourneyLogs] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedHaemogramResult, setSelectedHaemogramResult] = useState<string | null>(null);
+
+  // Station Routing & Personnel Prompt Modal State
+  const [routingModalOpen, setRoutingModalOpen] = useState(false);
+  const [modalTargetStation, setModalTargetStation] = useState<TargetStationType>("triage");
+
+  const openRoutingModal = (station: TargetStationType) => {
+    setModalTargetStation(station);
+    setRoutingModalOpen(true);
+  };
 
   const addLog = (msg: string) => {
     setJourneyLogs((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 15)]);
@@ -121,11 +135,21 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
       setMedications(meds);
     });
 
+    // 5. Subscribe to Employees
+    const unsubEmployees = onSnapshot(collection(db, "employees"), (snapshot) => {
+      const emps: Employee[] = [];
+      snapshot.forEach((doc) => {
+        emps.push({ id: doc.id, ...doc.data() } as Employee);
+      });
+      setEmployees(emps);
+    });
+
     return () => {
       unsubQueue();
       unsubPatients();
       unsubInvoices();
       unsubMeds();
+      unsubEmployees();
     };
   }, []);
 
@@ -245,6 +269,55 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
       });
       addLog(`Patient routed to ${getDeptLabel(targetDepartment)} with Ticket #${nextTicketNo}`);
       toast.success(`Patient routed to ${getDeptLabel(targetDepartment)} (#${nextTicketNo})`, "Queue Updated");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to route patient ticket.", "Routing Error");
+    } finally {
+      setRoutingInProgress(null);
+    }
+  };
+
+  // Comprehensive modal route dispatcher with Practitioner & Room assignment
+  const handleConfirmModalRoute = async (params: {
+    targetDepartment: string;
+    prefix: string;
+    notes: string;
+    assignedSpecialistId?: string;
+    assignedSpecialistName?: string;
+    specialistTitle?: string;
+    consultationRoom?: string;
+    targetClinic?: string;
+    priority?: "normal" | "urgent" | "emergency";
+  }) => {
+    if (!selectedTicket) return;
+    setRoutingInProgress(params.targetDepartment);
+    const ticketId = selectedTicket.id;
+    const rawNumber = selectedTicket.ticketNo.includes("-")
+      ? selectedTicket.ticketNo.split("-")[1]
+      : selectedTicket.ticketNo.replace(/\D/g, "") || String(Math.floor(100 + Math.random() * 900));
+    const nextTicketNo = `${params.prefix}-${rawNumber}`;
+
+    try {
+      await updateDoc(doc(db, "queue", ticketId), {
+        currentDepartment: params.targetDepartment,
+        ticketNo: nextTicketNo,
+        status: "pending",
+        notes: params.notes,
+        assignedSpecialistId: params.assignedSpecialistId || null,
+        assignedSpecialistName: params.assignedSpecialistName || null,
+        specialistTitle: params.specialistTitle || null,
+        consultationRoom: params.consultationRoom || null,
+        targetClinic: params.targetClinic || null,
+        priority: params.priority || "normal",
+        dispatchedAt: new Date().toISOString()
+      });
+
+      const practitionerLabel = params.assignedSpecialistName ? ` -> ${params.assignedSpecialistName} (${params.consultationRoom || "Assigned Room"})` : "";
+      addLog(`Patient routed to ${getDeptLabel(params.targetDepartment)}${practitionerLabel} with Ticket #${nextTicketNo}`);
+      toast.success(
+        `Patient routed to ${getDeptLabel(params.targetDepartment)}${params.assignedSpecialistName ? ` • ${params.assignedSpecialistName}` : ""} (#${nextTicketNo})`,
+        "Encounter Dispatched"
+      );
     } catch (err) {
       console.error(err);
       toast.error("Failed to route patient ticket.", "Routing Error");
@@ -449,6 +522,26 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
                     {selectedTicket.phone && `Phone: ${selectedTicket.phone} • `}
                     {selectedTicket.service && `Intake Service: ${selectedTicket.service}`}
                   </p>
+                  {selectedTicket.assignedSpecialistName && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-1 bg-blue-50 text-blue-900 border border-blue-200 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-2xs">
+                        <Stethoscope className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Assigned: <strong>{selectedTicket.assignedSpecialistName}</strong></span>
+                        {selectedTicket.consultationRoom && (
+                          <span className="text-blue-600 font-normal">({selectedTicket.consultationRoom})</span>
+                        )}
+                      </span>
+                      {selectedTicket.priority && selectedTicket.priority !== "normal" && (
+                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-md ${
+                          selectedTicket.priority === "emergency"
+                            ? "bg-rose-100 text-rose-800 border border-rose-300"
+                            : "bg-amber-100 text-amber-800 border border-amber-300"
+                        }`}>
+                          {selectedTicket.priority}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -488,34 +581,45 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
 
                   {/* Nodes */}
                   {[
-                    { key: "reception", label: "1. Reception", icon: Building },
-                    { key: "triage", label: "2. Nurse Triage", icon: Heart },
-                    { key: "doctor", label: "3. Doctor Consult", icon: Stethoscope },
-                    { key: "diagnostics", label: "4. Diagnostics", icon: FlaskRound },
-                    { key: "pharmacy", label: "5. Pharmacy", icon: ShoppingCart },
-                    { key: "billing", label: "6. Billing & eTIMS", icon: CreditCard },
-                    { key: "discharge", label: "7. Gate Pass Exit", icon: ShieldCheck }
+                    { key: "reception", stationType: null, label: "1. Reception", icon: Building },
+                    { key: "triage", stationType: "triage" as TargetStationType, label: "2. Nurse Triage", icon: Heart },
+                    { key: "doctor", stationType: "doctor" as TargetStationType, label: "3. Doctor Consult", icon: Stethoscope },
+                    { key: "diagnostics", stationType: "diagnostics" as TargetStationType, label: "4. Diagnostics", icon: FlaskRound },
+                    { key: "pharmacy", stationType: "pharmacy" as TargetStationType, label: "5. Pharmacy", icon: ShoppingCart },
+                    { key: "billing", stationType: "billing" as TargetStationType, label: "6. Billing & eTIMS", icon: CreditCard },
+                    { key: "discharge", stationType: null, label: "7. Gate Pass Exit", icon: ShieldCheck }
                   ].map((step, idx) => {
                     const isPassed = journeyState.stepIndex > idx;
                     const isActive = journeyState.stepIndex === idx;
                     const Icon = step.icon;
 
                     return (
-                      <div key={step.key} className="flex flex-col items-center text-center space-y-1.5 z-10">
+                      <div
+                        key={step.key}
+                        onClick={() => {
+                          if (step.stationType) {
+                            openRoutingModal(step.stationType);
+                          }
+                        }}
+                        className={`flex flex-col items-center text-center space-y-1.5 z-10 ${
+                          step.stationType ? "cursor-pointer group" : ""
+                        }`}
+                        title={step.stationType ? `Click to dispatch patient to ${step.label}` : undefined}
+                      >
                         <div
                           className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all bg-white ${
                             isActive
                               ? "border-emerald-600 text-emerald-700 shadow-md ring-4 ring-emerald-100"
                               : isPassed
                               ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                              : "border-gray-300 text-gray-400"
+                              : "border-gray-300 text-gray-400 group-hover:border-emerald-400 group-hover:text-emerald-600"
                           }`}
                         >
                           {isPassed ? <Check className="w-5 h-5" /> : <Icon className="w-4 h-4" />}
                         </div>
                         <div>
                           <p className={`text-[10px] font-bold tracking-tight leading-tight ${
-                            isActive ? "text-emerald-800 font-extrabold" : isPassed ? "text-gray-800" : "text-gray-400"
+                            isActive ? "text-emerald-800 font-extrabold" : isPassed ? "text-gray-800" : "text-gray-400 group-hover:text-emerald-700"
                           }`}>
                             {step.label}
                           </p>
@@ -545,51 +649,51 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
                   <button
                     type="button"
                     disabled={routingInProgress !== null}
-                    onClick={() => handleRoutePatient("triage", "TRI", "Routed to Nurse Triage for vital signs and urgency check.")}
+                    onClick={() => openRoutingModal("triage")}
                     className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
                   >
                     <Heart className="w-3.5 h-3.5 text-rose-500" />
-                    <span>Route to Triage</span>
+                    <span>Route to Triage...</span>
                   </button>
 
                   <button
                     type="button"
                     disabled={routingInProgress !== null}
-                    onClick={() => handleRoutePatient("doctor", "DOC", "Routed to Doctor Consultation room.")}
+                    onClick={() => openRoutingModal("doctor")}
                     className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
                   >
                     <Stethoscope className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Route to Doctor</span>
+                    <span>Route to Doctor...</span>
                   </button>
 
                   <button
                     type="button"
                     disabled={routingInProgress !== null}
-                    onClick={() => handleRoutePatient("laboratory", "LAB", "Referred for Laboratory diagnostics and blood tests.")}
+                    onClick={() => openRoutingModal("diagnostics")}
                     className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
                   >
                     <FlaskRound className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Route to Diagnostics</span>
+                    <span>Route to Diagnostics...</span>
                   </button>
 
                   <button
                     type="button"
                     disabled={routingInProgress !== null}
-                    onClick={() => handleRoutePatient("pharmacy", "PHA", "Prescriptions queued for smart pharmacy batch match & dispensing.")}
+                    onClick={() => openRoutingModal("pharmacy")}
                     className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
                   >
                     <ShoppingCart className="w-3.5 h-3.5 text-orange-600" />
-                    <span>Route to Pharmacy</span>
+                    <span>Route to Pharmacy...</span>
                   </button>
 
                   <button
                     type="button"
                     disabled={routingInProgress !== null}
-                    onClick={() => handleRoutePatient("billing", "BIL", "Invoice and ledger reconciliation ready for cashier checkout.")}
+                    onClick={() => openRoutingModal("billing")}
                     className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
                   >
                     <CreditCard className="w-3.5 h-3.5 text-purple-600" />
-                    <span>Route to Billing</span>
+                    <span>Route to Billing...</span>
                   </button>
 
                   <button
@@ -746,18 +850,42 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
                   matchedPatient.visits.length > 0 &&
                   matchedPatient.visits[matchedPatient.visits.length - 1].referrals &&
                   matchedPatient.visits[matchedPatient.visits.length - 1].referrals!.length > 0 ? (
-                    <div className="text-xs space-y-1.5">
-                      {matchedPatient.visits[matchedPatient.visits.length - 1].referrals!.map((ref, idx) => (
-                        <div key={idx} className="p-2 bg-indigo-50/50 border border-indigo-100 rounded-lg">
-                          <div className="flex justify-between font-bold text-gray-900">
-                            <span>{ref.testName}</span>
-                            <span className="text-[10px] uppercase text-indigo-700">{ref.status}</span>
+                    <div className="text-xs space-y-2">
+                      {matchedPatient.visits[matchedPatient.visits.length - 1].referrals!.map((ref, idx) => {
+                        const isHaemogram =
+                          isHaemogramReport(ref.results || "") ||
+                          ref.testName.toLowerCase().includes("haemogram") ||
+                          ref.testName.toLowerCase().includes("cbc");
+
+                        return (
+                          <div key={idx} className="p-2.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl space-y-1.5">
+                            <div className="flex justify-between items-center font-bold text-gray-900">
+                              <span className="text-xs">{ref.testName}</span>
+                              <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded">
+                                {ref.status}
+                              </span>
+                            </div>
+                            {ref.results && (
+                              <div className="pt-1">
+                                {isHaemogram ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedHaemogramResult(ref.results || "")}
+                                    className="w-full py-1.5 px-3 bg-rose-700 hover:bg-rose-800 text-white rounded-lg font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span>Open Full Haemogram Clinical Document</span>
+                                  </button>
+                                ) : (
+                                  <p className="text-[11px] text-slate-700 bg-white p-2 rounded-lg border border-indigo-100 font-medium">
+                                    {ref.results}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          {ref.results && (
-                            <p className="text-[11px] text-gray-600 mt-1 italic">{ref.results}</p>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-xs text-gray-400 italic py-2">
@@ -856,6 +984,36 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
           )}
         </div>
       </div>
+      {/* Full Haemogram Document View Modal */}
+      {selectedHaemogramResult && (
+        <HaemogramDocument
+          mode="modal"
+          isOpen={Boolean(selectedHaemogramResult)}
+          onClose={() => setSelectedHaemogramResult(null)}
+          data={selectedHaemogramResult}
+          patientMeta={{
+            name: matchedPatient?.patientName || selectedTicket?.patientName,
+            age: matchedPatient?.age || 30,
+            gender: matchedPatient?.gender || "Adult",
+            patientNo: matchedPatient?.nationalId || matchedPatient?.patientNumber || selectedTicket?.ticketNo || "PAT-99",
+            facilityName: "AfyaCare Diagnostic & Laboratory Center",
+            doctor: "Attending Clinician"
+          }}
+        />
+      )}
+
+      {/* Station Routing Staff & Room Selection Modal */}
+      {routingModalOpen && selectedTicket && (
+        <StationRoutingPromptModal
+          isOpen={routingModalOpen}
+          onClose={() => setRoutingModalOpen(false)}
+          targetStation={modalTargetStation}
+          ticket={selectedTicket}
+          allEmployees={employees}
+          allQueueTickets={tickets}
+          onConfirmRoute={handleConfirmModalRoute}
+        />
+      )}
     </div>
   );
 }

@@ -14,6 +14,8 @@ import {
   Copy, 
   Check, 
   Printer, 
+  Download,
+  Loader2,
   Building2, 
   Mail, 
   Phone, 
@@ -24,6 +26,7 @@ import {
   Award,
   AlertCircle
 } from "lucide-react";
+import { printElement, downloadElementAsPdf } from "../lib/printUtils";
 
 interface StaffOnboardingModalProps {
   isOpen: boolean;
@@ -180,6 +183,10 @@ export default function StaffOnboardingModal({
     }
   };
 
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
   const copyCredentialsToClipboard = () => {
     if (!createdStaffResult) return;
     const credText = `🏥 ${hospitalName} - Staff Login Credentials
@@ -200,8 +207,48 @@ Please keep your security PIN confidential.`;
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handlePrintPasscard = () => {
-    window.print();
+  const handlePrintPasscard = async () => {
+    if (printing || !createdStaffResult) return;
+    setPrinting(true);
+    try {
+      await printElement("printable-staff-credential-passcard", {
+        title: `Staff_Passcard_${createdStaffResult.name.replace(/\s+/g, "_")}`,
+        paperSize: "a4"
+      });
+      toast.success("Staff credential card sent to printer.", "Print Triggered");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to print credential passcard.", "Print Error");
+    } finally {
+      setTimeout(() => setPrinting(false), 700);
+    }
+  };
+
+  const handleDownloadPasscardPdf = async () => {
+    if (downloading || !createdStaffResult) return;
+    setDownloading(true);
+    setDownloadSuccess(false);
+    try {
+      const fileName = `Staff_Passcard_${createdStaffResult.name.replace(/\s+/g, "_")}.pdf`;
+      const ok = await downloadElementAsPdf("printable-staff-credential-passcard", {
+        fileName,
+        title: `Staff Credential: ${createdStaffResult.name}`,
+        format: "a4",
+        scale: 2
+      });
+      if (ok) {
+        setDownloadSuccess(true);
+        toast.success("Credential passcard downloaded as PDF.", "Download Complete");
+        setTimeout(() => setDownloadSuccess(false), 3500);
+      } else {
+        toast.error("Could not export passcard PDF.", "Export Error");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error generating passcard PDF.", "Export Error");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleResetForNext = () => {
@@ -213,6 +260,9 @@ Please keep your security PIN confidential.`;
     setPin(Math.floor(1000 + Math.random() * 9000).toString());
     setCreatedStaffResult(null);
     setErrorMessage(null);
+    setPrinting(false);
+    setDownloading(false);
+    setDownloadSuccess(false);
   };
 
   return (
@@ -327,18 +377,58 @@ Please keep your security PIN confidential.`;
                 <button
                   type="button"
                   onClick={copyCredentialsToClipboard}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs"
+                  className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs"
                 >
                   {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                  <span>{copied ? "Copied to Clipboard!" : "Copy Login Credentials"}</span>
+                  <span>{copied ? "Copied!" : "Copy Login"}</span>
                 </button>
                 <button
                   type="button"
+                  id="btn-print-passcard"
+                  disabled={printing}
                   onClick={handlePrintPasscard}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs"
+                  className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-60"
                 >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Passcard Slip</span>
+                  {printing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Printing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Printer className="w-4 h-4" />
+                      <span>Print Card</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  id="btn-download-passcard-pdf"
+                  disabled={downloading}
+                  onClick={handleDownloadPasscardPdf}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs active:scale-95 disabled:opacity-60 ${
+                    downloadSuccess
+                      ? "bg-emerald-800 text-white"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  }`}
+                  title="Download credential passcard as PDF"
+                >
+                  {downloading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : downloadSuccess ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-300" />
+                      <span>PDF Saved</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Save PDF</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -21,6 +21,8 @@ import {
   Search, 
   Sparkles, 
   Printer, 
+  Download,
+  Loader2,
   AlertCircle,
   TrendingUp,
   Award,
@@ -38,6 +40,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import { printElement, downloadElementAsPdf } from "../lib/printUtils";
 import { toast, modernConfirm } from "../lib/promptService";
 
 export const DEPARTMENT_SPECIALTIES: Record<string, string[]> = {
@@ -159,6 +162,53 @@ export default function HumanResources() {
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [showStaffOnboardingModal, setShowStaffOnboardingModal] = useState(false);
   const [copiedStaffId, setCopiedStaffId] = useState<string | null>(null);
+  const [dossierPrinting, setDossierPrinting] = useState(false);
+  const [dossierDownloading, setDossierDownloading] = useState(false);
+  const [dossierDownloadSuccess, setDossierDownloadSuccess] = useState(false);
+
+  const handlePrintDossier = async () => {
+    if (dossierPrinting || !viewingEmployee) return;
+    setDossierPrinting(true);
+    try {
+      await printElement("dossier-print-section", {
+        title: `Staff_Dossier_${viewingEmployee.name.replace(/\s+/g, "_")}_${viewingEmployee.employeeId}`,
+        paperSize: "a4"
+      });
+      toast.success("Staff personnel dossier sent to printer.", "Print Triggered");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to print dossier.", "Print Error");
+    } finally {
+      setTimeout(() => setDossierPrinting(false), 700);
+    }
+  };
+
+  const handleDownloadDossierPdf = async () => {
+    if (dossierDownloading || !viewingEmployee) return;
+    setDossierDownloading(true);
+    setDossierDownloadSuccess(false);
+    try {
+      const fileName = `Staff_Dossier_${viewingEmployee.name.replace(/\s+/g, "_")}_${viewingEmployee.employeeId}.pdf`;
+      const ok = await downloadElementAsPdf("dossier-print-section", {
+        fileName,
+        title: `Staff Personnel Dossier: ${viewingEmployee.name}`,
+        format: "a4",
+        scale: 2
+      });
+      if (ok) {
+        setDossierDownloadSuccess(true);
+        toast.success("Staff dossier downloaded as multi-page PDF.", "Download Complete");
+        setTimeout(() => setDossierDownloadSuccess(false), 3500);
+      } else {
+        toast.error("Could not export PDF.", "Export Error");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error generating dossier PDF.", "Export Error");
+    } finally {
+      setDossierDownloading(false);
+    }
+  };
 
   // Status flags
   const [submitting, setSubmitting] = useState(false);
@@ -1244,12 +1294,55 @@ export default function HumanResources() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/10 cursor-pointer"
+                  type="button"
+                  id="btn-print-dossier"
+                  disabled={dossierPrinting}
+                  onClick={handlePrintDossier}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/10 cursor-pointer disabled:opacity-60"
                 >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Dossier</span>
+                  {dossierPrinting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Printing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Printer className="w-4 h-4" />
+                      <span>Print Dossier</span>
+                    </>
+                  )}
                 </button>
+
+                <button
+                  type="button"
+                  id="btn-download-dossier-pdf"
+                  disabled={dossierDownloading}
+                  onClick={handleDownloadDossierPdf}
+                  className={`px-3.5 py-2 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-60 ${
+                    dossierDownloadSuccess
+                      ? "bg-emerald-800 text-white"
+                      : "bg-blue-600 hover:bg-blue-500 text-white"
+                  }`}
+                  title="Download complete employee dossier as multi-page PDF"
+                >
+                  {dossierDownloading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Generating PDF...</span>
+                    </>
+                  ) : dossierDownloadSuccess ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>PDF Downloaded</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Download Full PDF</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   onClick={() => setViewingEmployee(null)}
                   className="p-2 hover:bg-gray-200 text-gray-500 hover:text-gray-800 rounded-xl transition-all cursor-pointer"
@@ -1262,13 +1355,13 @@ export default function HumanResources() {
             {/* Informative Pro-tip Note */}
             <div className="bg-emerald-50 text-emerald-950 px-6 py-2.5 text-xs font-semibold flex items-center gap-2 shrink-0">
               <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>PRO-TIP: To download this dossier as a PDF, select "Save as PDF" as the printer destination in the system dialog.</span>
+              <span>Full multi-page document export is supported. You can print directly or click "Download Full PDF" to save an offline copy.</span>
             </div>
 
             {/* Scrollable Printable Profile Sheet */}
             <div className="flex-1 overflow-y-auto p-8 bg-gray-100/50 flex justify-center">
               <div
-                id="print-section"
+                id="dossier-print-section"
                 className="w-full max-w-2xl bg-white p-8 md:p-12 shadow-sm border border-gray-200 rounded-2xl relative text-slate-900 font-sans"
               >
                 {/* Security Watermark for Screen View */}

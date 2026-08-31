@@ -387,7 +387,7 @@ export default function PatientCartPOSModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-xs font-sans animate-in fade-in duration-200">
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-xs font-sans animate-in fade-in duration-200">
         <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-5xl h-full max-h-[94vh] shadow-2xl flex flex-col overflow-hidden">
           {/* Top Header */}
           <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">

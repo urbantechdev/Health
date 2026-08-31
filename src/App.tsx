@@ -356,7 +356,7 @@ export default function App() {
     queue: true,
     doctor: true,
     pharmacy: true,
-    laboratory: false, // Default clinic doesn't have lab/radiology
+    laboratory: true, // Enabled for Tier Clinic & all facility tiers
     radiology: false,
     billing: true,
   });

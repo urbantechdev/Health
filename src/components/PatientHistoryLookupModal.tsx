@@ -3,6 +3,8 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { MedicalRecord, ClinicalVisit, Invoice, QueueTicket, SystemTicket } from "../types";
 import { normalizeString, normalizePhone } from "../lib/patientSyncService";
+import { printElement, downloadElementAsPdf } from "../lib/printUtils";
+import { toast } from "../lib/promptService";
 import {
   Search,
   User,
@@ -18,6 +20,8 @@ import {
   Stethoscope,
   Activity,
   Printer,
+  Download,
+  Loader2,
   ChevronRight,
   ChevronDown,
   X,
@@ -197,6 +201,10 @@ export default function PatientHistoryLookupModal({
   }, [selectedPatient]);
 
   // Active encounters for this patient
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
   const activeEncounters = useMemo(() => {
     if (!selectedPatient) return { queue: null, ticket: null };
     const cleanNatId = (selectedPatient.nationalId || "").trim();
@@ -214,8 +222,53 @@ export default function PatientHistoryLookupModal({
     return { queue: activeQ, ticket: activeT };
   }, [selectedPatient, queueTickets, systemTickets]);
 
-  const handlePrintHistory = () => {
-    window.print();
+  const getChartTitle = () => {
+    const pName = selectedPatient?.patientName ? selectedPatient.patientName.replace(/[^a-zA-Z0-9]/g, "_") : "Patient";
+    const natId = selectedPatient?.nationalId ? selectedPatient.nationalId.replace(/[^a-zA-Z0-9]/g, "_") : "Chart";
+    return `Patient_Medical_History_${pName}_${natId}`;
+  };
+
+  const handlePrintHistory = async () => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      await printElement("patient-history-printable-chart", {
+        title: getChartTitle(),
+        paperSize: "a4"
+      });
+      toast.success("Patient medical history sent to printer.", "Print Triggered");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to print patient history.", "Print Error");
+    } finally {
+      setTimeout(() => setPrinting(false), 700);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    setDownloadSuccess(false);
+    try {
+      const ok = await downloadElementAsPdf("patient-history-printable-chart", {
+        fileName: `${getChartTitle()}.pdf`,
+        title: getChartTitle(),
+        format: "a4",
+        scale: 2
+      });
+      if (ok) {
+        setDownloadSuccess(true);
+        toast.success("Full medical chart downloaded as multi-page PDF.", "Download Complete");
+        setTimeout(() => setDownloadSuccess(false), 3500);
+      } else {
+        toast.error("Could not export PDF.", "Export Error");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error generating medical chart PDF.", "Export Error");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -223,7 +276,7 @@ export default function PatientHistoryLookupModal({
   return (
     <div
       id="patient-history-lookup-modal-backdrop"
-      className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in"
+      className="fixed inset-0 z-[99999] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in"
     >
       <div
         id="patient-history-lookup-modal-container"
@@ -287,13 +340,56 @@ export default function PatientHistoryLookupModal({
 
             {selectedPatient && (
               <div className="flex items-center gap-2 shrink-0">
+                {/* Print Button */}
                 <button
                   type="button"
+                  id="btn-print-patient-history"
+                  disabled={printing}
                   onClick={handlePrintHistory}
-                  className="px-3.5 py-2.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  className="px-3.5 py-2.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-60"
                 >
-                  <Printer className="w-4 h-4 text-slate-500" />
-                  <span>Print Chart</span>
+                  {printing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+                      <span>Printing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Printer className="w-4 h-4 text-slate-500" />
+                      <span>Print Chart</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Multi-Page PDF Download Button */}
+                <button
+                  type="button"
+                  id="btn-download-patient-history-pdf"
+                  disabled={downloading}
+                  onClick={handleDownloadPdf}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-60 ${
+                    downloadSuccess
+                      ? "bg-emerald-700 text-white"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  }`}
+                  title="Download full patient medical chart as multi-page PDF"
+                >
+                  {downloading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving PDF...</span>
+                    </>
+                  ) : downloadSuccess ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                      <span>PDF Downloaded</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Download Full PDF</span>
+                    </>
+                  )}
                 </button>
 
                 {onSelectPatientForIntake && (
@@ -400,7 +496,7 @@ export default function PatientHistoryLookupModal({
               )}
             </div>
           ) : (
-            <div className="space-y-6">
+            <div id="patient-history-printable-chart" className="space-y-6">
               {/* PATIENT PROFILE HEADER CARD */}
               <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-100/40 to-transparent rounded-full -mr-16 -mt-16 pointer-events-none" />

@@ -36,6 +36,8 @@ import {
   Scissors
 } from "lucide-react";
 import { toast } from "../lib/promptService";
+import HaemogramDocument from "./HaemogramDocument";
+import { isHaemogramReport } from "../lib/haemogramParser";
 
 export interface PatientDailyHistoryStatementProps {
   tickets: QueueTicket[];
@@ -156,6 +158,7 @@ export default function PatientDailyHistoryStatement({
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedHaemogramView, setSelectedHaemogramView] = useState<{ result: string; patientName?: string; date?: string } | null>(null);
 
   // Active Target Date string or date matcher
   const activeDateRange = useMemo(() => {
@@ -1105,21 +1108,47 @@ export default function PatientDailyHistoryStatement({
                               <p className="text-xs text-slate-400 italic pt-2">No laboratory tests ordered.</p>
                             ) : (
                               <div className="space-y-2 pt-1">
-                                {visit.labTests.map((t, idx) => (
-                                  <div key={idx} className="p-2 bg-amber-50/50 border border-amber-200/60 rounded-xl text-xs">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-bold text-slate-900">{t.name}</span>
-                                      <span className="text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">
-                                        {t.status || "Ordered"}
-                                      </span>
+                                {visit.labTests.map((t, idx) => {
+                                  const isHaemogram =
+                                    isHaemogramReport(t.results || "") ||
+                                    t.name.toLowerCase().includes("haemogram") ||
+                                    t.name.toLowerCase().includes("cbc");
+
+                                  return (
+                                    <div key={idx} className="p-2.5 bg-amber-50/60 border border-amber-200/80 rounded-xl text-xs space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-bold text-slate-900">{t.name}</span>
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">
+                                          {t.status || "Ordered"}
+                                        </span>
+                                      </div>
+                                      {t.results && (
+                                        <div className="pt-1">
+                                          {isHaemogram ? (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setSelectedHaemogramView({
+                                                  result: t.results || "",
+                                                  patientName: visit.patientName,
+                                                  date: visit.visitDate
+                                                })
+                                              }
+                                              className="w-full py-1.5 px-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer"
+                                            >
+                                              <FileText className="w-3 h-3" />
+                                              <span>View Official Haemogram (CBC) Document</span>
+                                            </button>
+                                          ) : (
+                                            <p className="text-[11px] text-slate-700 bg-white p-2 rounded-lg border border-amber-100 font-medium leading-relaxed">
+                                              {t.results}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
-                                    {t.results && (
-                                      <p className="text-[10px] text-emerald-700 font-semibold mt-1">
-                                        Result: {t.results}
-                                      </p>
-                                    )}
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -1291,6 +1320,21 @@ export default function PatientDailyHistoryStatement({
           </div>
         )}
       </div>
+      {/* Full Haemogram Document View Modal */}
+      {selectedHaemogramView && (
+        <HaemogramDocument
+          mode="modal"
+          isOpen={Boolean(selectedHaemogramView)}
+          onClose={() => setSelectedHaemogramView(null)}
+          data={selectedHaemogramView.result}
+          patientMeta={{
+            name: selectedHaemogramView.patientName || "Patient Record",
+            date: selectedHaemogramView.date,
+            facilityName: "AfyaCare Diagnostic & Laboratory Center",
+            doctor: "Attending Medical Officer"
+          }}
+        />
+      )}
     </div>
   );
 }
