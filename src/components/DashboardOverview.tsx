@@ -81,6 +81,7 @@ export default function DashboardOverview({
   const [printDocOpen, setPrintDocOpen] = useState(false);
   const [printDocType, setPrintDocType] = useState<"receipt" | "statement">("statement");
   const [printReceiptData, setPrintReceiptData] = useState<Invoice | null>(null);
+  const [printPatientStatementData, setPrintPatientStatementData] = useState<any>(null);
 
   useEffect(() => {
     // 1. Queue Listener
@@ -181,9 +182,11 @@ export default function DashboardOverview({
   const handlePrintPatientDocument = (docType: "statement" | "receipt" | "sick_sheet", data: any) => {
     if (docType === "receipt" && data?.invoice) {
       setPrintReceiptData(data.invoice);
+      setPrintPatientStatementData(null);
       setPrintDocType("receipt");
     } else {
       setPrintReceiptData(data?.invoice || null);
+      setPrintPatientStatementData(data || null);
       setPrintDocType("statement");
     }
     setPrintDocOpen(true);
@@ -377,6 +380,7 @@ export default function DashboardOverview({
           onClose={() => setPrintDocOpen(false)}
           type={printDocType}
           receiptData={printReceiptData}
+          patientStatementData={printPatientStatementData}
         />
       </div>
     );
@@ -628,6 +632,7 @@ export default function DashboardOverview({
           onClose={() => setPrintDocOpen(false)}
           type={printDocType}
           receiptData={printReceiptData}
+          patientStatementData={printPatientStatementData}
         />
       </div>
     );
@@ -838,6 +843,7 @@ export default function DashboardOverview({
           onClose={() => setPrintDocOpen(false)}
           type={printDocType}
           receiptData={printReceiptData}
+          patientStatementData={printPatientStatementData}
         />
       </div>
     );
@@ -1114,6 +1120,7 @@ export default function DashboardOverview({
         onClose={() => setPrintDocOpen(false)}
         type={printDocType}
         receiptData={printReceiptData}
+        patientStatementData={printPatientStatementData}
       />
     </div>
   );

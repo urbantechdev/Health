@@ -20,13 +20,15 @@ import {
   PackagePlus,
   DollarSign,
   Smartphone,
-  Pill
+  Pill,
+  Plus
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { Html5Qrcode } from "html5-qrcode";
 import PharmacyInventoryModal from "./PharmacyInventoryModal";
 import PharmacyPOSCheckoutModal from "./PharmacyPOSCheckoutModal";
 import { toast, modernAlert } from "../lib/promptService";
+import { onHotkeyAction } from "../lib/hotkeyService";
 
 interface SmartPharmacyProps {
   toggles: any;
@@ -42,6 +44,8 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
   
   // Modals
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
+  const [inventoryInitialMode, setInventoryInitialMode] = useState<"list" | "create" | "wizard">("list");
+  const [inventoryInitialBarcode, setInventoryInitialBarcode] = useState<string>("");
   const [posCheckoutModalOpen, setPosCheckoutModalOpen] = useState(false);
 
   // Scannable search bar
@@ -51,7 +55,11 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
 
   // Real Barcode Scanner states
   const [isScanning, setIsScanning] = useState(false);
-  const [scanStatus, setScanStatus] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [scanStatus, setScanStatus] = useState<{ 
+    type: "success" | "error" | "info"; 
+    message: string; 
+    unrecognizedCode?: string;
+  } | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastLoadedRef = useRef<string | null>(null);
@@ -135,6 +143,46 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
       }
     }
   }, [selectedPrescriptionId, activePrescriptions, patients, medications]);
+
+  // Hotkey Action Dispatch Subscriptions
+  useEffect(() => {
+    const unsubFocus = onHotkeyAction("focus-barcode-search", () => {
+      const laserInput = document.getElementById("pos-laser-barcode-input") as HTMLInputElement;
+      if (laserInput) {
+        laserInput.focus();
+        laserInput.select();
+        toast.info("Barcode Scanner Ready (F2)", "Scanner Active");
+      }
+    });
+
+    const unsubCheckout = onHotkeyAction("pos-quick-checkout", () => {
+      if (cart.length > 0) {
+        setPosCheckoutModalOpen(true);
+      } else {
+        toast.warning("Cannot checkout: Dispensing register is empty. Scan or select medications first.", "Cart Empty");
+      }
+    });
+
+    const unsubWizard = onHotkeyAction("open-barcode-inventory-wizard", () => {
+      setInventoryInitialMode("wizard");
+      setInventoryInitialBarcode("");
+      setInventoryModalOpen(true);
+    });
+
+    const unsubClear = onHotkeyAction("clear-pos-cart", () => {
+      if (cart.length > 0) {
+        setCart([]);
+        toast.info("Dispensing register cart cleared.", "Cart Cleared (F8)");
+      }
+    });
+
+    return () => {
+      unsubFocus();
+      unsubCheckout();
+      unsubWizard();
+      unsubClear();
+    };
+  }, [cart]);
 
   const addToCart = (med: Medication, quantity: number = 1) => {
     if (med.quantity <= 0) {
@@ -375,14 +423,15 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
     } else {
       setScanStatus({
         type: "error",
-        message: `⚠️ Unrecognized Barcode: "${cleanCode}". Try one of the test codes listed below.`,
+        message: `⚠️ Unrecognized Barcode: "${cleanCode}".`,
+        unrecognizedCode: cleanCode,
       });
     }
 
-    // Auto-clear notification after 4 seconds
+    // Auto-clear notification after 6 seconds
     setTimeout(() => {
       setScanStatus(null);
-    }, 4000);
+    }, 6000);
   };
 
   const handleKeyboardGunScanSubmit = (e: React.FormEvent) => {
@@ -459,11 +508,31 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
           <button
             id="btn-open-drug-inventory"
             type="button"
-            onClick={() => setInventoryModalOpen(true)}
+            onClick={() => {
+              setInventoryInitialMode("list");
+              setInventoryInitialBarcode("");
+              setInventoryModalOpen(true);
+            }}
             className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
           >
             <Pill className="w-4 h-4 text-teal-300" />
             <span>Drug Inventory Database</span>
+          </button>
+
+          <button
+            id="btn-open-barcode-inventory-wizard-top"
+            type="button"
+            onClick={() => {
+              setInventoryInitialMode("wizard");
+              setInventoryInitialBarcode("");
+              setInventoryModalOpen(true);
+            }}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            title="Scan barcode with camera to onboard new medication step-by-step [F9]"
+          >
+            <Camera className="w-4 h-4 text-emerald-200" />
+            <span>+ Scan & Add with Camera</span>
+            <kbd className="px-1.5 py-0.2 bg-emerald-800 text-emerald-100 rounded text-[9px] font-mono font-bold">F9</kbd>
           </button>
 
           <div className="flex items-center gap-1.5">
@@ -498,12 +567,29 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
         <div className="lg:col-span-7 space-y-4 pr-0 lg:pr-2 lg:border-r border-gray-100">
           {/* Scan feedback status banner */}
           {scanStatus && (
-            <div className={`p-3 rounded-xl text-xs font-bold border transition-all ${
+            <div className={`p-3.5 rounded-2xl text-xs font-bold border transition-all ${
               scanStatus.type === "success" 
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
-                : "bg-rose-50 text-rose-800 border-rose-200"
-            } flex items-center justify-between`}>
-              <span>{scanStatus.message}</span>
+                ? "bg-emerald-50 text-emerald-900 border-emerald-200 shadow-xs" 
+                : "bg-rose-50 text-rose-900 border-rose-200 shadow-xs"
+            } flex flex-wrap items-center justify-between gap-2`}>
+              <div className="flex items-center gap-2">
+                <span>{scanStatus.message}</span>
+                {scanStatus.unrecognizedCode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInventoryInitialMode("wizard");
+                      setInventoryInitialBarcode(scanStatus.unrecognizedCode || "");
+                      setInventoryModalOpen(true);
+                      setScanStatus(null);
+                    }}
+                    className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-black cursor-pointer shadow-xs transition-all flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Register to Inventory Wizard</span>
+                  </button>
+                )}
+              </div>
               <button onClick={() => setScanStatus(null)} className="p-1 hover:bg-black/5 rounded">
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -611,13 +697,15 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
               <div className="relative flex-1">
                 <Barcode className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                 <input
+                  id="pos-laser-barcode-input"
                   type="text"
-                  placeholder="Scan batch/laser code..."
+                  placeholder="Scan barcode [F2]..."
                   value={keyboardScanInput}
                   onChange={(e) => setKeyboardScanInput(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 border border-orange-200 bg-orange-50/10 focus:bg-white rounded-xl text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                  title="Scan with handheld laser barcode gun or type batch code and press Enter"
+                  className="w-full pl-10 pr-10 py-2 border border-orange-200 bg-orange-50/10 focus:bg-white rounded-xl text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  title="Scan with handheld laser barcode gun or type batch code and press Enter (Shortcut: F2)"
                 />
+                <kbd className="absolute right-2 top-2.5 px-1.5 py-0.5 bg-orange-100 text-orange-800 rounded text-[9px] font-mono font-bold">F2</kbd>
               </div>
               <button
                 type="submit"
@@ -744,10 +832,24 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
         {/* POS Cart Summary */}
         <div className="lg:col-span-5 flex flex-col justify-between border border-gray-150 rounded-2xl p-5 bg-gray-50/40">
           <div className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
-              <ShoppingCart className="w-4.5 h-4.5 text-gray-400" />
-              <span>Checkout Dispensing Register</span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                <ShoppingCart className="w-4.5 h-4.5 text-gray-400" />
+                <span>Checkout Dispensing Register</span>
+              </h3>
+              {cart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCart([])}
+                  className="px-2 py-0.5 text-[10px] font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-1 cursor-pointer"
+                  title="Clear dispensing cart [F8]"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear Cart</span>
+                  <kbd className="px-1 py-0.2 bg-rose-100 rounded text-[8px] font-mono">F8</kbd>
+                </button>
+              )}
+            </div>
 
             {selectedPrescriptionId && (
               <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl text-xs text-emerald-950 space-y-3 shadow-2xs">
@@ -958,6 +1060,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
               >
                 <Smartphone className="w-4.5 h-4.5" />
                 <span>Proceed to POS Checkout (M-Pesa / Cash)</span>
+                <kbd className="px-1.5 py-0.5 bg-emerald-800 text-emerald-100 rounded text-[10px] font-mono">F4</kbd>
               </button>
 
               <button
@@ -978,9 +1081,16 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
       {/* Drug Inventory Database Modal (Exclusive Authority) */}
       <PharmacyInventoryModal
         isOpen={inventoryModalOpen}
-        onClose={() => setInventoryModalOpen(false)}
+        onClose={() => {
+          setInventoryModalOpen(false);
+          setInventoryInitialMode("list");
+          setInventoryInitialBarcode("");
+        }}
         medications={medications}
         userRole={userRole}
+        initialMode={inventoryInitialMode}
+        initialBarcode={inventoryInitialBarcode}
+        onFeedToPOS={(med, qty) => addToCart(med, qty || 1)}
       />
 
       {/* Integrated Pharmacy POS Checkout Modal (M-Pesa / Cash) */}

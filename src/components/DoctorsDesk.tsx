@@ -38,7 +38,9 @@ import {
   FlaskConical,
   Droplets,
   Zap,
-  FilePlus
+  FilePlus,
+  Pill,
+  Trash2
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import KenyanHospitalFormsModal, { KenyanFormType, COMMON_ICD10_KENYA } from "./KenyanHospitalFormsModal";

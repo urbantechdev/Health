@@ -8,6 +8,7 @@ export interface PrintOptions {
   paperSize?: "a4" | "a5" | "letter" | "receipt80mm";
   margins?: string; // e.g. "8mm"
   customStyles?: string;
+  delayMs?: number;
 }
 
 export interface PdfOptions {
@@ -18,13 +19,13 @@ export interface PdfOptions {
   marginMm?: number;
   scale?: number;
   quality?: number;
+  addPageNumbers?: boolean;
 }
 
 /**
- * Universal print handler that works reliably inside iframes, modals, and embedded windows.
- * Extracts the target element into a dedicated print container or isolated iframe,
- * ensures full vertical height (no clipping from modal overflow), applies all stylesheets,
- * and triggers the system print dialog.
+ * Universal print handler that works reliably in all browsers, modals, and inside iframe sandboxes.
+ * Ensures full vertical document height (no clipping from scrollable modal overflow),
+ * preserves exact colors/fonts, and triggers the print dialog cleanly.
  */
 export async function printElement(
   target: string | HTMLElement,
@@ -33,8 +34,12 @@ export async function printElement(
   const element = typeof target === "string" ? document.getElementById(target) : target;
   if (!element) {
     console.error(`[printElement] Target element not found:`, target);
-    window.print();
-    return false;
+    try {
+      window.print();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   const {
@@ -42,26 +47,27 @@ export async function printElement(
     pageOrientation = "portrait",
     paperSize = "a4",
     margins = "8mm",
-    customStyles = ""
+    customStyles = "",
+    delayMs = 350
   } = options;
 
-  // Gather all style and link tags from current document
+  // Determine page size CSS
+  let pageSizeCss = "A4 portrait";
+  if (paperSize === "receipt80mm") {
+    pageSizeCss = "80mm auto";
+  } else if (paperSize === "a5") {
+    pageSizeCss = `A5 ${pageOrientation}`;
+  } else if (pageOrientation === "landscape") {
+    pageSizeCss = "A4 landscape";
+  }
+
+  // Gather existing stylesheets from the document
   const headStyles: string[] = [];
   document.querySelectorAll("style, link[rel='stylesheet']").forEach((node) => {
     headStyles.push(node.outerHTML);
   });
 
-  // Calculate page size rule
-  let pageSizeRule = "A4 portrait";
-  if (paperSize === "receipt80mm") {
-    pageSizeRule = "80mm auto";
-  } else if (paperSize === "a5") {
-    pageSizeRule = `A5 ${pageOrientation}`;
-  } else if (pageOrientation === "landscape") {
-    pageSizeRule = "A4 landscape";
-  }
-
-  const printDocumentHtml = `
+  const fullPrintHtml = `
     <!DOCTYPE html>
     <html lang="en">
       <head>
@@ -74,11 +80,11 @@ export async function printElement(
         ${headStyles.join("\n")}
         <style>
           @page {
-            size: ${pageSizeRule};
+            size: ${pageSizeCss};
             margin: ${margins};
           }
           *, *::before, *::after {
-            box-sizing: border-box;
+            box-sizing: border-box !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
@@ -88,9 +94,10 @@ export async function printElement(
             color: #0f172a !important;
             margin: 0 !important;
             padding: 0 !important;
-            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
-            overflow: visible !important;
+            width: 100% !important;
             height: auto !important;
+            overflow: visible !important;
+            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
           }
           .no-print, [data-no-print="true"], button, [role="button"] {
             display: none !important;
@@ -105,8 +112,7 @@ export async function printElement(
             overflow: visible !important;
             height: auto !important;
           }
-          /* Page break avoidance for critical hospital document blocks */
-          table, tr, .avoid-break, .page-break-inside-avoid, fieldset, .print-card, img, svg {
+          table, tr, td, th, .avoid-break, .page-break-inside-avoid, fieldset, .print-card, img, svg, .signature-box {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
@@ -125,76 +131,122 @@ export async function printElement(
     </html>
   `;
 
-  // Create an isolated hidden iframe for printing
-  const iframeId = "print-utility-iframe";
-  let printIframe = document.getElementById(iframeId) as HTMLIFrameElement | null;
-  if (printIframe) {
-    printIframe.remove();
-  }
-
-  printIframe = document.createElement("iframe");
-  printIframe.id = iframeId;
-  printIframe.style.position = "fixed";
-  printIframe.style.right = "0";
-  printIframe.style.bottom = "0";
-  printIframe.style.width = "0px";
-  printIframe.style.height = "0px";
-  printIframe.style.border = "none";
-  printIframe.style.visibility = "hidden";
-  printIframe.style.zIndex = "-9999";
-  document.body.appendChild(printIframe);
-
+  // Method 1: Print via dedicated full-dimension hidden iframe
   try {
+    const iframeId = "print-utility-isolated-frame";
+    let printIframe = document.getElementById(iframeId) as HTMLIFrameElement | null;
+    if (printIframe) {
+      printIframe.remove();
+    }
+
+    printIframe = document.createElement("iframe");
+    printIframe.id = iframeId;
+    printIframe.style.position = "fixed";
+    printIframe.style.top = "0";
+    printIframe.style.left = "0";
+    printIframe.style.width = "100%";
+    printIframe.style.height = "100%";
+    printIframe.style.border = "none";
+    printIframe.style.opacity = "0.001";
+    printIframe.style.pointerEvents = "none";
+    printIframe.style.zIndex = "-999";
+    document.body.appendChild(printIframe);
+
     const iframeDoc = printIframe.contentWindow?.document || printIframe.contentDocument;
     if (!iframeDoc || !printIframe.contentWindow) {
       throw new Error("Cannot access print iframe document");
     }
 
     iframeDoc.open();
-    iframeDoc.write(printDocumentHtml);
+    iframeDoc.write(fullPrintHtml);
     iframeDoc.close();
 
-    // Allow images and fonts in the iframe to render
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // Wait for fonts and images to load in the iframe
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
 
-    // Focus and execute print
+    // Trigger focus and print
     printIframe.contentWindow.focus();
     printIframe.contentWindow.print();
 
-    // Schedule cleanup
+    // Remove iframe after print dialog completes
     setTimeout(() => {
       if (printIframe && printIframe.parentNode) {
-        printIframe.parentNode.removeChild(printIframe);
+        printIframe.remove();
       }
-    }, 2500);
+    }, 4000);
 
     return true;
   } catch (err) {
-    console.warn("[printElement] Iframe print fallback triggered:", err);
+    console.warn("[printElement] Iframe print failed, falling back to direct DOM isolation:", err);
 
-    // Fallback: create a temporary printable container in the current page
-    const tempContainer = document.createElement("div");
-    tempContainer.id = "print-fallback-container";
-    tempContainer.className = "fixed inset-0 bg-white z-[999999] p-8 overflow-visible";
-    tempContainer.innerHTML = element.innerHTML;
-    document.body.appendChild(tempContainer);
+    // Method 2 (Fallback): Direct Document Body Isolation
+    const originalDocTitle = document.title;
+    document.title = title;
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "visible";
-
-    window.print();
-
-    document.body.style.overflow = originalOverflow;
-    if (tempContainer.parentNode) {
-      tempContainer.parentNode.removeChild(tempContainer);
+    const portalId = "print-active-portal";
+    let portal = document.getElementById(portalId);
+    if (portal) {
+      portal.remove();
     }
+
+    portal = document.createElement("div");
+    portal.id = portalId;
+    portal.className = "printable-document-root";
+    portal.style.position = "absolute";
+    portal.style.top = "0";
+    portal.style.left = "0";
+    portal.style.width = "100%";
+    portal.style.backgroundColor = "#ffffff";
+    portal.style.zIndex = "999999";
+    portal.innerHTML = element.innerHTML;
+
+    // Strip buttons from portal clone
+    portal.querySelectorAll("button, [data-no-print='true'], .no-print, [role='button']").forEach((btn) => btn.remove());
+
+    document.body.appendChild(portal);
+    document.body.classList.add("printing-isolated");
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    try {
+      window.print();
+    } finally {
+      // Clean up after print
+      setTimeout(() => {
+        document.body.classList.remove("printing-isolated");
+        if (portal && portal.parentNode) {
+          portal.remove();
+        }
+        document.title = originalDocTitle;
+      }, 2500);
+    }
+
     return true;
   }
 }
 
 /**
- * Downloads any DOM element as a high-definition, multi-page PDF.
- * Slices long hospital documents across clean A4 pages without truncation or cut-offs.
+ * Accurately estimates how many A4 pages a DOM element will occupy.
+ */
+export function estimatePageCount(
+  target: string | HTMLElement,
+  format: "a4" | "letter" | "a5" = "a4",
+  orientation: "portrait" | "landscape" = "portrait"
+): number {
+  const element = typeof target === "string" ? document.getElementById(target) : target;
+  if (!element) return 1;
+
+  const standardA4HeightPx = orientation === "portrait" ? 1123 : 794;
+  const elementHeightPx = Math.max(element.scrollHeight, element.offsetHeight, element.clientHeight);
+
+  if (elementHeightPx <= 0) return 1;
+  return Math.max(1, Math.ceil(elementHeightPx / standardA4HeightPx));
+}
+
+/**
+ * Downloads any DOM element as a high-definition, multi-page PDF document.
+ * Slices multi-page hospital documents cleanly across A4 pages without truncation or cut-offs,
+ * and attaches clear page numbering and official document metadata.
  */
 export async function downloadElementAsPdf(
   target: string | HTMLElement,
@@ -211,59 +263,93 @@ export async function downloadElementAsPdf(
     title = "Hospital Medical Document",
     orientation = "portrait",
     format = "a4",
-    marginMm = 10,
-    scale = 2
+    marginMm = 8,
+    scale = 2,
+    addPageNumbers = true
   } = options;
 
-  // Clone element to a clean, isolated container without scroll/height constraints
+  // Clone element to a completely isolated, unconstrained measurement container
   const clone = element.cloneNode(true) as HTMLElement;
-  
-  // Remove interactive elements and buttons from the clone
+
+  // Remove interactive buttons and print exclusions from clone
   clone.querySelectorAll("button, [data-no-print='true'], .no-print, [role='button']").forEach((el) => {
     el.remove();
   });
+
+  // Ensure inner scrollbars or max-height constraints are completely stripped on clone
+  clone.style.maxHeight = "none";
+  clone.style.height = "auto";
+  clone.style.overflow = "visible";
+  clone.querySelectorAll("*").forEach((child) => {
+    const htmlChild = child as HTMLElement;
+    if (htmlChild.style) {
+      if (htmlChild.style.overflow && htmlChild.style.overflow !== "visible") {
+        htmlChild.style.overflow = "visible";
+      }
+      if (htmlChild.style.maxHeight) {
+        htmlChild.style.maxHeight = "none";
+      }
+    }
+  });
+
+  const targetWidthPx = orientation === "portrait" ? 794 : 1123; // Standard 96 DPI A4 representation
 
   const wrapper = document.createElement("div");
   wrapper.style.position = "fixed";
   wrapper.style.left = "-99999px";
   wrapper.style.top = "0";
-  wrapper.style.width = orientation === "portrait" ? "794px" : "1123px"; // Standard 96 DPI A4 width
+  wrapper.style.width = `${targetWidthPx}px`;
   wrapper.style.background = "#ffffff";
   wrapper.style.color = "#0f172a";
-  wrapper.style.padding = "24px";
+  wrapper.style.padding = "20px";
   wrapper.style.margin = "0";
   wrapper.style.boxSizing = "border-box";
   wrapper.style.zIndex = "-99999";
   wrapper.style.overflow = "visible";
+  wrapper.style.fontFamily = "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif";
   wrapper.appendChild(clone);
   document.body.appendChild(wrapper);
 
   try {
-    // Generate high-resolution canvas with html2canvas
+    // Generate high-definition canvas using html2canvas
     const canvas = await html2canvas(wrapper, {
-      scale: scale,
+      scale: Math.min(scale, 2.5),
       useCORS: true,
       allowTaint: true,
       logging: false,
       backgroundColor: "#ffffff",
-      windowWidth: orientation === "portrait" ? 794 : 1123
+      windowWidth: targetWidthPx,
+      scrollX: 0,
+      scrollY: 0
     });
 
-    // Clean up temporary DOM wrapper
-    wrapper.remove();
+    // Remove temporary DOM wrapper
+    if (wrapper.parentNode) {
+      wrapper.remove();
+    }
 
-    // A4 dimensions in millimeters
-    const pdfPageWidth = orientation === "portrait" ? 210 : 297;
-    const pdfPageHeight = orientation === "portrait" ? 297 : 210;
-    
-    // Printable content area inside margins
+    // Page dimensions in millimeters
+    let pdfPageWidth = 210;
+    let pdfPageHeight = 297;
+    if (format === "a5") {
+      pdfPageWidth = orientation === "portrait" ? 148 : 210;
+      pdfPageHeight = orientation === "portrait" ? 210 : 148;
+    } else if (format === "letter") {
+      pdfPageWidth = orientation === "portrait" ? 215.9 : 279.4;
+      pdfPageHeight = orientation === "portrait" ? 279.4 : 215.9;
+    } else {
+      pdfPageWidth = orientation === "portrait" ? 210 : 297;
+      pdfPageHeight = orientation === "portrait" ? 297 : 210;
+    }
+
+    // Printable content bounding box
     const contentWidthMm = pdfPageWidth - marginMm * 2;
     const contentHeightMm = pdfPageHeight - marginMm * 2;
 
     const imgWidthPx = canvas.width;
     const imgHeightPx = canvas.height;
 
-    // Calculate total height in PDF mm based on aspect ratio
+    // Total height in PDF millimeters
     const totalPdfHeightMm = (imgHeightPx * contentWidthMm) / imgWidthPx;
 
     const pdf = new jsPDF({
@@ -274,14 +360,14 @@ export async function downloadElementAsPdf(
 
     pdf.setProperties({
       title: title,
-      subject: "Hospital Clinical Records & Invoices",
-      author: "HMS NextGen e-Health System",
-      creator: "HMS Hospital Management Suite"
+      subject: "Hospital Medical Records, Invoices & Clinical Documentation",
+      author: "NextGen Hospital Management System",
+      creator: "HMIS Health Suite"
     });
 
-    // If total document fits on one page (with a small margin tolerance)
+    // Case 1: Fits comfortably within a single page
     if (totalPdfHeightMm <= contentHeightMm) {
-      const imgData = canvas.toDataURL("image/png", 0.98);
+      const imgData = canvas.toDataURL("image/png", 0.95);
       pdf.addImage(
         imgData,
         "PNG",
@@ -292,9 +378,19 @@ export async function downloadElementAsPdf(
         undefined,
         "FAST"
       );
+
+      if (addPageNumbers) {
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(148, 163, 184);
+        pdf.text(
+          `Page 1 of 1 • ${title} • Certified System Record`,
+          pdfPageWidth / 2,
+          pdfPageHeight - 4,
+          { align: "center" }
+        );
+      }
     } else {
-      // Multi-Page Slicing Algorithm
-      // Calculate how many canvas pixels correspond to one PDF page content height
+      // Case 2: Multi-Page Slicing
       const pageHeightPx = (contentHeightMm * imgWidthPx) / contentWidthMm;
       const totalPages = Math.ceil(imgHeightPx / pageHeightPx);
 
@@ -306,7 +402,7 @@ export async function downloadElementAsPdf(
         const sourceYPx = page * pageHeightPx;
         const currentSliceHeightPx = Math.min(pageHeightPx, imgHeightPx - sourceYPx);
 
-        // Create slice canvas for this page
+        // Render page slice onto individual canvas
         const pageCanvas = document.createElement("canvas");
         pageCanvas.width = imgWidthPx;
         pageCanvas.height = currentSliceHeightPx;
@@ -328,7 +424,7 @@ export async function downloadElementAsPdf(
           );
 
           const sliceHeightMm = (currentSliceHeightPx * contentWidthMm) / imgWidthPx;
-          const pageImgData = pageCanvas.toDataURL("image/png", 0.98);
+          const pageImgData = pageCanvas.toDataURL("image/png", 0.95);
 
           pdf.addImage(
             pageImgData,
@@ -341,26 +437,28 @@ export async function downloadElementAsPdf(
             "FAST"
           );
 
-          // Add subtle page number in footer
-          pdf.setFontSize(8);
-          pdf.setTextColor(148, 163, 184);
-          pdf.text(
-            `Page ${page + 1} of ${totalPages} • ${title}`,
-            pdfPageWidth / 2,
-            pdfPageHeight - 4,
-            { align: "center" }
-          );
+          // Add clean page numbering and document reference in footer
+          if (addPageNumbers) {
+            pdf.setFontSize(7.5);
+            pdf.setTextColor(148, 163, 184);
+            pdf.text(
+              `Page ${page + 1} of ${totalPages} • ${title} • Certified Electronic Record`,
+              pdfPageWidth / 2,
+              pdfPageHeight - 4,
+              { align: "center" }
+            );
+          }
         }
       }
     }
 
-    // Save and trigger file download
+    // Save and download PDF file
     const cleanFileName = fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`;
     pdf.save(cleanFileName);
     return true;
   } catch (error) {
-    console.error("[downloadElementAsPdf] Failed to generate PDF:", error);
-    if (wrapper.parentNode) {
+    console.error("[downloadElementAsPdf] Failed to generate PDF document:", error);
+    if (wrapper && wrapper.parentNode) {
       wrapper.remove();
     }
     return false;

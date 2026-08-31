@@ -32,6 +32,8 @@ import {
   PolicyClause
 } from "../constants/policyTermsContent";
 import { SystemRole, getRoleConfig } from "../constants/roles";
+import { printElement, downloadElementAsPdf } from "../lib/printUtils";
+import { Loader2 } from "lucide-react";
 
 interface SystemPolicyTermsModalProps {
   isOpen: boolean;
@@ -102,6 +104,10 @@ export default function SystemPolicyTermsModal({
     setAcknowledgedAt(timestamp);
   };
 
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
   const filterClauses = (clauses: PolicyClause[]) => {
     if (!searchQuery.trim()) return clauses;
     const q = searchQuery.toLowerCase();
@@ -116,8 +122,41 @@ export default function SystemPolicyTermsModal({
     );
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      await printElement("policy-printable-content", {
+        title: "Hospital_System_Policy_KDPA_HMIS_Terms_2026",
+        paperSize: "a4"
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTimeout(() => setPrinting(false), 800);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    setDownloadSuccess(false);
+    try {
+      const ok = await downloadElementAsPdf("policy-printable-content", {
+        fileName: `Hospital_System_Policy_KDPA_HMIS_Terms_${new Date().toISOString().slice(0, 10)}.pdf`,
+        title: "Hospital System Policy & KDPA Standards",
+        format: "a4",
+        scale: 2
+      });
+      if (ok) {
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const handleCopyLink = () => {
@@ -154,10 +193,23 @@ export default function SystemPolicyTermsModal({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="p-2 text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition-all cursor-pointer title"
-              title="Print / Save PDF of Policy Document"
+              disabled={printing}
+              className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+              title="Print Document (A4)"
             >
-              <Printer className="w-4 h-4" />
+              {printing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">Print</span>
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className={`px-3 py-1.5 text-xs font-bold text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
+                downloadSuccess ? "bg-emerald-800" : "bg-blue-600 hover:bg-blue-500"
+              }`}
+              title="Download Full Multi-Page PDF"
+            >
+              {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{downloadSuccess ? "Downloaded" : "PDF"}</span>
             </button>
             <button
               onClick={onClose}
@@ -233,7 +285,7 @@ export default function SystemPolicyTermsModal({
         </div>
 
         {/* Content Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-6">
+        <div id="policy-printable-content" className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-6">
 
           {/* ========================================================================= */}
           {/* TAB 1: DATA PROTECTION & PRIVACY POLICY (KDPA 2019) */}

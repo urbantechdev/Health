@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { SystemRole, getRoleConfig } from "../constants/roles";
 import { downloadReadmeFile } from "../lib/downloadReadme";
+import { onHotkeyAction } from "../lib/hotkeyService";
 
 interface DesktopBottomNavProps {
   activeTab: string;
@@ -59,6 +60,13 @@ export default function DesktopBottomNav({
 }: DesktopBottomNavProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const roleConfig = getRoleConfig(currentUserRole);
+
+  React.useEffect(() => {
+    const unsub = onHotkeyAction("toggle-shortcuts-help", () => {
+      setShowShortcuts((prev) => !prev);
+    });
+    return unsub;
+  }, []);
 
   const canAccessMpesa =
     roleConfig.canDispenseAndCheckout ||
@@ -122,14 +130,19 @@ export default function DesktopBottomNav({
   ];
 
   const keyboardShortcutsList = [
+    { key: "F1", desc: "Shortcuts Cheat Sheet" },
+    { key: "F2", desc: "Focus POS Barcode Gun / Search" },
+    { key: "F4", desc: "POS Quick Checkout Modal" },
+    { key: "F8", desc: "Clear POS Dispensing Cart" },
+    { key: "F9 / Alt+I", desc: "Barcode Inventory Wizard" },
     { key: "Alt + 1", desc: "Dashboard Overview" },
     { key: "Alt + 2", desc: "Reception Desk" },
     { key: "Alt + 3", desc: "Doctor Consultation" },
     { key: "Alt + 4", desc: "Lab & Diagnostics" },
-    { key: "Alt + 5", desc: "Pharmacy POS" },
-    { key: "Alt + 6", desc: "Split Billing & Claims" },
-    { key: "Alt + 7", desc: "Finance & Accounts" },
-    { key: "Alt + 8", desc: "Admin & Settings" },
+    { key: "Alt + 5 / P", desc: "Pharmacy POS" },
+    { key: "Alt + 6 / B", desc: "Split Billing & Claims" },
+    { key: "Alt + 7 / F", desc: "Finance & Accounts" },
+    { key: "Alt + 8 / A", desc: "Admin & Settings" },
     { key: "Alt + 9 / G", desc: "User Guide & Manual" },
     { key: "Alt + J", desc: "Patient Journey" },
     { key: "Alt + K", desc: "Patient Tickets" },

@@ -43,6 +43,8 @@ import {
 } from "lucide-react";
 import { downloadReadmeFile } from "../lib/downloadReadme";
 import { toast } from "../lib/promptService";
+import { printElement, downloadElementAsPdf } from "../lib/printUtils";
+import { Loader2 } from "lucide-react";
 
 interface UserGuideProps {
   onNavigateTab?: (tab: string) => void;
@@ -84,6 +86,9 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
     "faq": false,
   });
   const [copiedSectionId, setCopiedSectionId] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfSuccess, setPdfSuccess] = useState(false);
 
   const toggleSection = (id: string) => {
     setExpandedSections((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -111,6 +116,47 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
     setCopiedSectionId(section.id);
     toast.success(`Copied "${section.title}" guide to clipboard!`, "Guide Copied");
     setTimeout(() => setCopiedSectionId(null), 2500);
+  };
+
+  const handlePrintGuide = async () => {
+    if (printing) return;
+    setPrinting(true);
+    expandAll();
+    try {
+      await new Promise(r => setTimeout(r, 200));
+      await printElement("platform-user-guide", {
+        title: "AfyaCare_HMS_Operating_Manual_User_Guide",
+        paperSize: "a4"
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTimeout(() => setPrinting(false), 800);
+    }
+  };
+
+  const handleDownloadGuidePdf = async () => {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    setPdfSuccess(false);
+    expandAll();
+    try {
+      await new Promise(r => setTimeout(r, 250));
+      const ok = await downloadElementAsPdf("platform-user-guide", {
+        fileName: `AfyaCare_HMS_Platform_User_Guide_${new Date().toISOString().slice(0, 10)}.pdf`,
+        title: "AfyaCare HMS Platform User Guide",
+        format: "a4",
+        scale: 2
+      });
+      if (ok) {
+        setPdfSuccess(true);
+        setTimeout(() => setPdfSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   const guideSections: GuideSection[] = [
@@ -521,17 +567,28 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
               <span>Download README.md</span>
             </button>
 
-            {/* Print or Export Guide */}
+            {/* Print Guide Button */}
             <button
-              onClick={() => {
-                expandAll();
-                setTimeout(() => window.print(), 300);
-              }}
-              title="Print or Save User Guide as PDF"
-              className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-600 shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+              onClick={handlePrintGuide}
+              disabled={printing}
+              title="Print User Guide (A4 Layout)"
+              className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-600 shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-60"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print / Save PDF</span>
+              {printing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+              <span>{printing ? "Printing..." : "Print Guide"}</span>
+            </button>
+
+            {/* Download Multi-Page PDF Button */}
+            <button
+              onClick={handleDownloadGuidePdf}
+              disabled={downloadingPdf}
+              title="Download Full Multi-Page User Guide as PDF"
+              className={`flex-1 sm:flex-none px-4 py-2.5 text-white text-xs font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-60 ${
+                pdfSuccess ? "bg-emerald-800" : "bg-blue-600 hover:bg-blue-500"
+              }`}
+            >
+              {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              <span>{downloadingPdf ? "Exporting PDF..." : pdfSuccess ? "PDF Downloaded!" : "Download Full PDF"}</span>
             </button>
           </div>
         </div>

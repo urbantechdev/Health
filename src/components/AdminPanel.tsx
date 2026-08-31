@@ -73,6 +73,20 @@ const THEME_PALETTES = [
   { id: "teal", name: "Aquatic Ocean Teal", hex: "#0d9488" }
 ];
 
+const HEADER_THEMES = [
+  { id: "dark-slate", name: "Deep Slate & Green (Default)" },
+  { id: "emerald-dark", name: "Medical Emerald & Green" },
+  { id: "plain-yellow", name: "Plain Yellow (Hero)" },
+  { id: "gold-yellow", name: "Golden Yellow & Green" },
+  { id: "solid-pink", name: "Rose Pink & Green" },
+  { id: "sunset-orange", name: "Sunset Orange & Green" },
+  { id: "navy-dark", name: "Executive Navy & Green" },
+  { id: "midnight", name: "Midnight Charcoal & Green" },
+  { id: "teal-dark", name: "Ocean Teal & Green" },
+  { id: "royal-purple", name: "Royal Violet & Green" },
+  { id: "subtle-light", name: "Crisp Light & Green" }
+];
+
 interface AdminPanelProps {
   tenant: Tenant;
   onTenantChange: (tenant: Tenant) => void;
@@ -151,7 +165,8 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   const [customBrandNameInput, setCustomBrandNameInput] = React.useState(() => localStorage.getItem("platform_custom_brand_name") || "");
   const [selectedFont, setSelectedFont] = React.useState(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
   const [selectedThemeColor, setSelectedThemeColor] = React.useState(() => localStorage.getItem("platform_theme_color") || "emerald");
-  const [selectedBlockEdgeColor, setSelectedBlockEdgeColor] = React.useState(() => localStorage.getItem("platform_block_edge_color") || "yellow-blue-green");
+  const [selectedHeaderBg, setSelectedHeaderBg] = React.useState(() => localStorage.getItem("platform_header_bg") || "dark-slate");
+  const [selectedBlockEdgeColor, setSelectedBlockEdgeColor] = React.useState(() => localStorage.getItem("platform_block_edge_color") || "#059669");
 
   // System Users / Staff list from Firestore
   const [systemUsers, setSystemUsers] = React.useState<Employee[]>([]);
@@ -459,7 +474,8 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       setCustomBrandNameInput(localStorage.getItem("platform_custom_brand_name") || "");
       setSelectedFont(localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
       setSelectedThemeColor(localStorage.getItem("platform_theme_color") || "emerald");
-      setSelectedBlockEdgeColor(localStorage.getItem("platform_block_edge_color") || "yellow-blue-green");
+      setSelectedHeaderBg(localStorage.getItem("platform_header_bg") || "dark-slate");
+      setSelectedBlockEdgeColor(localStorage.getItem("platform_block_edge_color") || "#059669");
     };
 
     window.addEventListener("platform_font_size_changed", handleSync);
@@ -1668,8 +1684,31 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
             </div>
           </div>
 
-          {/* Block Right Edge Design Option */}
+          {/* Theme & Header Design Option */}
           <div className="pt-3 border-t border-gray-200/60 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Header Bar Color Theme</span>
+              </label>
+              <select
+                value={selectedHeaderBg}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedHeaderBg(val);
+                  updateBrandingSettings("platform_header_bg", val);
+                }}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-emerald-500"
+              >
+                {HEADER_THEMES.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[9px] text-gray-400">Controls the primary top header background gradient and aesthetics.</p>
+            </div>
+
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                 <Palette className="w-3.5 h-3.5 text-emerald-600" />
@@ -1684,9 +1723,9 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                 }}
                 className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-emerald-500"
               >
-                <option value="#eab308">🟡 Solid Yellow Gold (#eab308) [Default]</option>
+                <option value="#059669">🟢 Emerald Green (#059669) [Default]</option>
                 <option value="theme">✨ Matching Theme Accent (Dynamic Solid)</option>
-                <option value="#059669">🟢 Emerald Green (#059669)</option>
+                <option value="#eab308">🟡 Solid Yellow Gold (#eab308)</option>
                 <option value="#4f46e5">🔵 Corporate Indigo (#4f46e5)</option>
                 <option value="#0284c7">🌊 Ocean Cyan / Sky (#0284c7)</option>
                 <option value="#7c3aed">🟣 Royal Violet (#7c3aed)</option>

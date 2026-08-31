@@ -42,6 +42,7 @@ import { bootstrapCloudFirestore, ensureSuperAdminsExist } from "./lib/dbInit";
 import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "./lib/superAdmins";
 import { toast } from "./lib/promptService";
 import { downloadReadmeFile } from "./lib/downloadReadme";
+import { normalizeKeyboardEvent, dispatchHotkeyAction, onHotkeyAction, SYSTEM_HOTKEYS } from "./lib/hotkeyService";
 
 import {
   Building2,
@@ -99,7 +100,8 @@ import {
   BookOpen,
   FileDown,
   Download,
-  BookMarked
+  BookMarked,
+  Receipt
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -220,6 +222,28 @@ export const THEME_PALETTES: Record<string, { name: string; hex: string; colors:
 };
 
 const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClass: string; textClass: string; borderClass: string; pillClass: string; btnClass: string; accentClass: string; titleClass: string }> = {
+  "dark-slate": {
+    name: "Deep Slate & Green (Default)",
+    bgClass: "bg-slate-900",
+    fillClass: "fill-slate-900",
+    textClass: "text-slate-100",
+    borderClass: "border-slate-800",
+    pillClass: "bg-slate-800/90 backdrop-blur-md text-slate-100 border-emerald-500/40 shadow-xs",
+    btnClass: "bg-emerald-700/80 hover:bg-emerald-600 text-slate-100 border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
+    titleClass: "text-white",
+  },
+  "emerald-dark": {
+    name: "Medical Emerald & Green",
+    bgClass: "bg-emerald-950",
+    fillClass: "fill-emerald-950",
+    textClass: "text-emerald-100",
+    borderClass: "border-emerald-900",
+    pillClass: "bg-emerald-900/80 backdrop-blur-md text-emerald-100 border-emerald-500/40 shadow-xs",
+    btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
+    titleClass: "text-white",
+  },
   "plain-yellow": {
     name: "Plain Yellow (Hero)",
     bgClass: "bg-yellow-400",
@@ -232,7 +256,7 @@ const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClas
     titleClass: "text-slate-950 font-black",
   },
   "gold-yellow": {
-    name: "Plain Yellow (Hero)",
+    name: "Golden Yellow & Green",
     bgClass: "bg-yellow-400",
     fillClass: "fill-yellow-400",
     textClass: "text-slate-950",
@@ -243,15 +267,15 @@ const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClas
     titleClass: "text-slate-950 font-black",
   },
   "solid-pink": {
-    name: "Plain Yellow (Hero)",
-    bgClass: "bg-yellow-400",
-    fillClass: "fill-yellow-400",
-    textClass: "text-slate-950",
-    borderClass: "border-yellow-400",
-    pillClass: "bg-yellow-500/80 text-slate-950 border-yellow-600/40 shadow-xs font-bold",
-    btnClass: "bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-bold border border-yellow-600/40 shadow-xs",
-    accentClass: "text-slate-950",
-    titleClass: "text-slate-950 font-black",
+    name: "Rose Pink & Green",
+    bgClass: "bg-pink-900",
+    fillClass: "fill-pink-900",
+    textClass: "text-pink-100",
+    borderClass: "border-pink-800",
+    pillClass: "bg-pink-800/80 backdrop-blur-md text-pink-100 border-emerald-500/40 shadow-xs font-bold",
+    btnClass: "bg-emerald-700/80 hover:bg-emerald-600 text-pink-100 font-bold border border-emerald-500/60 shadow-xs",
+    accentClass: "text-emerald-400",
+    titleClass: "text-white font-black",
   },
   "sunset-orange": {
     name: "Sunset Orange & Green",
@@ -261,28 +285,6 @@ const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClas
     borderClass: "border-orange-800",
     pillClass: "bg-emerald-950/70 backdrop-blur-md text-emerald-100 border-emerald-600/60 shadow-xs",
     btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-emerald-50 border border-emerald-500/80 shadow-xs hover:border-emerald-400",
-    accentClass: "text-emerald-400",
-    titleClass: "text-white",
-  },
-  "dark-slate": {
-    name: "Deep Slate & Green",
-    bgClass: "bg-slate-900",
-    fillClass: "fill-slate-900",
-    textClass: "text-slate-100",
-    borderClass: "border-slate-800",
-    pillClass: "bg-slate-800/90 backdrop-blur-md text-slate-100 border-emerald-500/40 shadow-xs",
-    btnClass: "bg-emerald-700/80 hover:bg-emerald-600 text-slate-100 border border-emerald-500/60 shadow-xs",
-    accentClass: "text-emerald-400",
-    titleClass: "text-white",
-  },
-  "emerald-dark": {
-    name: "Medical Emerald",
-    bgClass: "bg-emerald-950",
-    fillClass: "fill-emerald-950",
-    textClass: "text-emerald-100",
-    borderClass: "border-emerald-900",
-    pillClass: "bg-emerald-900/80 backdrop-blur-md text-emerald-100 border-emerald-500/40 shadow-xs",
-    btnClass: "bg-emerald-800/80 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/60 shadow-xs",
     accentClass: "text-emerald-400",
     titleClass: "text-white",
   },
@@ -381,13 +383,13 @@ export default function App() {
 
   // Dynamic branding state values
   const DEFAULT_BRAND_LOGO = "https://i.pinimg.com/1200x/0d/21/0a/0d210ae7221bc218df223d59b16d2198.jpg";
-  const [headerBgStyle, setHeaderBgStyle] = useState<string>(() => localStorage.getItem("platform_header_bg") || "gold-yellow");
+  const [headerBgStyle, setHeaderBgStyle] = useState<string>(() => localStorage.getItem("platform_header_bg") || "dark-slate");
   const [brandLogoUrl, setBrandLogoUrl] = useState<string>(() => localStorage.getItem("platform_logo_url") || DEFAULT_BRAND_LOGO);
   const [brandFaviconUrl, setBrandFaviconUrl] = useState<string>(() => localStorage.getItem("platform_favicon_url") || "");
   const [brandCustomName, setBrandCustomName] = useState<string>(() => localStorage.getItem("platform_custom_brand_name") || "");
   const [brandFontId, setBrandFontId] = useState<string>(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
   const [brandThemeColor, setBrandThemeColor] = useState<string>(() => localStorage.getItem("platform_theme_color") || "emerald");
-  const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "#eab308");
+  const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "#059669");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Global M-Pesa, SHA & Logo Modal states
@@ -483,10 +485,10 @@ export default function App() {
       root.style.setProperty("--block-edge-width", "3px");
       root.style.setProperty("--block-edge-opacity", "0.3");
       root.style.setProperty("--block-edge-hover-opacity", "0.5");
-      if (brandBlockEdgeColor === "yellow-blue-green" || brandBlockEdgeColor === "yellow-blue-green-diag" || brandBlockEdgeColor === "yellow-blue-green-soft" || brandBlockEdgeColor === "yellow" || brandBlockEdgeColor === "#eab308" || !brandBlockEdgeColor) {
+      if (brandBlockEdgeColor === "yellow-blue-green" || brandBlockEdgeColor === "yellow-blue-green-diag" || brandBlockEdgeColor === "yellow-blue-green-soft" || brandBlockEdgeColor === "yellow" || brandBlockEdgeColor === "#eab308") {
         root.style.setProperty("--block-edge-gradient", "#eab308");
-      } else if (brandBlockEdgeColor === "theme") {
-        const themeHex = palette ? palette.colors["600"] : "#eab308";
+      } else if (brandBlockEdgeColor === "theme" || !brandBlockEdgeColor) {
+        const themeHex = palette ? palette.colors["600"] : "#059669";
         root.style.setProperty("--block-edge-gradient", themeHex);
       } else {
         root.style.setProperty("--block-edge-gradient", brandBlockEdgeColor);
@@ -828,39 +830,113 @@ export default function App() {
     };
   };
 
-  // Desktop Keyboard Shortcuts: Alt+1 to Alt+9 for rapid module switching
+  // Desktop Keyboard Shortcuts & Hotkey Dispatcher
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      // 1. Function Keys (F1..F12) work globally regardless of input focus
+      if (e.key === "F1") {
+        e.preventDefault();
+        dispatchHotkeyAction("toggle-shortcuts-help");
+        return;
+      }
+      if (e.key === "F2") {
+        e.preventDefault();
+        if (activeTab !== "pharmacy") {
+          const perm = checkTabPermission("pharmacy");
+          if (perm.allowed) setActiveTab("pharmacy");
+        }
+        dispatchHotkeyAction("focus-barcode-search");
+        return;
+      }
+      if (e.key === "F4") {
+        e.preventDefault();
+        dispatchHotkeyAction("pos-quick-checkout");
+        return;
+      }
+      if (e.key === "F8") {
+        e.preventDefault();
+        dispatchHotkeyAction("clear-pos-cart");
+        return;
+      }
+      if (e.key === "F9") {
+        e.preventDefault();
+        if (activeTab !== "pharmacy") {
+          const perm = checkTabPermission("pharmacy");
+          if (perm.allowed) {
+            setActiveTab("pharmacy");
+          } else {
+            toast.warning(perm.reason || "Access restricted to Pharmacy module.", "Permission Denied");
+            return;
+          }
+        }
+        dispatchHotkeyAction("open-barcode-inventory-wizard");
+        return;
+      }
+
+      // 2. Alt/Option + Key Navigation & Actions
+      const { hasAlt, normalizedKey } = normalizeKeyboardEvent(e);
+      if (hasAlt && !e.ctrlKey && !e.metaKey) {
+        // Special operational actions with Alt modifier
+        if (normalizedKey === "i") {
+          e.preventDefault();
+          if (activeTab !== "pharmacy") {
+            const perm = checkTabPermission("pharmacy");
+            if (perm.allowed) setActiveTab("pharmacy");
+          }
+          dispatchHotkeyAction("open-barcode-inventory-wizard");
+          return;
+        }
+
+        if (normalizedKey === "h") {
+          e.preventDefault();
+          dispatchHotkeyAction("toggle-shortcuts-help");
+          return;
+        }
+
+        if (normalizedKey === "c") {
+          e.preventDefault();
+          dispatchHotkeyAction("clear-pos-cart");
+          return;
+        }
+
+        // Direct tab navigation map
         const keyMap: Record<string, string> = {
           "1": "dashboard",
           "2": "reception",
           "3": "doctor",
           "4": "diagnostics",
           "5": "pharmacy",
+          "p": "pharmacy",
           "6": "billing",
+          "b": "billing",
           "7": "finance",
+          "f": "finance",
           "8": "admin",
+          "a": "admin",
           "9": "guide",
           "g": "guide",
-          "G": "guide",
           "j": "journey",
-          "J": "journey",
           "k": "tickets",
-          "K": "tickets",
           "q": "queue",
-          "Q": "queue",
         };
-        const targetTab = keyMap[e.key];
-        if (targetTab && checkTabPermission(targetTab).allowed) {
-          e.preventDefault();
-          setActiveTab(targetTab);
+
+        const targetTab = keyMap[normalizedKey];
+        if (targetTab) {
+          const perm = checkTabPermission(targetTab);
+          if (perm.allowed) {
+            e.preventDefault();
+            setActiveTab(targetTab);
+          } else {
+            e.preventDefault();
+            toast.warning(perm.reason || `Access to ${targetTab.toUpperCase()} is restricted for role ${currentSystemRole}.`, "Restricted Module");
+          }
         }
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentSystemRole, employees, simulatedUser]);
+  }, [currentSystemRole, employees, simulatedUser, activeTab]);
 
   const handleGoogleLogin = () => {
     setAuthError(null);
@@ -1288,7 +1364,7 @@ export default function App() {
     );
   }
 
-  const currentHeaderStyle = HEADER_BG_STYLES[headerBgStyle] || HEADER_BG_STYLES["gold-yellow"] || HEADER_BG_STYLES["solid-pink"];
+  const currentHeaderStyle = HEADER_BG_STYLES[headerBgStyle] || HEADER_BG_STYLES["dark-slate"] || HEADER_BG_STYLES["emerald-dark"];
 
   return (
     <div className="h-screen h-[100dvh] w-screen w-[100dvw] overflow-hidden bg-gray-100 flex flex-col text-gray-800 font-sans pb-16 md:pb-0 select-none antialiased">
@@ -1454,16 +1530,16 @@ export default function App() {
                 </button>
               )}
 
-              {/* Mobile Platform User Guide Button */}
+              {/* Mobile POS / Split Billing Button */}
               <button
-                id="btn-mobile-user-guide"
-                onClick={() => setActiveTab("guide")}
-                title="Platform User Guide & Operational Manual"
+                id="btn-mobile-pos-billing"
+                onClick={() => setActiveTab("billing")}
+                title="POS & Split Billing (Cash, M-Pesa, SHA/Insurance)"
                 className={`p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer relative ${
-                  activeTab === "guide" ? "bg-white/20 rounded-lg" : ""
+                  activeTab === "billing" ? "bg-white/20 rounded-lg" : ""
                 }`}
               >
-                <BookOpen className="w-5 h-5 text-white" />
+                <Receipt className="w-5 h-5 text-white" />
               </button>
 
               {/* Mobile Offline/Online Indicator - Large White Icon (No Background) */}

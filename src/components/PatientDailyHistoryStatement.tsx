@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { toast } from "../lib/promptService";
 import HaemogramDocument from "./HaemogramDocument";
+import PrintDocument from "./PrintDocument";
 import { isHaemogramReport } from "../lib/haemogramParser";
 
 export interface PatientDailyHistoryStatementProps {
@@ -159,6 +160,12 @@ export default function PatientDailyHistoryStatement({
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedHaemogramView, setSelectedHaemogramView] = useState<{ result: string; patientName?: string; date?: string } | null>(null);
+  const [localPrintDoc, setLocalPrintDoc] = useState<{
+    isOpen: boolean;
+    patientData: any;
+    visitData: any;
+    invoiceData: any;
+  } | null>(null);
 
   // Active Target Date string or date matcher
   const activeDateRange = useMemo(() => {
@@ -655,38 +662,45 @@ export default function PatientDailyHistoryStatement({
   };
 
   const handlePrintStatement = (visit: UnifiedDailyPatientVisit) => {
+    const docPayload = {
+      patient: visit.rawPatientRecord || {
+        patientName: visit.patientName,
+        nationalId: visit.nationalId,
+        phone: visit.phone,
+        age: visit.age,
+        gender: visit.gender
+      },
+      visit: {
+        date: visit.visitDate,
+        diagnosis: visit.diagnosis,
+        symptoms: visit.symptoms,
+        doctorName: visit.doctorName,
+        procedures: visit.procedures,
+        prescriptions: visit.prescriptions,
+        vitals: visit.triageVitals
+      },
+      invoice: visit.rawInvoice || {
+        id: visit.statement.invoiceNumber || `INV-${visit.id.slice(0, 6)}`,
+        patientName: visit.patientName,
+        nationalId: visit.nationalId,
+        items: visit.statement.items,
+        total: visit.statement.totalBilled,
+        paymentStatus: visit.statement.paymentStatus,
+        paymentMethod: visit.statement.paymentMethod,
+        kraCompliantInvoiceNo: visit.statement.kraInvoiceNo,
+        mpesaReceiptNumber: visit.statement.mpesaReceipt
+      }
+    };
+
     if (onPrintPatientDocument) {
-      onPrintPatientDocument("statement", {
-        patient: visit.rawPatientRecord || {
-          patientName: visit.patientName,
-          nationalId: visit.nationalId,
-          phone: visit.phone,
-          age: visit.age,
-          gender: visit.gender
-        },
-        visit: {
-          date: visit.visitDate,
-          diagnosis: visit.diagnosis,
-          symptoms: visit.symptoms,
-          doctorName: visit.doctorName,
-          procedures: visit.procedures,
-          prescriptions: visit.prescriptions,
-          vitals: visit.triageVitals
-        },
-        invoice: visit.rawInvoice || {
-          id: visit.statement.invoiceNumber || `INV-${visit.id.slice(0, 6)}`,
-          patientName: visit.patientName,
-          nationalId: visit.nationalId,
-          items: visit.statement.items,
-          total: visit.statement.totalBilled,
-          paymentStatus: visit.statement.paymentStatus,
-          paymentMethod: visit.statement.paymentMethod,
-          kraCompliantInvoiceNo: visit.statement.kraInvoiceNo,
-          mpesaReceiptNumber: visit.statement.mpesaReceipt
-        }
-      });
+      onPrintPatientDocument("statement", docPayload);
     } else {
-      window.print();
+      setLocalPrintDoc({
+        isOpen: true,
+        patientData: docPayload.patient,
+        visitData: docPayload.visit,
+        invoiceData: docPayload.invoice
+      });
     }
   };
 
@@ -1332,6 +1346,20 @@ export default function PatientDailyHistoryStatement({
             date: selectedHaemogramView.date,
             facilityName: "AfyaCare Diagnostic & Laboratory Center",
             doctor: "Attending Medical Officer"
+          }}
+        />
+      )}
+      {/* Local Print Document Modal Fallback */}
+      {localPrintDoc?.isOpen && (
+        <PrintDocument
+          isOpen={localPrintDoc.isOpen}
+          onClose={() => setLocalPrintDoc(null)}
+          type="patient_statement"
+          receiptData={localPrintDoc.invoiceData}
+          patientStatementData={{
+            patient: localPrintDoc.patientData,
+            visit: localPrintDoc.visitData,
+            invoice: localPrintDoc.invoiceData
           }}
         />
       )}
