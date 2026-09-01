@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Invoice, MedicalRecord, ClinicalVisit, PayrollRecord, ExpenseItem } from "../types";
 import {
   Printer,
@@ -20,6 +21,7 @@ import {
   Stethoscope
 } from "lucide-react";
 import { printElement, downloadElementAsPdf, estimatePageCount } from "../lib/printUtils";
+import DocumentLogo from "./DocumentLogo";
 
 export interface PrintDocumentProps {
   isOpen: boolean;
@@ -162,10 +164,17 @@ export default function PrintDocument({
   const taxAmount = Math.round(totalAmount * 0.16); // 16% VAT in Kenya
   const netAmount = totalAmount - taxAmount;
 
-  return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto font-sans">
-      {/* Modal Container */}
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 md:p-6 overflow-y-auto font-sans animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      {/* Popup Modal Container */}
+      <div className="relative bg-white rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.5)] border border-slate-200/80 w-full max-w-4xl flex flex-col max-h-[94vh] overflow-hidden animate-in zoom-in-95 duration-200">
         
         {/* Modal Header Bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50 shrink-0 gap-3">
@@ -308,7 +317,10 @@ export default function PrintDocument({
               className="w-full max-w-sm bg-stone-50 text-slate-900 border border-slate-300 p-5 rounded-xl shadow-xl font-mono text-xs space-y-4 my-auto relative overflow-hidden"
             >
               {/* Thermal receipt top header */}
-              <div className="text-center space-y-1 border-b border-dashed border-slate-400 pb-3">
+              <div className="text-center space-y-1.5 border-b border-dashed border-slate-400 pb-3">
+                <div className="flex justify-center mb-1">
+                  <DocumentLogo size="thermal" className="border-2 border-slate-400/80 shadow-xs" />
+                </div>
                 <div className="inline-flex items-center justify-center gap-1 font-sans font-black text-sm tracking-tight text-slate-950">
                   <ShieldCheck className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
                   <span>TASSIAHILL HOSPITAL</span>
@@ -353,10 +365,10 @@ export default function PrintDocument({
                   <span>ITEM DESCRIPTION</span>
                   <span>AMT (KES)</span>
                 </div>
-                {receiptData.items.map((item, idx) => (
+                {(receiptData.items || []).map((item, idx) => (
                   <div key={idx} className="flex justify-between text-[11px] leading-tight py-0.5">
-                    <span className="truncate max-w-[190px] text-slate-800">{item.description}</span>
-                    <span className="font-bold text-slate-950">KES {item.amount.toLocaleString()}.00</span>
+                    <span className="truncate max-w-[190px] text-slate-800">{item?.description || "Item"}</span>
+                    <span className="font-bold text-slate-950">KES {(Number(item?.amount) || 0).toLocaleString()}.00</span>
                   </div>
                 ))}
               </div>
@@ -439,9 +451,12 @@ export default function PrintDocument({
               className="w-full max-w-3xl bg-white p-5 sm:p-8 md:p-12 shadow-md border border-slate-200 rounded-2xl relative text-slate-900 font-sans space-y-8"
               style={{ minHeight: "297mm" }}
             >
-              {/* Security Watermark for Screen View */}
-              <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] select-none z-0">
-                <span className="text-6xl font-black rotate-45 text-slate-950">TASSIAHILL HOSPITAL</span>
+              {/* Security Watermark for Screen View & PDF */}
+              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-[0.035] select-none z-0">
+                <DocumentLogo size="watermark" border={false} className="grayscale" showFallbackIcon={false} />
+                <span className="text-5xl font-black rotate-[-25deg] text-slate-950 mt-4 tracking-widest uppercase">
+                  TASSIAHILL HOSPITAL
+                </span>
               </div>
 
               <div className="relative z-10 flex flex-col justify-between min-h-full space-y-8">
@@ -449,11 +464,14 @@ export default function PrintDocument({
                 {/* DOCUMENT TOP HEADER */}
                 <div className="border-b-2 border-slate-950 pb-6">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                      <h1 className="text-2xl font-black tracking-tight text-slate-950">TASSIAHILL HOSPITAL</h1>
-                      <p className="text-xs text-slate-500 font-semibold tracking-wide uppercase mt-1">Ministry of Health Reg: Reg No. ODPC-KE-2026</p>
-                      <p className="text-xs text-slate-500">Tassia Hill Complex, Fedha/Embakasi East, Nairobi, Kenya</p>
-                      <p className="text-xs text-slate-500">Tel: +254 (0) 711 943 210 | Email: info@tassiahillhospital.co.ke</p>
+                    <div className="flex items-center gap-4">
+                      <DocumentLogo size="lg" className="border-2 border-emerald-600/60 shadow-md ring-2 ring-emerald-500/20" />
+                      <div>
+                        <h1 className="text-2xl font-black tracking-tight text-slate-950">TASSIAHILL HOSPITAL</h1>
+                        <p className="text-xs text-slate-500 font-semibold tracking-wide uppercase mt-0.5">Ministry of Health Reg: Reg No. ODPC-KE-2026</p>
+                        <p className="text-xs text-slate-500">Tassia Hill Complex, Fedha/Embakasi East, Nairobi, Kenya</p>
+                        <p className="text-xs text-slate-500">Tel: +254 (0) 711 943 210 | Email: info@tassiahillhospital.co.ke</p>
+                      </div>
                     </div>
                     <div className="text-right flex flex-col items-start md:items-end">
                       <span className="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-[10px] font-bold tracking-wider uppercase border border-slate-200">
@@ -518,11 +536,11 @@ export default function PrintDocument({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-150">
-                            {receiptData.items.map((item, idx) => (
+                            {(receiptData.items || []).map((item, idx) => (
                               <tr key={idx} className="hover:bg-slate-50/40">
-                                <td className="p-3 font-medium text-slate-900">{item.description}</td>
-                                <td className="p-3 text-center capitalize text-slate-600 font-semibold">{item.department}</td>
-                                <td className="p-3 text-right font-mono font-bold text-slate-950">KES {item.amount.toLocaleString()}.00</td>
+                                <td className="p-3 font-medium text-slate-900">{item?.description || "Item"}</td>
+                                <td className="p-3 text-center capitalize text-slate-600 font-semibold">{item?.department || "General"}</td>
+                                <td className="p-3 text-right font-mono font-bold text-slate-950">KES {(Number(item?.amount) || 0).toLocaleString()}.00</td>
                               </tr>
                             ))}
                           </tbody>
@@ -840,7 +858,7 @@ export default function PrintDocument({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-150">
-                            {statementData.invoices.filter(i => i.paymentStatus === "paid").map((i, idx) => (
+                            {(statementData?.invoices || []).filter(i => i && i.paymentStatus === "paid").map((i, idx) => (
                               <tr key={idx} className="hover:bg-slate-50/20">
                                 <td className="p-2 font-mono font-bold text-slate-700">{i.id}</td>
                                 <td className="p-2 font-semibold text-slate-950">{i.patientName}</td>
@@ -849,10 +867,10 @@ export default function PrintDocument({
                                     {i.paymentMethod}
                                   </span>
                                 </td>
-                                <td className="p-2 text-right font-mono font-bold text-slate-950">KES {i.total.toLocaleString()}.00</td>
+                                <td className="p-2 text-right font-mono font-bold text-slate-950">KES {(Number(i.total) || 0).toLocaleString()}.00</td>
                               </tr>
                             ))}
-                            {statementData.invoices.filter(i => i.paymentStatus === "paid").length === 0 && (
+                            {(statementData?.invoices || []).filter(i => i && i.paymentStatus === "paid").length === 0 && (
                               <tr>
                                 <td colSpan={4} className="p-3 text-center text-slate-400 italic">No reconciled income records.</td>
                               </tr>
@@ -880,16 +898,16 @@ export default function PrintDocument({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-150">
-                            {statementData.expenses.map((exp, idx) => (
+                            {(statementData?.expenses || []).map((exp, idx) => (
                               <tr key={idx} className="hover:bg-slate-50/20">
                                 <td className="p-2 font-mono text-slate-600">{exp.date}</td>
                                 <td className="p-2 font-semibold text-slate-950">{exp.description}</td>
                                 <td className="p-2 capitalize text-slate-600 font-medium">{exp.category}</td>
                                 <td className="p-2 text-slate-600 truncate max-w-[120px]" title={exp.supplier}>{exp.supplier || "Standard Vendor"}</td>
-                                <td className="p-2 text-right font-mono font-bold text-rose-950">KES {exp.amount.toLocaleString()}.00</td>
+                                <td className="p-2 text-right font-mono font-bold text-rose-950">KES {(Number(exp.amount) || 0).toLocaleString()}.00</td>
                               </tr>
                             ))}
-                            {statementData.expenses.length === 0 && (
+                            {(statementData?.expenses || []).length === 0 && (
                               <tr>
                                 <td colSpan={5} className="p-3 text-center text-slate-400 italic">No expenses reported.</td>
                               </tr>
@@ -1052,4 +1070,6 @@ export default function PrintDocument({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

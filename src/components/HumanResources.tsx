@@ -40,6 +40,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import DocumentLogo from "./DocumentLogo";
 import { printElement, downloadElementAsPdf } from "../lib/printUtils";
 import { toast, modernConfirm } from "../lib/promptService";
 
@@ -329,7 +330,7 @@ export default function HumanResources() {
       return;
     }
 
-    const calculatedEmail = empEmail.trim().toLowerCase() || `${empName.trim().toLowerCase().replace(/\s+/g, ".")}@afyaboraclinic.co.ke`;
+    const calculatedEmail = empEmail.trim().toLowerCase() || `${empName.trim().toLowerCase().replace(/\s+/g, ".")}@tassiahillhospital.co.ke`;
     const cleanNationalId = empNationalId.trim();
 
     setSubmitting(true);
@@ -929,7 +930,7 @@ export default function HumanResources() {
                     required
                     value={empEmail}
                     onChange={(e) => setEmpEmail(e.target.value)}
-                    placeholder="e.g. staff.user@afyacare.co.ke"
+                    placeholder="e.g. staff.user@tassiahillhospital.co.ke"
                     className="w-full px-3 py-2 border border-gray-200 bg-gray-50/50 rounded-xl focus:outline-hidden focus:border-emerald-500 font-mono"
                   />
                 </div>
@@ -1371,13 +1372,16 @@ export default function HumanResources() {
 
                 <div className="relative z-10 space-y-8">
                   {/* Clinic Header Block */}
-                  <div className="flex items-start justify-between border-b-2 border-slate-900 pb-6">
-                    <div>
-                      <h2 className="text-xl font-black tracking-tight text-slate-950">TASSIAHILL HOSPITAL</h2>
-                      <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Healthcare Management System Staff Register</p>
-                      <p className="text-[10px] text-gray-400 font-medium">Registry Code: ODPC-KE-2026 / MOH-STAFF-REG</p>
+                  <div className="flex items-start justify-between border-b-2 border-slate-900 pb-6 gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <DocumentLogo size="md" className="border border-slate-300 shadow-xs" />
+                      <div>
+                        <h2 className="text-xl font-black tracking-tight text-slate-950">TASSIAHILL HOSPITAL</h2>
+                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Healthcare Management System Staff Register</p>
+                        <p className="text-[10px] text-gray-400 font-medium">Registry Code: ODPC-KE-2026 / MOH-STAFF-REG</p>
+                      </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <span className="px-2.5 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-widest">
                         CONFIDENTIAL
                       </span>

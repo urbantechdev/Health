@@ -38,7 +38,7 @@ interface StaffOnboardingModalProps {
 export default function StaffOnboardingModal({
   isOpen,
   onClose,
-  hospitalName = "AfyaCare Hospital",
+  hospitalName = "TASSIAHILL HOSPITAL",
   onStaffCreated
 }: StaffOnboardingModalProps) {
   // Form State
@@ -69,10 +69,10 @@ export default function StaffOnboardingModal({
 
   const handleNameChange = (val: string) => {
     setName(val);
-    if (!email || email.includes("@afyacare.co.ke") || email.includes("@afyaboraclinic.co.ke")) {
+    if (!email || email.includes("@tassiahillhospital.co.ke") || email.includes("@afyacare.co.ke") || email.includes("@afyaboraclinic.co.ke")) {
       const slug = val.toLowerCase().trim().replace(/[^a-z0-9]/g, ".");
       if (slug) {
-        setEmail(`${slug}@afyacare.co.ke`);
+        setEmail(`${slug}@tassiahillhospital.co.ke`);
       }
     }
   };
@@ -482,7 +482,7 @@ Please keep your security PIN confidential.`;
                 <input
                   type="email"
                   required
-                  placeholder="e.g. brian.mwangi@afyacare.co.ke"
+                  placeholder="e.g. brian.mwangi@tassiahillhospital.co.ke"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-purple-500"

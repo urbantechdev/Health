@@ -996,7 +996,7 @@ export default function PatientJourneyTracker({ onNavigateTab }: PatientJourneyT
             age: matchedPatient?.age || 30,
             gender: matchedPatient?.gender || "Adult",
             patientNo: matchedPatient?.nationalId || matchedPatient?.patientNumber || selectedTicket?.ticketNo || "PAT-99",
-            facilityName: "AfyaCare Diagnostic & Laboratory Center",
+            facilityName: "TASSIAHILL HOSPITAL Diagnostic & Laboratory Center",
             doctor: "Attending Clinician"
           }}
         />

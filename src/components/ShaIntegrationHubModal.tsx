@@ -101,7 +101,7 @@ export default function ShaIntegrationHubModal({
       visitDate: "2026-08-30",
       admissionType: "Outpatient",
       facilityCode: "HOSP-NRB-042",
-      facilityName: "AfyaCare National Referral Hospital",
+      facilityName: "TASSIAHILL HOSPITAL",
       attendingDoctor: {
         name: "Dr. Jane Odhiambo",
         kmpdcNumber: "KMPDC-A9432",
@@ -162,7 +162,7 @@ export default function ShaIntegrationHubModal({
       visitDate: "2026-08-29",
       admissionType: "Outpatient",
       facilityCode: "HOSP-NRB-042",
-      facilityName: "AfyaCare National Referral Hospital",
+      facilityName: "TASSIAHILL HOSPITAL",
       attendingDoctor: {
         name: "Dr. Peter Kimani",
         kmpdcNumber: "KMPDC-B4210",
@@ -285,7 +285,7 @@ export default function ShaIntegrationHubModal({
         visitDate: new Date().toISOString().split("T")[0],
         admissionType: "Outpatient",
         facilityCode: "HOSP-NRB-042",
-        facilityName: "AfyaCare National Referral Hospital",
+        facilityName: "TASSIAHILL HOSPITAL",
         attendingDoctor: {
           name: newClaimDoctor,
           kmpdcNumber: newClaimKmpdc,
@@ -352,7 +352,7 @@ export default function ShaIntegrationHubModal({
         visitDate: claimPayload.visitDate!,
         admissionType: "Outpatient",
         facilityCode: "HOSP-NRB-042",
-        facilityName: "AfyaCare National Referral Hospital",
+        facilityName: "TASSIAHILL HOSPITAL",
         attendingDoctor: claimPayload.attendingDoctor!,
         primaryDiagnosis: claimPayload.primaryDiagnosis!,
         biometricVerificationProof: claimPayload.biometricVerificationProof!,

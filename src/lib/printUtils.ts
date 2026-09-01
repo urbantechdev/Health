@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import html2canvas from "html2canvas-pro";
 
 export interface PrintOptions {
   title?: string;
@@ -311,7 +311,7 @@ export async function downloadElementAsPdf(
   document.body.appendChild(wrapper);
 
   try {
-    // Generate high-definition canvas using html2canvas
+    // Generate high-definition canvas using html2canvas-pro
     const canvas = await html2canvas(wrapper, {
       scale: Math.min(scale, 2.5),
       useCORS: true,
@@ -320,7 +320,37 @@ export async function downloadElementAsPdf(
       backgroundColor: "#ffffff",
       windowWidth: targetWidthPx,
       scrollX: 0,
-      scrollY: 0
+      scrollY: 0,
+      onclone: (clonedDoc) => {
+        // Double-safety: convert any oklch color attributes or inline styles
+        try {
+          const testCanvas = clonedDoc.createElement("canvas");
+          const ctx = testCanvas.getContext("2d");
+          if (ctx) {
+            const allElements = clonedDoc.querySelectorAll("*");
+            allElements.forEach((el) => {
+              const htmlEl = el as HTMLElement;
+              if (htmlEl.style) {
+                // If any style property contains oklch, sanitize it
+                const props = ["color", "backgroundColor", "borderColor", "outlineColor"];
+                props.forEach((prop) => {
+                  const val = (htmlEl.style as any)[prop];
+                  if (val && typeof val === "string" && val.includes("oklch")) {
+                    try {
+                      ctx.fillStyle = val;
+                      (htmlEl.style as any)[prop] = ctx.fillStyle;
+                    } catch {
+                      (htmlEl.style as any)[prop] = prop === "color" ? "#0f172a" : prop === "backgroundColor" ? "#ffffff" : "#cbd5e1";
+                    }
+                  }
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.warn("[downloadElementAsPdf] onclone color cleanup warning:", e);
+        }
+      }
     });
 
     // Remove temporary DOM wrapper
@@ -464,3 +494,54 @@ export async function downloadElementAsPdf(
     return false;
   }
 }
+
+/**
+ * Converts a numeric amount to Kenyan Shillings in words (e.g. 1500 -> "One Thousand Five Hundred Kenya Shillings Only")
+ */
+export function numberToKenyanShillingsWords(amount: number): string {
+  if (isNaN(amount) || amount === 0) return "Zero Kenya Shillings Only";
+  
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+
+  function convertGroup(n: number): string {
+    let out = "";
+    if (n >= 100) {
+      out += ones[Math.floor(n / 100)] + " Hundred ";
+      n %= 100;
+    }
+    if (n >= 20) {
+      out += tens[Math.floor(n / 10)] + " ";
+      n %= 10;
+    } else if (n >= 10) {
+      out += teens[n - 10] + " ";
+      n = 0;
+    }
+    if (n > 0) {
+      out += ones[n] + " ";
+    }
+    return out.trim();
+  }
+
+  const rounded = Math.floor(Math.abs(amount));
+  const cents = Math.round((Math.abs(amount) - rounded) * 100);
+
+  const billions = Math.floor(rounded / 1000000000);
+  const millions = Math.floor((rounded % 1000000000) / 1000000);
+  const thousands = Math.floor((rounded % 1000000) / 1000);
+  const remainder = rounded % 1000;
+
+  let words = "";
+  if (billions > 0) words += convertGroup(billions) + " Billion ";
+  if (millions > 0) words += convertGroup(millions) + " Million ";
+  if (thousands > 0) words += convertGroup(thousands) + " Thousand ";
+  if (remainder > 0) words += convertGroup(remainder) + " ";
+
+  words = words.trim() + " Kenya Shillings";
+  if (cents > 0) {
+    words += ` and ${convertGroup(cents)} Cents`;
+  }
+  return (words + " Only").replace(/\s+/g, " ");
+}
+

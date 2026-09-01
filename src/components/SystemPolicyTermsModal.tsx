@@ -63,7 +63,7 @@ export default function SystemPolicyTermsModal({
   // Check stored acknowledgment status
   useEffect(() => {
     if (isOpen) {
-      const stored = localStorage.getItem("afyacare_policy_ack_2026");
+      const stored = localStorage.getItem("tassiahill_policy_ack_2026") || localStorage.getItem("afyacare_policy_ack_2026");
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
@@ -99,7 +99,7 @@ export default function SystemPolicyTermsModal({
       timestamp,
       version: "2026.2-KDPA-DHA"
     };
-    localStorage.setItem("afyacare_policy_ack_2026", JSON.stringify(payload));
+    localStorage.setItem("tassiahill_policy_ack_2026", JSON.stringify(payload));
     setHasAcknowledged(true);
     setAcknowledgedAt(timestamp);
   };
@@ -367,7 +367,7 @@ export default function SystemPolicyTermsModal({
                 <div className="space-y-1">
                   <p className="font-bold text-sm text-blue-900">Hospital Information Management System (HMIS) End-User Agreement</p>
                   <p className="text-blue-800 leading-relaxed">
-                    By logging into or interacting with AfyaCare HMIS, clinical officers, medical practitioners, nurses, laboratory technologists, and finance staff agree to abide by statutory confidentiality, professional medical ethics, and authorized access boundaries.
+                    By logging into or interacting with TASSIAHILL HOSPITAL HMIS, clinical officers, medical practitioners, nurses, laboratory technologists, and finance staff agree to abide by statutory confidentiality, professional medical ethics, and authorized access boundaries.
                   </p>
                 </div>
               </div>
@@ -636,7 +636,7 @@ export default function SystemPolicyTermsModal({
         <div className="p-4 px-6 bg-slate-100 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>AfyaCare HMIS Compliance Engine • v2026.2 (KDPA & DHA Standards)</span>
+            <span>TASSIAHILL HOSPITAL HMIS Compliance Engine • v2026.2 (KDPA & DHA Standards)</span>
           </div>
 
           <div className="flex items-center gap-3">

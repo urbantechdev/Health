@@ -34,17 +34,17 @@ export default function MpesaPaymentModal({
   onClose,
   defaultPhone = "",
   defaultAmount = 1500,
-  defaultReference = "AFYA-OUTPATIENT",
+  defaultReference = "TASSIA-OUTPATIENT",
   patientName = "Walk-in Patient",
   invoiceId,
   onPaymentSuccess,
 }: MpesaPaymentModalProps) {
   const [phone, setPhone] = useState(defaultPhone || "0712345678");
   const [amount, setAmount] = useState(defaultAmount > 0 ? defaultAmount : 1500);
-  const [reference, setReference] = useState(defaultReference || "AFYA-OUTPATIENT");
+  const [reference, setReference] = useState(defaultReference || "TASSIA-OUTPATIENT");
   const [paybillType, setPaybillType] = useState<"paybill" | "till">("paybill");
   const [paybillNumber, setPaybillNumber] = useState("222111");
-  const [accountNumber, setAccountNumber] = useState("AFYA-CARE");
+  const [accountNumber, setAccountNumber] = useState("TASSIA-HOSPITAL");
 
   // Transaction execution states
   const [step, setStep] = useState<"input" | "waiting" | "success" | "failed">("input");
@@ -215,7 +215,7 @@ export default function MpesaPaymentModal({
                   onClick={() => {
                     setPaybillType("paybill");
                     setPaybillNumber("222111");
-                    setAccountNumber("AFYA-CARE");
+                    setAccountNumber("TASSIA-HOSPITAL");
                   }}
                   className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     paybillType === "paybill"
@@ -230,7 +230,7 @@ export default function MpesaPaymentModal({
                   onClick={() => {
                     setPaybillType("till");
                     setPaybillNumber("994321");
-                    setAccountNumber("Afya Pharmacy Till");
+                    setAccountNumber("Tassia Pharmacy Till");
                   }}
                   className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     paybillType === "till"

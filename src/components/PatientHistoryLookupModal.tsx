@@ -4,6 +4,7 @@ import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { MedicalRecord, ClinicalVisit, Invoice, QueueTicket, SystemTicket } from "../types";
 import { normalizeString, normalizePhone } from "../lib/patientSyncService";
 import { printElement, downloadElementAsPdf } from "../lib/printUtils";
+import DocumentLogo from "./DocumentLogo";
 import { toast } from "../lib/promptService";
 import {
   Search,
@@ -181,17 +182,18 @@ export default function PatientHistoryLookupModal({
 
   // Collect all prescriptions from all visits
   const allPrescriptions = useMemo(() => {
-    if (!selectedPatient || !selectedPatient.visits) return [];
+    if (!selectedPatient || !selectedPatient.visits || !Array.isArray(selectedPatient.visits)) return [];
     const items: { visitDate: string; drugName: string; dosage: string; quantity: number; instructions: string; status: string }[] = [];
     selectedPatient.visits.forEach((v) => {
-      if (v.prescriptions && v.prescriptions.length > 0) {
+      if (v && v.prescriptions && Array.isArray(v.prescriptions) && v.prescriptions.length > 0) {
         v.prescriptions.forEach((p) => {
+          if (!p) return;
           items.push({
-            visitDate: v.date,
-            drugName: p.drugName,
-            dosage: p.dosage,
-            quantity: p.quantity,
-            instructions: p.instructions,
+            visitDate: v.date || "Unknown",
+            drugName: p.drugName || "Medication",
+            dosage: p.dosage || "Std",
+            quantity: Number(p.quantity) || 1,
+            instructions: p.instructions || "As directed",
             status: p.status || "dispensed"
           });
         });
@@ -496,7 +498,31 @@ export default function PatientHistoryLookupModal({
               )}
             </div>
           ) : (
-            <div id="patient-history-printable-chart" className="space-y-6">
+            <div id="patient-history-printable-chart" className="space-y-6 bg-white p-2 sm:p-4 rounded-2xl">
+              {/* OFFICIAL HOSPITAL PRINT LETTERHEAD */}
+              <div className="border-b-2 border-slate-900 pb-4 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <DocumentLogo size="md" className="border-2 border-indigo-700/60 shadow-xs" />
+                  <div>
+                    <h1 className="text-xl font-black text-slate-950 tracking-tight uppercase">
+                      TASSIAHILL HOSPITAL
+                    </h1>
+                    <p className="text-xs text-slate-600 font-medium mt-0.5">
+                      Ministry of Health Reg: MOH/2026/14892 • Level 5 Tertiary Referral Hospital
+                    </p>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Argwings Kodhek Rd, Nairobi, Kenya • Tel: +254 (0) 711 943 210 • Email: info@tassiahillhospital.co.ke
+                    </p>
+                  </div>
+                </div>
+                <div className="text-left sm:text-right text-xs space-y-1">
+                  <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-900 border border-indigo-200 font-bold text-[10px] rounded-lg uppercase">
+                    Comprehensive Patient EHR Chart
+                  </span>
+                  <p className="text-[11px] text-slate-500 font-mono">Date: {new Date().toLocaleDateString("en-GB")}</p>
+                </div>
+              </div>
+
               {/* PATIENT PROFILE HEADER CARD */}
               <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-100/40 to-transparent rounded-full -mr-16 -mt-16 pointer-events-none" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { db, cleanFirestoreData } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
 import { Medication, QueueTicket, PrescriptionItem, Invoice, MedicalRecord } from "../types";
@@ -21,7 +21,9 @@ import {
   DollarSign,
   Smartphone,
   Pill,
-  Plus
+  Plus,
+  ArrowRightCircle,
+  Receipt
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { Html5Qrcode } from "html5-qrcode";
@@ -108,29 +110,76 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
     };
   }, []);
 
-  // Auto-fill cart when prescription is selected (one-time per selection)
+  // Auto-select latest active prescription in pharmacy queue if none selected
+  useEffect(() => {
+    if (activePrescriptions.length > 0) {
+      if (!selectedPrescriptionId || !activePrescriptions.some((p) => p.id === selectedPrescriptionId)) {
+        setSelectedPrescriptionId(activePrescriptions[0].id);
+      }
+    }
+  }, [activePrescriptions, selectedPrescriptionId]);
+
+  // Auto-fill cart when prescription is selected or handed over from doctor
   useEffect(() => {
     if (selectedPrescriptionId && medications.length > 0) {
-      if (lastLoadedRef.current !== selectedPrescriptionId) {
-        lastLoadedRef.current = selectedPrescriptionId;
-        const ticket = activePrescriptions.find((p) => p.id === selectedPrescriptionId);
+      const ticket = activePrescriptions.find((p) => p.id === selectedPrescriptionId);
+      const rxSignature = `${selectedPrescriptionId}-${JSON.stringify(ticket?.prescriptions || [])}`;
+      
+      if (lastLoadedRef.current !== rxSignature) {
+        lastLoadedRef.current = rxSignature;
         if (ticket) {
           const pat = findUnifiedPatient(ticket.patientId || ticket.nationalId || ticket.patientName, patients);
-          const visit = pat && pat.visits.length > 0 ? pat.visits[pat.visits.length - 1] : null;
-          if (visit && visit.prescriptions && visit.prescriptions.length > 0) {
+          
+          // 1. Extract prescription items from ticket payload, or patient EHR visits
+          let rxItems: any[] = [];
+          if (ticket.prescriptions && Array.isArray(ticket.prescriptions) && ticket.prescriptions.length > 0) {
+            rxItems = ticket.prescriptions;
+          } else if (pat && pat.visits && pat.visits.length > 0) {
+            for (let i = pat.visits.length - 1; i >= 0; i--) {
+              if (pat.visits[i].prescriptions && pat.visits[i].prescriptions.length > 0) {
+                rxItems = pat.visits[i].prescriptions;
+                break;
+              }
+            }
+            if (rxItems.length === 0 && pat.visits[pat.visits.length - 1]?.prescriptions) {
+              rxItems = pat.visits[pat.visits.length - 1].prescriptions;
+            }
+          }
+
+          if (rxItems.length > 0) {
             const newCart: { med: Medication; qty: number }[] = [];
-            visit.prescriptions.forEach((rx) => {
+            rxItems.forEach((rx) => {
+              const drugName = rx.drugName || rx.name || "Medication";
+              const qty = Number(rx.quantity) || 1;
               const match = medications.find(
                 (m) =>
-                  m.name.toLowerCase().includes(rx.drugName.toLowerCase()) ||
-                  rx.drugName.toLowerCase().includes(m.name.toLowerCase())
+                  m.name.toLowerCase().includes(drugName.toLowerCase()) ||
+                  drugName.toLowerCase().includes(m.name.toLowerCase())
               );
-              if (match && match.quantity > 0) {
-                const dispenseQty = Math.min(rx.quantity, match.quantity);
+              if (match) {
+                const dispenseQty = Math.max(1, qty);
                 newCart.push({ med: match, qty: dispenseQty });
+              } else {
+                const fallbackMed: Medication = {
+                  id: `rx-item-${Math.random().toString(36).substr(2, 7)}`,
+                  name: drugName,
+                  category: "Prescription",
+                  quantity: 50,
+                  minThreshold: 5,
+                  batchNo: "RX-AUTO",
+                  expiryDate: "2027-12-31",
+                  price: rx.unitPrice || rx.price || 150
+                };
+                newCart.push({ med: fallbackMed, qty: Math.max(1, qty) });
               }
             });
             setCart(newCart);
+
+            const total = newCart.reduce((sum, item) => sum + item.med.price * item.qty, 0);
+            toast.success(
+              `Prescription bill (KES ${total.toLocaleString()}) automatically added to cart for ${ticket.patientName}`,
+              "Doctor Prescription Loaded"
+            );
           } else {
             setCart([]);
           }
@@ -218,6 +267,131 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
     setCart(updatedCart);
     if (item) {
       toast.info(`Removed ${item.med.name} from POS cart`, "Cart Updated");
+    }
+  };
+
+  const playAudioTone = (freq = 880, duration = 0.2) => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {
+      console.log("Audio tone note:", e);
+    }
+  };
+
+  const speakAnnouncement = (text: string) => {
+    try {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+        utterance.lang = "en-KE";
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch (e) {
+      console.log("Speech synthesis note:", e);
+    }
+  };
+
+  // Direct Route Patient to Central Billing Desk
+  const handleRouteToBilling = async (customNotes?: string) => {
+    if (!selectedPrescriptionId && activePrescriptions.length === 0 && cart.length === 0) {
+      toast.warning("Please select a prescription queue ticket or add medications to route to billing.", "No Selection");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let targetTicket = selectedPrescriptionId
+        ? activePrescriptions.find((p) => p.id === selectedPrescriptionId)
+        : activePrescriptions[0];
+
+      let patientName = targetTicket?.patientName || matchedPatient?.patientName || "Pharmacy Patient";
+      let nationalId = targetTicket?.nationalId || matchedPatient?.nationalId || "N/A";
+      let ticketId = targetTicket?.id || selectedPrescriptionId;
+
+      let baseNum = targetTicket?.ticketNo?.includes("-")
+        ? targetTicket.ticketNo.split("-")[1]
+        : Math.floor(Math.random() * 900 + 100);
+
+      const assignedTicketNo = `BIL-${baseNum}`;
+      const instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Billing & Accounts`;
+
+      // If cart has items, sync as pending invoice
+      if (cart.length > 0) {
+        const invoiceItems = cart.map((item) => ({
+          description: `${item.med.name} (x${item.qty}) - Pharmacy`,
+          amount: item.med.price * item.qty,
+          department: "pharmacy",
+        }));
+        const total = invoiceItems.reduce((acc, curr) => acc + curr.amount, 0);
+
+        const pendingInvoice: Invoice = {
+          id: `INV-PHARM-${Date.now()}`,
+          patientId: targetTicket?.patientId || targetTicket?.id || "WALK-IN",
+          patientName,
+          nationalId,
+          items: invoiceItems,
+          total,
+          split: { sha: 0, insurance: 0, outOfPocket: total },
+          paymentMethod: "Cash",
+          paymentStatus: "unpaid",
+          timestamp: new Date().toISOString(),
+        };
+        await addDoc(collection(db, "invoices"), cleanFirestoreData(pendingInvoice));
+      }
+
+      // Update or create queue ticket
+      if (ticketId) {
+        await updateDoc(doc(db, "queue", ticketId), {
+          currentDepartment: "billing",
+          ticketNo: assignedTicketNo,
+          status: "pending",
+          service: "Billing & Accounts Clearance",
+          notes: customNotes || `Pharmacy dispensation routed to central billing (${cart.length > 0 ? `${cart.length} medications in cart` : "Prescription items"}).`,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        await addDoc(collection(db, "queue"), {
+          ticketNo: assignedTicketNo,
+          patientName,
+          nationalId,
+          biometricStatus: "verified",
+          currentDepartment: "billing",
+          status: "pending",
+          service: "Billing & Accounts Clearance",
+          notes: customNotes || "Pharmacy dispensation routed to central billing desk.",
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Audio & Speech Announcement
+      playAudioTone(880, 0.25);
+      setTimeout(() => playAudioTone(1174, 0.35), 260);
+      speakAnnouncement(`${instructionPhrase}. ${patientName}, please proceed to the Billing and Accounts Clearance desk.`);
+
+      toast.success(
+        `Patient ${patientName} (${assignedTicketNo}) successfully routed to Central Billing Desk!`,
+        "Routed to Billing"
+      );
+
+      setCart([]);
+      setSelectedPrescriptionId(null);
+      onDispenseCompleted();
+    } catch (e) {
+      console.error("Route to billing error:", e);
+      toast.error("Failed to route patient to billing. Please try again.", "Error");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -482,11 +656,27 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
 
   const selectedTicket = activePrescriptions.find((p) => p.id === selectedPrescriptionId);
   const matchedPatient = selectedTicket
-    ? patients.find((p) => p.patientName.toLowerCase() === selectedTicket.patientName.toLowerCase() || p.nationalId === selectedTicket.nationalId)
+    ? findUnifiedPatient(selectedTicket.patientId || selectedTicket.nationalId || selectedTicket.patientName, patients)
     : null;
-  const latestVisit = matchedPatient && matchedPatient.visits.length > 0
-    ? matchedPatient.visits[matchedPatient.visits.length - 1]
-    : null;
+  const latestVisit = useMemo(() => {
+    if (!matchedPatient || !matchedPatient.visits || matchedPatient.visits.length === 0) return null;
+    for (let i = matchedPatient.visits.length - 1; i >= 0; i--) {
+      if (matchedPatient.visits[i].prescriptions && matchedPatient.visits[i].prescriptions.length > 0) {
+        return matchedPatient.visits[i];
+      }
+    }
+    return matchedPatient.visits[matchedPatient.visits.length - 1];
+  }, [matchedPatient]);
+
+  const activeRxItems: PrescriptionItem[] = useMemo(() => {
+    if (selectedTicket?.prescriptions && Array.isArray(selectedTicket.prescriptions) && selectedTicket.prescriptions.length > 0) {
+      return selectedTicket.prescriptions;
+    }
+    if (latestVisit?.prescriptions && Array.isArray(latestVisit.prescriptions) && latestVisit.prescriptions.length > 0) {
+      return latestVisit.prescriptions;
+    }
+    return [];
+  }, [selectedTicket, latestVisit]);
 
   const totalCartValue = cart.reduce((acc, curr) => acc + curr.med.price * curr.qty, 0);
 
@@ -559,6 +749,20 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
               </select>
             )}
           </div>
+
+          {(selectedPrescriptionId || activePrescriptions.length > 0) && (
+            <button
+              id="btn-quick-route-billing"
+              type="button"
+              onClick={() => handleRouteToBilling()}
+              disabled={submitting}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Route selected prescription ticket to Central Billing Desk"
+            >
+              <ArrowRightCircle className="w-4 h-4 text-blue-200" />
+              <span>Route to Billing Desk</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -864,23 +1068,27 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                   </span>
                 </div>
 
-                {latestVisit ? (
+                {(activeRxItems.length > 0 || latestVisit) ? (
                   <div className="space-y-2.5">
-                    {latestVisit.diagnosis && (
+                    {latestVisit?.diagnosis && (
                       <p className="text-[11px] bg-white/70 p-2 rounded-lg border border-emerald-100/50">
                         <strong className="text-emerald-900 font-bold">Diagnosis:</strong> {latestVisit.diagnosis}
                       </p>
                     )}
 
                     <div className="space-y-1.5">
-                      <p className="font-bold text-[10px] uppercase text-emerald-800 tracking-wider">Prescribed Items:</p>
-                      {latestVisit.prescriptions && latestVisit.prescriptions.length > 0 ? (
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-[10px] uppercase text-emerald-800 tracking-wider">Doctor Prescribed Items:</p>
+                        <span className="px-1.5 py-0.2 bg-emerald-200 text-emerald-900 font-bold text-[9px] rounded">Auto-Billed to Cart</span>
+                      </div>
+                      {activeRxItems.length > 0 ? (
                         <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                          {latestVisit.prescriptions.map((rx, idx) => {
+                          {activeRxItems.map((rx, idx) => {
+                            const drugName = rx.drugName || (rx as any).name || "Medication";
                             const match = medications.find(
                               (m) =>
-                                m.name.toLowerCase().includes(rx.drugName.toLowerCase()) ||
-                                rx.drugName.toLowerCase().includes(m.name.toLowerCase())
+                                m.name.toLowerCase().includes(drugName.toLowerCase()) ||
+                                drugName.toLowerCase().includes(m.name.toLowerCase())
                             );
                             const inStock = match ? match.quantity : 0;
                             const isMatchFound = !!match;
@@ -888,7 +1096,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                             return (
                               <div key={idx} className="bg-white p-2 rounded-lg border border-emerald-100/50 flex flex-col gap-1 shadow-2xs">
                                 <div className="flex justify-between items-start">
-                                  <span className="font-bold text-slate-950">{rx.drugName}</span>
+                                  <span className="font-bold text-slate-950">{drugName}</span>
                                   {isMatchFound ? (
                                     inStock <= 0 ? (
                                       <span className="px-1 py-0.5 bg-red-100 border border-red-250 text-red-700 font-extrabold text-[8px] rounded-sm">OUT OF STOCK</span>
@@ -896,7 +1104,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                                       <span className="px-1 py-0.5 bg-emerald-100 border border-emerald-250 text-emerald-800 font-extrabold text-[8px] rounded-sm">IN STOCK ({inStock})</span>
                                     )
                                   ) : (
-                                    <span className="px-1 py-0.5 bg-amber-100 border border-amber-250 text-amber-700 font-extrabold text-[8px] rounded-sm">CATALOGUE MISMATCH</span>
+                                    <span className="px-1 py-0.5 bg-blue-100 border border-blue-250 text-blue-800 font-extrabold text-[8px] rounded-sm">REGISTERED TO BILL</span>
                                   )}
                                 </div>
                                 <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 font-medium">
@@ -918,7 +1126,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                       <button
                         id="btn-print-pharmacy-rx"
                         type="button"
@@ -934,23 +1142,49 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                         type="button"
                         onClick={() => {
                           const newCart: { med: Medication; qty: number }[] = [];
-                          latestVisit.prescriptions?.forEach((rx) => {
+                          activeRxItems.forEach((rx) => {
+                            const drugName = rx.drugName || (rx as any).name || "Medication";
+                            const qty = Number(rx.quantity) || 1;
                             const match = medications.find(
                               (m) =>
-                                m.name.toLowerCase().includes(rx.drugName.toLowerCase()) ||
-                                rx.drugName.toLowerCase().includes(m.name.toLowerCase())
+                                m.name.toLowerCase().includes(drugName.toLowerCase()) ||
+                                drugName.toLowerCase().includes(m.name.toLowerCase())
                             );
-                            if (match && match.quantity > 0) {
-                              const dispenseQty = Math.min(rx.quantity, match.quantity);
+                            if (match) {
+                              const dispenseQty = Math.max(1, qty);
                               newCart.push({ med: match, qty: dispenseQty });
+                            } else {
+                              const fallbackMed: Medication = {
+                                id: `rx-item-${Math.random().toString(36).substr(2, 7)}`,
+                                name: drugName,
+                                category: "Prescription",
+                                quantity: 50,
+                                minThreshold: 5,
+                                batchNo: "RX-AUTO",
+                                expiryDate: "2027-12-31",
+                                price: (rx as any).unitPrice || (rx as any).price || 150
+                              };
+                              newCart.push({ med: fallbackMed, qty: Math.max(1, qty) });
                             }
                           });
                           setCart(newCart);
+                          toast.success("Cart re-synced with doctor prescription bill.", "Cart Updated");
                         }}
                         className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] flex items-center justify-center gap-1 shadow-3xs transition-colors cursor-pointer"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         <span>Reset Cart to Rx</span>
+                      </button>
+
+                      <button
+                        id="btn-prescription-feed-route-billing"
+                        type="button"
+                        onClick={() => handleRouteToBilling("Doctor prescriptions verified by pharmacy and routed to billing")}
+                        disabled={submitting}
+                        className="py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[10px] flex items-center justify-center gap-1 shadow-3xs transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <ArrowRightCircle className="w-3.5 h-3.5" />
+                        <span>Route to Billing</span>
                       </button>
                     </div>
                   </div>
@@ -1061,6 +1295,17 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                 <Smartphone className="w-4.5 h-4.5" />
                 <span>Proceed to POS Checkout (M-Pesa / Cash)</span>
                 <kbd className="px-1.5 py-0.5 bg-emerald-800 text-emerald-100 rounded text-[10px] font-mono">F4</kbd>
+              </button>
+
+              <button
+                id="btn-pos-route-billing"
+                type="button"
+                onClick={() => handleRouteToBilling()}
+                disabled={submitting || (cart.length === 0 && !selectedPrescriptionId)}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all disabled:opacity-40 cursor-pointer"
+              >
+                <ArrowRightCircle className="w-4 h-4 text-blue-200" />
+                <span>Route to Central Billing Desk</span>
               </button>
 
               <button

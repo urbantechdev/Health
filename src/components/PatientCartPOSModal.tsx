@@ -121,11 +121,11 @@ export default function PatientCartPOSModal({
 
   if (!isOpen) return null;
 
-  const pendingItems = cart?.items.filter((i) => i.status === "pending_checkout") || [];
-  const checkedOutItems = cart?.items.filter((i) => i.status === "checked_out") || [];
-  const waivedItems = cart?.items.filter((i) => i.status === "waived") || [];
+  const pendingItems = cart?.items?.filter((i) => i && i.status === "pending_checkout") || [];
+  const checkedOutItems = cart?.items?.filter((i) => i && i.status === "checked_out") || [];
+  const waivedItems = cart?.items?.filter((i) => i && i.status === "waived") || [];
 
-  const subtotal = pendingItems.reduce((acc, i) => acc + i.totalPrice, 0);
+  const subtotal = pendingItems.reduce((acc, i) => acc + (Number(i.totalPrice) || 0), 0);
   const totalDeductions = shaCover + insuranceCover + discountAmount;
   const netPayable = Math.max(0, subtotal - totalDeductions);
 

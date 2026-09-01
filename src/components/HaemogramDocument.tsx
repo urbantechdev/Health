@@ -26,6 +26,7 @@ import {
   isHaemogramReport 
 } from "../lib/haemogramParser";
 import { printElement, downloadElementAsPdf } from "../lib/printUtils";
+import DocumentLogo from "./DocumentLogo";
 import { toast } from "../lib/promptService";
 
 interface HaemogramDocumentProps {
@@ -172,10 +173,8 @@ export default function HaemogramDocument({
       {/* 1. OFFICIAL LETTERHEAD */}
       <div className="border-b-2 border-slate-900 pb-4 mb-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-rose-700 text-white rounded-xl shadow-xs print:border print:border-rose-900 shrink-0">
-              <Droplets className="w-6 h-6" />
-            </div>
+          <div className="flex items-center gap-3.5">
+            <DocumentLogo size="md" className="border-2 border-rose-800/60 shadow-xs" />
             <div>
               <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-950 uppercase">
                 {report.facilityName}

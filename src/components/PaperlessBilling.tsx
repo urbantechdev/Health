@@ -362,10 +362,11 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
       }
 
       // Also check patient's historical active visits if available
-      if (patient.visits && patient.visits.length > 0) {
+      if (patient.visits && Array.isArray(patient.visits) && patient.visits.length > 0) {
         const latestVisit = patient.visits[patient.visits.length - 1];
-        if (latestVisit.prescriptions && (!encounter || unbilledList.filter((i) => i.category === "pharmacy").length === 0)) {
+        if (latestVisit && Array.isArray(latestVisit.prescriptions) && (!encounter || unbilledList.filter((i) => i.category === "pharmacy").length === 0)) {
           latestVisit.prescriptions.forEach((rx, idx) => {
+            if (!rx) return;
             unbilledList.push({
               id: `avail-pat-rx-${idx}`,
               sourceId: `pat-rx-${idx}`,
@@ -2026,9 +2027,9 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
                     </td>
                     <td className="p-3.5">
                       <div className="text-xs text-slate-700 max-w-xs truncate">
-                        {inv.items.map((it) => it.description).join(", ")}
+                        {(inv.items || []).map((it) => it?.description || "Item").join(", ")}
                       </div>
-                      <span className="text-[10px] text-slate-400">{inv.items.length} item(s)</span>
+                      <span className="text-[10px] text-slate-400">{(inv.items || []).length} item(s)</span>
                     </td>
                     <td className="p-3.5">
                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${

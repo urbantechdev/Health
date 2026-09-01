@@ -152,11 +152,11 @@ export default function Procurement() {
     const sup = suppliers.find(s => s.id === poSupplierId) || suppliers[0];
     const poNo = `LPO-2026-${Math.floor(100 + Math.random() * 900)}`;
 
-    const poItems = req.items.map(i => ({
-      itemName: i.itemName,
-      quantity: i.quantity,
-      unitPrice: i.estimatedCost,
-      total: i.quantity * i.estimatedCost
+    const poItems = (req.items || []).map(i => ({
+      itemName: i.itemName || "Item",
+      quantity: Number(i.quantity) || 1,
+      unitPrice: Number(i.estimatedCost) || 0,
+      total: (Number(i.quantity) || 1) * (Number(i.estimatedCost) || 0)
     }));
 
     const subtotal = poItems.reduce((acc, curr) => acc + curr.total, 0);
@@ -242,14 +242,14 @@ export default function Procurement() {
 
   const handleReceiveGoods = async (po: PurchaseOrder) => {
     const grnNo = `GRN-2026-${Math.floor(100 + Math.random() * 900)}`;
-    const grnItems = po.items.map(i => ({
-      itemName: i.itemName,
-      orderedQuantity: i.quantity,
-      receivedQuantity: i.quantity,
+    const grnItems = (po.items || []).map(i => ({
+      itemName: i.itemName || "Item",
+      orderedQuantity: i.quantity || 1,
+      receivedQuantity: i.quantity || 1,
       batchNo: grnBatchNo,
       expiryDate: grnExpiryDate,
-      unitPrice: i.unitPrice,
-      total: i.total,
+      unitPrice: i.unitPrice || 0,
+      total: i.total || 0,
       passInspection: true
     }));
 
@@ -456,7 +456,7 @@ export default function Procurement() {
                       <td className="py-3.5 px-4 uppercase font-bold text-gray-700">{req.department}</td>
                       <td className="py-3.5 px-4 font-semibold">{req.requestedBy}</td>
                       <td className="py-3.5 px-4 max-w-xs">
-                        {req.items.map((i, idx) => (
+                        {(req.items || []).map((i, idx) => (
                           <div key={idx} className="text-[11px] font-medium text-gray-800">
                             • {i.itemName} (x{i.quantity})
                           </div>
@@ -655,7 +655,7 @@ export default function Procurement() {
                       <td className="py-3.5 px-4 font-mono font-semibold text-gray-600">{grn.poNumber}</td>
                       <td className="py-3.5 px-4 font-bold text-gray-900">{grn.supplierName}</td>
                       <td className="py-3.5 px-4">
-                        {grn.items.map((i, idx) => (
+                        {(grn.items || []).map((i, idx) => (
                           <div key={idx} className="text-[11px] font-medium text-gray-800">
                             • {i.itemName} (x{i.receivedQuantity}) - Batch: {i.batchNo}
                           </div>

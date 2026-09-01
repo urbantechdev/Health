@@ -103,7 +103,7 @@ export function normalizeKeyboardEvent(e: KeyboardEvent): {
 
 // Global Custom Event Dispatcher for Action Hotkeys
 export function dispatchHotkeyAction(actionId: string, payload?: any) {
-  const event = new CustomEvent(`afyacare-hotkey-${actionId}`, { detail: payload });
+  const event = new CustomEvent(`tassiahill-hotkey-${actionId}`, { detail: payload });
   window.dispatchEvent(event);
 }
 
@@ -113,6 +113,6 @@ export function onHotkeyAction(actionId: string, callback: (detail?: any) => voi
     const customEvent = e as CustomEvent;
     callback(customEvent.detail);
   };
-  window.addEventListener(`afyacare-hotkey-${actionId}`, handler);
-  return () => window.removeEventListener(`afyacare-hotkey-${actionId}`, handler);
+  window.addEventListener(`tassiahill-hotkey-${actionId}`, handler);
+  return () => window.removeEventListener(`tassiahill-hotkey-${actionId}`, handler);
 }

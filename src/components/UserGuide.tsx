@@ -125,7 +125,7 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
     try {
       await new Promise(r => setTimeout(r, 200));
       await printElement("platform-user-guide", {
-        title: "AfyaCare_HMS_Operating_Manual_User_Guide",
+        title: "TASSIAHILL_HOSPITAL_HMS_Operating_Manual_User_Guide",
         paperSize: "a4"
       });
     } catch (err) {
@@ -143,8 +143,8 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
     try {
       await new Promise(r => setTimeout(r, 250));
       const ok = await downloadElementAsPdf("platform-user-guide", {
-        fileName: `AfyaCare_HMS_Platform_User_Guide_${new Date().toISOString().slice(0, 10)}.pdf`,
-        title: "AfyaCare HMS Platform User Guide",
+        fileName: `Tassiahill_Hospital_HMS_Platform_User_Guide_${new Date().toISOString().slice(0, 10)}.pdf`,
+        title: "TASSIAHILL HOSPITAL HMS Platform User Guide",
         format: "a4",
         scale: 2
       });
@@ -481,7 +481,7 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
         "**Barcode Label Printers (Lab / Pharmacy)**: Compatible with Zebra ZD220, TSC TE200, and standard direct thermal label rolls (1.5 x 1 inch or 2 x 1 inch)."
       ],
       tips: [
-        "All AfyaCare HMS scanner inputs listen automatically for fast hardware keystroke bursts, enabling instantaneous scanning without requiring mouse clicks.",
+        "All TASSIAHILL HOSPITAL HMS scanner inputs listen automatically for fast hardware keystroke bursts, enabling instantaneous scanning without requiring mouse clicks.",
       ],
     },
     {
@@ -494,7 +494,7 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
       summary: "Quick answers to common operational scenarios, network interruptions, and system questions.",
       prerequisites: [],
       steps: [
-        "**Q: What happens if the internet connection goes down?**\nA: AfyaCare HMS utilizes Google Cloud Firestore with client-side IndexedDB persistence. You can continue consulting, recording vitals, and dispensing medication offline. All changes sync automatically when connectivity is restored.",
+        "**Q: What happens if the internet connection goes down?**\nA: TASSIAHILL HOSPITAL HMS utilizes Google Cloud Firestore with client-side IndexedDB persistence. You can continue consulting, recording vitals, and dispensing medication offline. All changes sync automatically when connectivity is restored.",
         "**Q: How do I handle patients with split insurance and cash co-pays?**\nA: In the Split Billing register, apply the SHA / Insurance coverage amount first. The system automatically computes the remaining balance and enables M-Pesa STK push or cash payment for the difference.",
         "**Q: How do I change my station or pass the terminal to another nurse/doctor?**\nA: Click your user profile avatar in the header and enter your Security Station PIN. The interface instantly adapts to your individual role permissions.",
         "**Q: Where can I download the complete system README and architectural specs?**\nA: Click the 'Download README.md' button at the bottom footer of any page or inside this User Guide header."
@@ -548,7 +548,7 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
               <span>Official Knowledge Base & Staff Operating Manual</span>
             </div>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white">
-              AfyaCare HMS Platform User Guide
+              TASSIAHILL HOSPITAL HMS Platform User Guide
             </h1>
             <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
               Complete step-by-step operating procedures, clinical station workflows, Kenyan regulatory compliance instructions (SHA • eTIMS • M-PESA • PPB), and hardware calibration manuals for hospital personnel.
@@ -559,7 +559,7 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
             {/* Download Complete README.md File */}
             <button
-              onClick={() => downloadReadmeFile("AfyaCare-HMS-Enterprise-Documentation.md")}
+              onClick={() => downloadReadmeFile("Tassiahill-Hospital-HMS-Documentation.md")}
               title="Download full Markdown documentation file to your computer"
               className="flex-1 sm:flex-none px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 border border-emerald-400/40"
             >
@@ -908,7 +908,7 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
         </div>
 
         <button
-          onClick={() => downloadReadmeFile("AfyaCare-HMS-Enterprise-Documentation.md")}
+          onClick={() => downloadReadmeFile("Tassiahill-Hospital-HMS-Documentation.md")}
           className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-xl shadow-emerald-950/50 flex items-center gap-2 transition-all cursor-pointer active:scale-95 shrink-0 border border-emerald-400/30"
         >
           <FileDown className="w-4 h-4" />

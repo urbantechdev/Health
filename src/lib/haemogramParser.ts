@@ -421,7 +421,7 @@ export function parseHaemogramData(
   ];
 
   return {
-    facilityName: patientMeta?.facilityName || "AFYACARE HEALTHCARE & DIAGNOSTIC CENTER",
+    facilityName: patientMeta?.facilityName || "TASSIAHILL HOSPITAL & DIAGNOSTIC CENTER",
     facilityAddress: "MoH Reg. No: MOH/2026/089 • P.O. Box 45012-00100 Nairobi",
     facilityCode: "MOH-LEVEL-LAB-4409",
     patientName: patientMeta?.name || "Patient Walk-in",

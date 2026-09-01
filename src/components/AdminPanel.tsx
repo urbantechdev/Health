@@ -960,7 +960,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                 <input
                   type="email"
                   required
-                  placeholder="e.g. amina.wanjiku@afyacare.co.ke"
+                  placeholder="e.g. amina.wanjiku@tassiahillhospital.co.ke"
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
                   className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono focus:border-purple-500"

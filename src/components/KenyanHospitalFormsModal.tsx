@@ -47,6 +47,7 @@ import {
 } from "../types";
 import { toast } from "../lib/promptService";
 import { printElement, downloadElementAsPdf } from "../lib/printUtils";
+import DocumentLogo from "./DocumentLogo";
 
 export type KenyanFormType = 
   | "sick_sheet" 
@@ -235,9 +236,9 @@ export default function KenyanHospitalFormsModal({
     },
 
     // Step 8: Take-Home Discharge Medications (e-Rx)
-    dischargeMedications: (encounterSubcollections?.prescriptions && encounterSubcollections.prescriptions.length > 0)
+    dischargeMedications: (encounterSubcollections?.prescriptions && Array.isArray(encounterSubcollections.prescriptions) && encounterSubcollections.prescriptions.length > 0)
       ? encounterSubcollections.prescriptions.map(p => ({
-          drug: p.drugName,
+          drug: p.drugName || "Medication",
           dose: p.dosage || "1 Tablet Daily",
           duration: `${p.quantity || 1} Units / Course`,
           instructions: p.instructions || "Take with food"
@@ -870,9 +871,9 @@ export default function KenyanHospitalFormsModal({
               <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 sm:p-10 rounded-2xl shadow-xl font-serif text-slate-900 space-y-6 text-sm">
                 
                 {/* Official Kenyan Hospital Letterhead */}
-                <div className="text-center border-b-2 border-slate-900 pb-4 space-y-1">
-                  <div className="flex items-center justify-center gap-2">
-                    <Hospital className="w-6 h-6 text-emerald-700" />
+                <div className="text-center border-b-2 border-slate-900 pb-4 space-y-1.5">
+                  <div className="flex items-center justify-center gap-3">
+                    <DocumentLogo size="md" className="border-2 border-emerald-700/60 shadow-xs" />
                     <h1 className="text-xl sm:text-2xl font-black font-sans uppercase tracking-tight text-slate-950">
                       {facilityName}
                     </h1>
@@ -1080,9 +1081,9 @@ export default function KenyanHospitalFormsModal({
               <div id="print-section" className="w-full max-w-4xl bg-white border-2 border-slate-300 p-6 sm:p-9 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
                 
                 {/* Official Kenyan Hospital Letterhead & Statutory Accreditation */}
-                <div className="text-center border-b-2 border-slate-900 pb-3 space-y-1">
-                  <div className="flex items-center justify-center gap-2">
-                    <Hospital className="w-6 h-6 text-emerald-700" />
+                <div className="text-center border-b-2 border-slate-900 pb-3 space-y-1.5">
+                  <div className="flex items-center justify-center gap-3">
+                    <DocumentLogo size="md" className="border-2 border-emerald-700/60 shadow-xs" />
                     <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">{facilityName}</h1>
                   </div>
                   <p className="text-xs font-bold text-slate-700">{facilityMfl} • {county} • INPATIENT & OUTPATIENT CLINICAL CARE</p>
@@ -1418,9 +1419,12 @@ export default function KenyanHospitalFormsModal({
             {/* 4. MOH 240 LAB REQUISITION & RESULTS SLIP */}
             {selectedForm === "lab_requisition_moh240" && (
               <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
-                <div className="text-center border-b-2 border-slate-900 pb-3">
-                  <h1 className="text-lg font-black uppercase">{facilityName} - CLINICAL LABORATORY</h1>
-                  <span className="px-3 py-0.5 bg-slate-900 text-white font-bold text-xs uppercase rounded">
+                <div className="text-center border-b-2 border-slate-900 pb-3 space-y-1.5">
+                  <div className="flex items-center justify-center gap-3">
+                    <DocumentLogo size="sm" className="border border-slate-400" />
+                    <h1 className="text-lg font-black uppercase text-slate-950">{facilityName} - CLINICAL LABORATORY</h1>
+                  </div>
+                  <span className="px-3 py-0.5 bg-slate-900 text-white font-bold text-xs uppercase rounded inline-block">
                     MOH 240: LABORATORY INVESTIGATION REQUISITION & RESULTS REPORT
                   </span>
                 </div>
@@ -1466,9 +1470,12 @@ export default function KenyanHospitalFormsModal({
             {/* 5. PPB DIGITAL E-PRESCRIPTION */}
             {selectedForm === "prescription_erx" && (
               <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
-                <div className="text-center border-b-2 border-slate-900 pb-3">
-                  <h1 className="text-lg font-black uppercase text-emerald-900">{facilityName} • PHARMACY DISPENSARY</h1>
-                  <span className="px-3 py-0.5 bg-emerald-800 text-white font-bold text-xs uppercase rounded">
+                <div className="text-center border-b-2 border-slate-900 pb-3 space-y-1.5">
+                  <div className="flex items-center justify-center gap-3">
+                    <DocumentLogo size="sm" className="border border-emerald-600" />
+                    <h1 className="text-lg font-black uppercase text-emerald-950">{facilityName} • PHARMACY DISPENSARY</h1>
+                  </div>
+                  <span className="px-3 py-0.5 bg-emerald-800 text-white font-bold text-xs uppercase rounded inline-block">
                     PPB STANDARDIZED DIGITAL e-PRESCRIPTION SLIP (MOH / PPB COMPLIANT)
                   </span>
                 </div>
@@ -1523,9 +1530,12 @@ export default function KenyanHospitalFormsModal({
             {/* 6. TRIAGE SHEET & TEWS SCORE */}
             {selectedForm === "triage_sheet" && (
               <div id="print-section" className="w-full max-w-3xl bg-white border-2 border-slate-300 p-8 rounded-2xl shadow-xl font-sans text-slate-900 space-y-4 text-xs">
-                <div className="text-center border-b-2 border-slate-900 pb-3">
-                  <h1 className="text-lg font-black uppercase">{facilityName} - ACCIDENT & EMERGENCY</h1>
-                  <span className="px-3 py-0.5 bg-amber-600 text-white font-bold text-xs uppercase rounded">
+                <div className="text-center border-b-2 border-slate-900 pb-3 space-y-1.5">
+                  <div className="flex items-center justify-center gap-3">
+                    <DocumentLogo size="sm" className="border border-amber-600" />
+                    <h1 className="text-lg font-black uppercase text-slate-950">{facilityName} - ACCIDENT & EMERGENCY</h1>
+                  </div>
+                  <span className="px-3 py-0.5 bg-amber-600 text-white font-bold text-xs uppercase rounded inline-block">
                     TRIAGE EARLY WARNING SCORE (TEWS) & EMERGENCY INTAKE RECORD
                   </span>
                 </div>

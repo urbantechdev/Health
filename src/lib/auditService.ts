@@ -16,7 +16,7 @@ export async function logSettingsChange(params: {
     const auditRecord: Omit<SettingsAuditLog, "id"> = {
       timestamp: new Date().toISOString(),
       changedBy: params.userName || "System Administrator",
-      userEmail: params.userEmail || "admin@afyacare.go.ke",
+      userEmail: params.userEmail || "admin@tassiahillhospital.co.ke",
       userRole: params.userRole || "Super Admin",
       changeType: params.changeType,
       fieldName: params.fieldName,

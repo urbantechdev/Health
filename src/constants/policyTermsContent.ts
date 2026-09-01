@@ -14,7 +14,7 @@ export const TERMS_OF_USE_CLAUSES: PolicyClause[] = [
     section: "1. System Authorization & Permitted Purpose",
     title: "Authorized Practitioner & Staff Access Only",
     summary: "Access to this Hospital Management Information System (HMIS) is restricted to credentialed healthcare workers and authorized administrative personnel.",
-    fullText: `1.1. This Hospital Management Information System (AfyaCare HMIS / NextGen Hospital Platform) is licensed exclusively for legitimate healthcare administration, patient triage, clinical consultation, diagnostic ordering, pharmacy dispensing, inpatient bed management, and revenue cycle reconciliation.
+    fullText: `1.1. This Hospital Management Information System (TASSIAHILL HOSPITAL HMIS) is licensed exclusively for legitimate healthcare administration, patient triage, clinical consultation, diagnostic ordering, pharmacy dispensing, inpatient bed management, and revenue cycle reconciliation.
 1.2. Users must only access patient data for individuals directly under their active clinical care or administrative responsibility ("Need-to-Know Principle").
 1.3. Sharing of login credentials, PINs, smartcard tokens, or biometric override codes is strictly prohibited and constitutes a direct breach of employment contract and professional licensure rules.`,
     legalReference: "Health Act No. 21 of 2017 (Sec 10-14); KMPDC Code of Professional Conduct",
@@ -174,12 +174,12 @@ export const INFOSEC_STANDARDS: PolicyClause[] = [
 ];
 
 export const REGULATORY_DIRECTORY = {
-  hospitalName: "AfyaCare National Referral Hospital & Research Centre",
+  hospitalName: "TASSIAHILL HOSPITAL & Healthcare Centre",
   odpcRegistrationNumber: "ODPC/REG/KE/2026-HC-00482",
   dhaFacilityCode: "DHA-FAC-NRB-04281",
   kmhflCode: "KMHFL-24019",
   dpoName: "Dr. Emmanuel Mutua, LL.M, CIPP/E",
-  dpoEmail: "dpo@afyacare-hospital.co.ke",
+  dpoEmail: "dpo@tassiahillhospital.co.ke",
   dpoHotline: "+254 (020) 794-2000 / Ext 404",
   odpcNationalOffice: "Office of the Data Protection Commissioner, Britam Tower, 13th Floor, Hospital Rd, Nairobi",
   odpcWebsite: "https://www.odpc.go.ke",

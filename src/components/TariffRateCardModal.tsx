@@ -40,7 +40,7 @@ export default function TariffRateCardModal({
   isOpen,
   onClose,
   userRole = "Billing & Accounts",
-  userEmail = "billing@afyacare.go.ke"
+  userEmail = "billing@tassiahillhospital.co.ke"
 }: TariffRateCardModalProps) {
   const [activeSubTab, setActiveSubTab] = useState<"bed_rates" | "procedure_tariffs">("bed_rates");
   

@@ -1,4 +1,4 @@
-# 🏥 AfyaCare Enterprise HMS — Multi-Tenant Hospital & Clinic Management System
+# 🏥 TASSIAHILL HOSPITAL Enterprise HMS — Multi-Tenant Hospital & Clinic Management System
 ### *Kenyan Healthcare Ecosystem Edition (Taifa Care / SHA • KRA eTIMS • M-PESA Daraja 3.0 • PPB e-Rx)*
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
@@ -12,7 +12,7 @@
 
 ## 📋 Executive Overview
 
-**AfyaCare Enterprise HMS** is a multi-tenant, cloud-native Hospital Information System (HIS) and Electronic Medical Records (EMR) platform engineered specifically for the regulatory, financial, and operational demands of Kenyan healthcare providers (Levels 2–5 hospitals, specialist clinics, and multi-branch healthcare networks).
+**TASSIAHILL HOSPITAL Enterprise HMS** is a multi-tenant, cloud-native Hospital Information System (HIS) and Electronic Medical Records (EMR) platform engineered specifically for the regulatory, financial, and operational demands of Kenyan healthcare providers (Levels 2–5 hospitals, specialist clinics, and multi-branch healthcare networks).
 
 The platform unifies all facility operations into a synchronized, real-time clinical workflow — from **biometric reception & optical ID scanning**, **triage with automated MEWS deterioration scores**, **ICD-10 clinical consultations**, **LIS/RIS diagnostic orders**, and **GS1 2D barcode smart pharmacy dispensing**, through to **split-ledger billing**, **KRA eTIMS fiscal QR invoicing**, **Safaricom M-Pesa Express STK checkout**, and **digital gate pass clearance**.
 
@@ -20,7 +20,7 @@ The platform unifies all facility operations into a synchronized, real-time clin
 
 ## 🇰🇪 Kenyan National Health & Digital Ecosystem Integrations
 
-| Integration Service | Regulatory Body / Provider | Standard & Protocol | Implementation in AfyaCare HMS |
+| Integration Service | Regulatory Body / Provider | Standard & Protocol | Implementation in TASSIAHILL HOSPITAL HMS |
 | :--- | :--- | :--- | :--- |
 | **Social Health Authority (SHA / Taifa Care)** | Ministry of Health (MOH) / SHA | AfyaLink Digital Health Agency (DHA) REST v4.2 | Real-time DHA beneficiary eligibility verification, Biometric/National ID lookup, electronic pre-authorization claims, co-pay split ledger computation. |
 | **KRA eTIMS v2.0** | Kenya Revenue Authority | Fiscal Device OSCU / VSCU API & QR Hash Standard | Automated fiscal invoice generation, cryptographic signature validation, QR code printing on thermal & PDF receipts, zero tax compliance backlog. |
@@ -125,7 +125,7 @@ The platform unifies all facility operations into a synchronized, real-time clin
 
 ## 👥 Role-Based Access Control (RBAC) Matrix
 
-AfyaCare HMS implements strict **Need-to-Know Role Scoping** aligned with the Kenya Data Protection Act 2019:
+TASSIAHILL HOSPITAL HMS implements strict **Need-to-Know Role Scoping** aligned with the Kenya Data Protection Act 2019:
 
 | Role Title | Department | Primary Permitted Modules |
 | :--- | :--- | :--- |
@@ -197,8 +197,8 @@ AfyaCare HMS implements strict **Need-to-Know Role Scoping** aligned with the Ke
 ### Quick Start
 ```bash
 # 1. Clone the repository
-git clone https://github.com/urbantechdev/afyacare-hms.git
-cd afyacare-hms
+git clone https://github.com/urbantechdev/tassiahill-hospital-hms.git
+cd tassiahill-hospital-hms
 
 # 2. Install dependencies
 npm install
@@ -229,7 +229,7 @@ npm start
 
 ## 📞 Support, Licensing & Credits
 
-**AfyaCare Enterprise HMS** is designed, developed, and maintained by **Urban Technology Developer (urbantechdev)**.
+**TASSIAHILL HOSPITAL Enterprise HMS** is designed, developed, and maintained by **Urban Technology Developer (urbantechdev)**.
 
 - **Website**: [https://urbantechdev.com](https://urbantechdev.com)
 - **Technical Support**: `urbaninteriorkenya@gmail.com` / `moraasdorcah@gmail.com`

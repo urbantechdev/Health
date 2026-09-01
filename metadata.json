@@ -1,6 +1,6 @@
 {
-  "name": "HMIS",
-  "description": "A Multi-Tenant Hospital & Clinic Management System designed for Kenyan healthcare providers, featuring dynamic departmental workflows, paperless billing, smart pharmacy POS, and deep integrations with SHA/Taifa Care, KRA eTIMS, and Safaricom M-PESA.",
+  "name": "TASSIAHILL HOSPITAL HMIS",
+  "description": "TASSIAHILL HOSPITAL Multi-Tenant Hospital & Clinic Management System designed for Kenyan healthcare providers, featuring dynamic departmental workflows, paperless billing, smart pharmacy POS, and deep integrations with SHA/Taifa Care, KRA eTIMS, and Safaricom M-PESA.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

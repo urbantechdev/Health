@@ -715,25 +715,45 @@ app.post("/api/integrations/slade/preauth", (req, res) => {
 
 // --- VITE DEV OR PRODUCTION STATIC SERVING ---
 async function setupViteOrStatic() {
-  if (process.env.NODE_ENV !== "production") {
-    console.log("Mounting Vite dev middleware...");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
+  try {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[Server] Mounting Vite dev middleware...");
+      const vite = await createViteServer({
+        root: process.cwd(),
+        server: {
+          middlewareMode: true,
+          hmr: process.env.DISABLE_HMR === "true" ? false : undefined,
+        },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } else {
+      console.log("[Server] Serving static production assets from /dist...");
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[NextGen HMS Server] running on http://0.0.0.0:${PORT}`);
     });
-    app.use(vite.middlewares);
-  } else {
-    console.log("Serving static production assets...");
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+
+    server.on("error", (err: any) => {
+      console.error("[NextGen HMS Server] Listener error:", err);
+    });
+  } catch (error) {
+    console.error("[Server] Error initializing Vite middleware or Express listener:", error);
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[NextGen HMS Server] Fallback listener running on http://0.0.0.0:${PORT}`);
+    });
+    server.on("error", (err: any) => {
+      console.error("[NextGen HMS Server] Fallback listener error:", err);
     });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[NextGen HMS Server] running on http://localhost:${PORT}`);
-  });
 }
 
-setupViteOrStatic();
+setupViteOrStatic().catch((err) => {
+  console.error("[Server] Unhandled startup rejection:", err);
+});

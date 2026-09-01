@@ -272,8 +272,9 @@ export default function PatientDailyHistoryStatement({
 
       // Lab tests
       const labList: UnifiedDailyPatientVisit["labTests"] = [];
-      const testNames = t.requestedTests || t.labTestsOrdered || [];
+      const testNames = Array.isArray(t.requestedTests) ? t.requestedTests : Array.isArray(t.labTestsOrdered) ? t.labTestsOrdered : [];
       testNames.forEach((tName) => {
+        if (!tName) return;
         labList.push({
           name: tName,
           status: t.resultsReady ? "Completed" : t.currentDepartment === "laboratory" ? "In Processing" : "Requested",
@@ -441,9 +442,10 @@ export default function PatientDailyHistoryStatement({
 
     // 3. Link Patient Master Records (Visits, Clinical Notes, Prescriptions)
     patients.forEach((pRecord) => {
-      if (!pRecord.visits || pRecord.visits.length === 0) return;
+      if (!pRecord || !pRecord.visits || !Array.isArray(pRecord.visits) || pRecord.visits.length === 0) return;
 
       pRecord.visits.forEach((v) => {
+        if (!v) return;
         const vDate = v.date ? v.date.slice(0, 10) : "";
         if (!isInDateRange(vDate)) return;
 
@@ -466,9 +468,10 @@ export default function PatientDailyHistoryStatement({
             };
           }
           // Prescriptions from clinical visit
-          if (v.prescriptions && v.prescriptions.length > 0) {
+          if (v.prescriptions && Array.isArray(v.prescriptions) && v.prescriptions.length > 0) {
             v.prescriptions.forEach((rx) => {
-              if (!visit!.prescriptions.some(existing => existing.drugName.toLowerCase() === rx.drugName.toLowerCase())) {
+              if (!rx || !rx.drugName) return;
+              if (!visit!.prescriptions.some(existing => existing.drugName && existing.drugName.toLowerCase() === rx.drugName.toLowerCase())) {
                 visit!.prescriptions.push({
                   drugName: rx.drugName,
                   dosage: rx.dosage,
@@ -480,9 +483,10 @@ export default function PatientDailyHistoryStatement({
             });
           }
           // Referrals & Lab Tests
-          if (v.referrals && v.referrals.length > 0) {
+          if (v.referrals && Array.isArray(v.referrals) && v.referrals.length > 0) {
             v.referrals.forEach((ref) => {
-              if (!visit!.labTests.some(existing => existing.name.toLowerCase() === ref.testName.toLowerCase())) {
+              if (!ref || !ref.testName) return;
+              if (!visit!.labTests.some(existing => existing.name && existing.name.toLowerCase() === ref.testName.toLowerCase())) {
                 visit!.labTests.push({
                   name: ref.testName,
                   status: ref.status === "completed" ? "Completed" : "Pending",
@@ -1344,7 +1348,7 @@ export default function PatientDailyHistoryStatement({
           patientMeta={{
             name: selectedHaemogramView.patientName || "Patient Record",
             date: selectedHaemogramView.date,
-            facilityName: "AfyaCare Diagnostic & Laboratory Center",
+            facilityName: "TASSIAHILL HOSPITAL Diagnostic & Laboratory Center",
             doctor: "Attending Medical Officer"
           }}
         />

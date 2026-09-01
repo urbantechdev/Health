@@ -218,10 +218,10 @@ export async function removeChargeFromCart(
   const currentCart = await getPatientCart(patientId);
   if (!currentCart) return;
 
-  const updatedItems = currentCart.items.filter((i) => i.id !== itemId);
-  const pendingItems = updatedItems.filter((i) => i.status === "pending_checkout");
-  const totalAmount = pendingItems.reduce((sum, i) => sum + i.totalPrice, 0);
-  const itemCount = pendingItems.reduce((sum, i) => sum + i.quantity, 0);
+  const updatedItems = (currentCart.items || []).filter((i) => i && i.id !== itemId);
+  const pendingItems = updatedItems.filter((i) => i && i.status === "pending_checkout");
+  const totalAmount = pendingItems.reduce((sum, i) => sum + (Number(i.totalPrice) || 0), 0);
+  const itemCount = pendingItems.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
 
   const cartDocRef = doc(db, "patient_carts", `cart-${patientId}`);
   await updateDoc(cartDocRef, {
@@ -244,10 +244,10 @@ export async function updateCartItemQuantity(
   const currentCart = await getPatientCart(patientId);
   if (!currentCart) return;
 
-  const updatedItems = currentCart.items.map((item) => {
-    if (item.id === itemId) {
+  const updatedItems = (currentCart.items || []).map((item) => {
+    if (item && item.id === itemId) {
       const newQty = Math.max(1, quantity);
-      const newPrice = unitPrice !== undefined ? Math.max(0, unitPrice) : item.unitPrice;
+      const newPrice = unitPrice !== undefined ? Math.max(0, unitPrice) : (Number(item.unitPrice) || 0);
       return {
         ...item,
         quantity: newQty,
@@ -258,9 +258,9 @@ export async function updateCartItemQuantity(
     return item;
   });
 
-  const pendingItems = updatedItems.filter((i) => i.status === "pending_checkout");
-  const totalAmount = pendingItems.reduce((sum, i) => sum + i.totalPrice, 0);
-  const itemCount = pendingItems.reduce((sum, i) => sum + i.quantity, 0);
+  const pendingItems = updatedItems.filter((i) => i && i.status === "pending_checkout");
+  const totalAmount = pendingItems.reduce((sum, i) => sum + (Number(i.totalPrice) || 0), 0);
+  const itemCount = pendingItems.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
 
   const cartDocRef = doc(db, "patient_carts", `cart-${patientId}`);
   await updateDoc(cartDocRef, {
@@ -282,8 +282,8 @@ export async function waiveCartItem(
   const currentCart = await getPatientCart(patientId);
   if (!currentCart) return;
 
-  const updatedItems = currentCart.items.map((item) => {
-    if (item.id === itemId) {
+  const updatedItems = (currentCart.items || []).map((item) => {
+    if (item && item.id === itemId) {
       return {
         ...item,
         status: "waived" as const,
@@ -293,9 +293,9 @@ export async function waiveCartItem(
     return item;
   });
 
-  const pendingItems = updatedItems.filter((i) => i.status === "pending_checkout");
-  const totalAmount = pendingItems.reduce((sum, i) => sum + i.totalPrice, 0);
-  const itemCount = pendingItems.reduce((sum, i) => sum + i.quantity, 0);
+  const pendingItems = updatedItems.filter((i) => i && i.status === "pending_checkout");
+  const totalAmount = pendingItems.reduce((sum, i) => sum + (Number(i.totalPrice) || 0), 0);
+  const itemCount = pendingItems.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
 
   const cartDocRef = doc(db, "patient_carts", `cart-${patientId}`);
   await updateDoc(cartDocRef, {
@@ -345,23 +345,23 @@ export async function checkoutPatientCart(
   const nowIso = new Date().toISOString();
   const currentCart = await getPatientCart(params.patientId);
 
-  if (!currentCart || currentCart.items.length === 0) {
+  if (!currentCart || !Array.isArray(currentCart.items) || currentCart.items.length === 0) {
     throw new Error("No items in patient cart to checkout.");
   }
 
-  const pendingItems = currentCart.items.filter((i) => i.status === "pending_checkout");
+  const pendingItems = (currentCart.items || []).filter((i) => i && i.status === "pending_checkout");
   if (pendingItems.length === 0) {
     throw new Error("All items in this cart are already checked out or waived.");
   }
 
-  const subtotal = pendingItems.reduce((sum, i) => sum + i.totalPrice, 0);
+  const subtotal = pendingItems.reduce((sum, i) => sum + (Number(i.totalPrice) || 0), 0);
   const discount = Math.max(0, params.discountAmount || params.splitBreakdown?.discount || 0);
   const finalPayable = Math.max(0, subtotal - discount);
 
   // Compile itemized invoice lines
   const invoiceItems = pendingItems.map((item) => ({
     description: `[${item.stage}] ${item.name}${item.quantity > 1 ? ` (x${item.quantity})` : ""}`,
-    amount: item.totalPrice,
+    amount: Number(item.totalPrice) || 0,
     department: item.department || item.stage
   }));
 
@@ -417,8 +417,8 @@ export async function checkoutPatientCart(
   await setDoc(doc(db, "invoices", invoiceNo), cleanFirestoreData(invoiceDoc));
 
   // 2. Mark all pending cart items as checked out
-  const finalizedItems: PatientCartItem[] = currentCart.items.map((item) => {
-    if (item.status === "pending_checkout") {
+  const finalizedItems: PatientCartItem[] = (currentCart.items || []).map((item) => {
+    if (item && item.status === "pending_checkout") {
       return {
         ...item,
         status: "checked_out" as const
@@ -503,17 +503,35 @@ export async function syncDoctorConsultationToCart(params: {
   encounterId?: string;
   doctorName: string;
   isResultsReview?: boolean;
-  prescriptions: { drugName: string; quantity: number; dosage: string; unitPrice?: number }[];
+  prescriptions: { drugName: string; quantity: number; dosage: string; instructions?: string; unitPrice?: number }[];
   referrals: { testName: string; department: string; standardAmount?: number }[];
   procedures?: { name: string; category?: PatientCartItem["category"]; amount: number }[];
-}): Promise<void> {
-  // 1. Add Consultation Fee only if this is NOT a lab results review visit
+}): Promise<PatientCart | null> {
+  const nowIso = new Date().toISOString();
+  const cartDocRef = doc(db, "patient_carts", `cart-${params.patientId}`);
+  const currentCart = await getPatientCart(params.patientId);
+
+  // Retain all items from other departments or stages, or already completed/billed items
+  const retainedItems = (currentCart?.items || []).filter(
+    (item) =>
+      item.status !== "pending_checkout" ||
+      ![
+        "Doctor Consultation",
+        "Pharmacy Dispensing",
+        "Laboratory Diagnostics",
+        "Radiology & Imaging",
+        "Clinical Procedures"
+      ].includes(item.stage)
+  );
+
+  const newSyncedItems: PatientCartItem[] = [];
+
+  // 1. Consultation Fee
   if (!params.isResultsReview) {
-    await addChargeToCart({
+    newSyncedItems.push({
+      id: `cart-item-con-${params.patientId}`,
       patientId: params.patientId,
       patientName: params.patientName,
-      nationalId: params.nationalId,
-      phone: params.phone,
       ticketNo: params.ticketNo,
       encounterId: params.encounterId,
       stage: "Doctor Consultation",
@@ -523,66 +541,82 @@ export async function syncDoctorConsultationToCart(params: {
       name: "Doctor Consultation & Clinical Assessment Fee",
       unitPrice: 1000,
       quantity: 1,
+      totalPrice: 1000,
       notes: `Attending Doctor: ${params.doctorName}`,
       addedBy: params.doctorName,
-      addedByRole: "Doctor"
+      addedByRole: "Doctor",
+      addedAt: nowIso,
+      status: "pending_checkout"
     });
   }
 
-  // 2. Add Prescriptions
+  // 2. Prescriptions
   for (const rx of params.prescriptions) {
-    const unitPrice = rx.unitPrice || 450;
-    await addChargeToCart({
+    const qty = Math.max(1, rx.quantity || 1);
+    const unitPrice = Math.max(0, rx.unitPrice !== undefined ? rx.unitPrice : 150);
+    const notesArr = [
+      rx.dosage ? `Dosage: ${rx.dosage}` : "",
+      rx.instructions ? `Instructions: ${rx.instructions}` : "",
+      `Prescribed by Dr. ${params.doctorName}`
+    ].filter(Boolean);
+
+    newSyncedItems.push({
+      id: `cart-item-rx-${rx.drugName.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 900)}`,
       patientId: params.patientId,
       patientName: params.patientName,
-      nationalId: params.nationalId,
-      phone: params.phone,
       ticketNo: params.ticketNo,
       encounterId: params.encounterId,
       stage: "Pharmacy Dispensing",
       department: "Pharmacy",
       category: "pharmacy",
-      name: `Rx: ${rx.drugName} (${rx.dosage || "Standard"})`,
+      itemCode: "RX-AUTO",
+      name: `${rx.drugName}${rx.dosage ? ` (${rx.dosage})` : ""}`,
       unitPrice,
-      quantity: rx.quantity || 1,
-      notes: `Prescribed by Dr. ${params.doctorName}`,
+      quantity: qty,
+      totalPrice: qty * unitPrice,
+      notes: notesArr.join(" • "),
       addedBy: params.doctorName,
-      addedByRole: "Doctor"
+      addedByRole: "Doctor",
+      addedAt: nowIso,
+      status: "pending_checkout"
     });
   }
 
-  // 3. Add Diagnostic Referrals (Lab & Radiology)
+  // 3. Diagnostic Referrals (Lab & Radiology)
   for (const ref of params.referrals) {
     const isRad = ref.department === "radiology";
     const stage = isRad ? "Radiology & Imaging" : "Laboratory Diagnostics";
     const defaultCost = isRad ? 1800 : 850;
-    await addChargeToCart({
+    const unitPrice = ref.standardAmount || defaultCost;
+
+    newSyncedItems.push({
+      id: `cart-item-ref-${ref.testName.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 900)}`,
       patientId: params.patientId,
       patientName: params.patientName,
-      nationalId: params.nationalId,
-      phone: params.phone,
       ticketNo: params.ticketNo,
       encounterId: params.encounterId,
       stage,
       department: ref.department || (isRad ? "Radiology" : "Laboratory"),
       category: isRad ? "radiology" : "laboratory",
       name: `${isRad ? "Imaging" : "Lab Test"}: ${ref.testName}`,
-      unitPrice: ref.standardAmount || defaultCost,
+      unitPrice,
       quantity: 1,
+      totalPrice: unitPrice,
       notes: `Ordered by Dr. ${params.doctorName}`,
       addedBy: params.doctorName,
-      addedByRole: "Doctor"
+      addedByRole: "Doctor",
+      addedAt: nowIso,
+      status: "pending_checkout"
     });
   }
 
-  // 4. Add any Procedures if present
+  // 4. Procedures
   if (params.procedures) {
     for (const proc of params.procedures) {
-      await addChargeToCart({
+      newSyncedItems.push({
+        id: `cart-item-proc-${proc.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 900)}`,
         patientId: params.patientId,
         patientName: params.patientName,
-        nationalId: params.nationalId,
-        phone: params.phone,
         ticketNo: params.ticketNo,
         encounterId: params.encounterId,
         stage: "Doctor Consultation",
@@ -591,10 +625,39 @@ export async function syncDoctorConsultationToCart(params: {
         name: `Procedure: ${proc.name}`,
         unitPrice: proc.amount,
         quantity: 1,
+        totalPrice: proc.amount,
         notes: `Performed by Dr. ${params.doctorName}`,
         addedBy: params.doctorName,
-        addedByRole: "Doctor"
+        addedByRole: "Doctor",
+        addedAt: nowIso,
+        status: "pending_checkout"
       });
     }
   }
+
+  const allUpdatedItems = [...retainedItems, ...newSyncedItems];
+  const pendingItems = allUpdatedItems.filter((i) => i.status === "pending_checkout");
+  const totalAmount = pendingItems.reduce((sum, i) => sum + i.totalPrice, 0);
+  const itemCount = pendingItems.reduce((sum, i) => sum + i.quantity, 0);
+
+  const cartPayload: PatientCart = {
+    id: `cart-${params.patientId}`,
+    patientId: params.patientId,
+    patientName: params.patientName,
+    nationalId: params.nationalId || currentCart?.nationalId || "N/A",
+    phone: params.phone || currentCart?.phone || "",
+    activeTicketNo: params.ticketNo || currentCart?.activeTicketNo || "",
+    encounterId: params.encounterId || currentCart?.encounterId || "",
+    items: allUpdatedItems,
+    totalAmount,
+    itemCount,
+    status: "active",
+    lastAddedStage: "Pharmacy Dispensing",
+    createdAt: currentCart?.createdAt || nowIso,
+    updatedAt: nowIso
+  };
+
+  await setDoc(cartDocRef, cleanFirestoreData(cartPayload));
+  return cartPayload;
 }
+

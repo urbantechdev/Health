@@ -908,7 +908,7 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
                     <Zap className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
                     <div>
                       <strong className="text-amber-200">Doctor's Order Notes:</strong> {selectedTicket.notes}
-                      {selectedTicket.requestedTests && (
+                      {selectedTicket.requestedTests && Array.isArray(selectedTicket.requestedTests) && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {selectedTicket.requestedTests.map((req, i) => (
                             <span key={i} className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-md text-white">
@@ -2244,7 +2244,7 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
             age: matchedPatient?.age || 30,
             gender: matchedPatient?.gender || "Adult",
             patientNo: matchedPatient?.nationalId || matchedPatient?.patientNumber || selectedTicket?.ticketNo || "LAB-OPD-99",
-            facilityName: "AfyaCare Diagnostic & Laboratory Center",
+            facilityName: "TASSIAHILL HOSPITAL Diagnostic & Laboratory Center",
             doctor: "Attending Medical Officer",
             date: new Date().toISOString().replace("T", " ").substring(0, 16)
           }}

@@ -1368,10 +1368,10 @@ export default function AdmissionDischargeManager() {
                   </div>
 
                   <div className="space-y-2.5">
-                    {subcollections.prescriptions.length === 0 ? (
+                    {(subcollections?.prescriptions || []).length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-8">No prescriptions in this encounter.</p>
                     ) : (
-                      subcollections.prescriptions.map((rx) => (
+                      (subcollections?.prescriptions || []).map((rx) => (
                         <div key={rx.id} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-4">
                           <div>
                             <div className="flex items-center gap-2">

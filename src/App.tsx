@@ -33,6 +33,7 @@ import TransfersHub from "./components/TransfersHub";
 import AdmissionDischargeManager from "./components/AdmissionDischargeManager";
 import KenyanHospitalFormsModal, { KenyanFormType } from "./components/KenyanHospitalFormsModal";
 import PatientHistoryLookupModal from "./components/PatientHistoryLookupModal";
+import ReceiptsClearanceModal from "./components/ReceiptsClearanceModal";
 import RolePortalLogin from "./components/RolePortalLogin";
 import SystemPolicyTermsModal from "./components/SystemPolicyTermsModal";
 import { GoogleAuthModal } from "./components/GoogleAuthModal";
@@ -348,7 +349,7 @@ const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClas
 export default function App() {
   const [tenant, setTenant] = useState<Tenant>({
     id: "tenant-9943",
-    name: "HMIS",
+    name: "TASSIAHILL HOSPITAL",
     type: "clinic",
     county: "Nairobi",
   });
@@ -1114,6 +1115,19 @@ export default function App() {
   const [kenyanFormsInitialPatient, setKenyanFormsInitialPatient] = useState<any>(null);
   const [kenyanFormsInitialFormType, setKenyanFormsInitialFormType] = useState<KenyanFormType>("sick_sheet");
 
+  // Patient Receipts, Invoices & Discharge Clearance Hub Modal State
+  const [showReceiptsModal, setShowReceiptsModal] = useState(false);
+  const [receiptsInitialPatientId, setReceiptsInitialPatientId] = useState<string | undefined>(undefined);
+  const [totalReceiptsCount, setTotalReceiptsCount] = useState<number>(0);
+
+  // Real-time listener for invoices to update bottom dock badge
+  useEffect(() => {
+    const unsubInvoices = onSnapshot(collection(db, "invoices"), (snap) => {
+      setTotalReceiptsCount(snap.size);
+    });
+    return () => unsubInvoices();
+  }, []);
+
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [pendingTransfersCount, setPendingTransfersCount] = useState<number>(0);
 
@@ -1323,7 +1337,7 @@ export default function App() {
       <>
         <RolePortalLogin
           employees={employees}
-          hospitalName={brandCustomName || tenant.name || "AfyaCare Medical Systems"}
+          hospitalName={brandCustomName || tenant.name || "TASSIAHILL HOSPITAL"}
           hospitalLogoUrl={brandLogoUrl}
           authError={authError}
           onGoogleLogin={handleGoogleLogin}
@@ -2347,7 +2361,7 @@ export default function App() {
                       <span>User Guide</span>
                     </button>
                     <button
-                      onClick={() => downloadReadmeFile("AfyaCare-HMS-Enterprise-Documentation.md")}
+                      onClick={() => downloadReadmeFile("Tassiahill-Hospital-HMS-Documentation.md")}
                       className="p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <FileDown className="w-4 h-4 text-emerald-400" />
@@ -2641,14 +2655,14 @@ export default function App() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 font-bold text-slate-700">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>AfyaCare Enterprise HMS</span>
+                  <span>TASSIAHILL HOSPITAL Enterprise HMS</span>
                 </div>
                 <span className="text-slate-300">•</span>
                 <span className="text-slate-500 text-[11px] font-medium">SHA Portal API v4.2 • KRA eTIMS v2.0 Live Sync</span>
                 <span className="text-slate-300">•</span>
                 <button
                   id="btn-footer-download-readme"
-                  onClick={() => downloadReadmeFile("AfyaCare-HMS-Enterprise-Documentation.md")}
+                  onClick={() => downloadReadmeFile("Tassiahill-Hospital-HMS-Documentation.md")}
                   title="Download complete system documentation and architecture (README.md)"
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold border border-slate-300/80 hover:border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95 text-[11px]"
                 >
@@ -2781,7 +2795,7 @@ export default function App() {
         setMpesaModalData({
           defaultPhone: "0712345678",
           defaultAmount: 1500,
-          defaultReference: "AFYA-DIRECT",
+          defaultReference: "TASSIA-DIRECT",
           patientName: "Direct Hospital Client",
         });
         setShowMpesaModal(true);
@@ -2793,6 +2807,11 @@ export default function App() {
         });
         setShowShaModal(true);
       }}
+      onOpenReceipts={() => {
+        setReceiptsInitialPatientId(undefined);
+        setShowReceiptsModal(true);
+      }}
+      receiptsCount={totalReceiptsCount}
       checkTabPermission={checkTabPermission}
       onOpenChat={() => {
         setChatTargetRole(undefined);
@@ -2906,7 +2925,7 @@ export default function App() {
         localStorage.setItem("platform_favicon_url", url);
         window.dispatchEvent(new Event("platform_branding_changed"));
       }}
-      hospitalName={brandCustomName || tenant.name || "AfyaCare Hospital HMS"}
+      hospitalName={brandCustomName || tenant.name || "TASSIAHILL HOSPITAL"}
     />
 
     {/* User Account Profile & Credentials Management Modal */}
@@ -2941,6 +2960,22 @@ export default function App() {
       }}
       onSelectPatientForIntake={(p) => {
         setActiveTab("reception");
+      }}
+    />
+
+    {/* Patient Receipts, Detailed Invoices, Discharge Plans & Clearance Hub Modal */}
+    <ReceiptsClearanceModal
+      isOpen={showReceiptsModal}
+      onClose={() => setShowReceiptsModal(false)}
+      initialPatientId={receiptsInitialPatientId}
+      onOpenMpesaPay={(patientName, phone, amount, ref) => {
+        setMpesaModalData({
+          defaultPhone: phone,
+          defaultAmount: amount,
+          defaultReference: ref,
+          patientName: patientName,
+        });
+        setShowMpesaModal(true);
       }}
     />
 

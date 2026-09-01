@@ -211,6 +211,55 @@ export default function PharmacyPOSCheckoutModal({
     }
   };
 
+  const handleRouteToCentralBilling = async () => {
+    if (cart.length === 0) return;
+    setProcessing(true);
+    try {
+      const invoiceData: Invoice = {
+        id: `INV-PHARM-${Date.now()}`,
+        patientId: ticketId || "WALK-IN",
+        patientName: patientName || "Walk-in Pharmacy Patient",
+        nationalId: nationalId || "N/A",
+        items: cart.map((i) => ({
+          description: `${i.med.name} (Qty: ${i.qty})`,
+          amount: i.qty * i.med.price,
+          department: "pharmacy",
+        })),
+        total: totalAmount,
+        split: {
+          sha: 0,
+          insurance: 0,
+          outOfPocket: totalAmount,
+        },
+        paymentMethod: "Cash",
+        paymentStatus: "unpaid",
+        timestamp: new Date().toISOString(),
+      };
+
+      await addDoc(collection(db, "invoices"), cleanFirestoreData(invoiceData));
+
+      if (ticketId) {
+        await updateDoc(doc(db, "queue", ticketId), {
+          currentDepartment: "billing",
+          status: "pending",
+          ticketNo: `BIL-${ticketId.slice(-3)}`,
+          service: "Billing & Accounts Clearance",
+          notes: `Pharmacy prescription items queued for payment clearance at Central Billing Cashier.`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      toast.success("Prescription invoice routed to Central Billing Desk for settlement!", "Routed to Billing");
+      onCheckoutComplete();
+      onClose();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to route to central billing.", "Error");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleDone = () => {
     onCheckoutComplete();
     onClose();
@@ -495,13 +544,22 @@ export default function PharmacyPOSCheckoutModal({
               )}
 
               {/* Checkout Action Button */}
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={onClose}
                   className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRouteToCentralBilling}
+                  disabled={processing}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  <span>Route to Central Billing</span>
                 </button>
                 <button
                   type="button"

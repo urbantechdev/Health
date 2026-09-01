@@ -454,7 +454,7 @@ export const MASTER_SHA_TARIFF_CATALOG: ShaTariffMapping[] = [
 // HL7 FHIR R4 JSON Transformers & Shared Health Record (SHR) Converters
 // -----------------------------------------------------------------------------------------
 
-export function convertPatientToFhirResource(patient: any, hospitalName = "AfyaCare National Referral Hospital") {
+export function convertPatientToFhirResource(patient: any, hospitalName = "TASSIAHILL HOSPITAL") {
   const patientName = patient.name || patient.patientName || "Patient";
   return {
     resourceType: "Patient",
@@ -717,11 +717,11 @@ export function validateClaimBeforeSubmission(claim: Partial<EClaimRecord>): { i
     score -= 25;
   }
 
-  if (!claim.items || claim.items.length === 0) {
+  if (!claim.items || !Array.isArray(claim.items) || claim.items.length === 0) {
     errors.push("No tariff billable line items attached to this electronic claim.");
     score -= 20;
   } else {
-    const unmappedItems = claim.items.filter(i => !i.shaTariffCode || i.shaTariffCode === "UNMAPPED");
+    const unmappedItems = claim.items.filter(i => !i || !i.shaTariffCode || i.shaTariffCode === "UNMAPPED");
     if (unmappedItems.length > 0) {
       errors.push(`${unmappedItems.length} item(s) are missing valid SHA standard tariff codes.`);
       score -= 15;
