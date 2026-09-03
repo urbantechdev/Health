@@ -379,7 +379,7 @@ export async function captureBiometricFingerprint(
       const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
         challenge: challenge,
         rp: {
-          name: "Tassiahill Hospital HMS",
+          name: "The Tassia Hill Hospital HMS",
           id: window.location.hostname || "localhost",
         },
         user: {

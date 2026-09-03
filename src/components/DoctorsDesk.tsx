@@ -59,6 +59,7 @@ interface DoctorsDeskProps {
   activeSpecialistId?: string;
   onOpenTransferModal?: (patient?: any) => void;
   onOpenChatModal?: (targetRole?: string, patientInfo?: any) => void;
+  currentUser?: { name: string; role: string; email?: string };
 }
 
 export interface RoutingCueInfo {
@@ -77,8 +78,13 @@ export default function DoctorsDesk({
   onRefreshQueue,
   activeSpecialistId,
   onOpenTransferModal,
-  onOpenChatModal
+  onOpenChatModal,
+  currentUser
 }: DoctorsDeskProps) {
+  const currentDoctorName = useMemo(() => {
+    if (activeSpecialistId) return `Specialist (${activeSpecialistId})`;
+    return currentUser?.name || "Medical Officer";
+  }, [activeSpecialistId, currentUser?.name]);
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
   const [medications, setMedications] = useState<Medication[]>([]);
   const [queueTickets, setQueueTickets] = useState<QueueTicket[]>([]);
@@ -383,7 +389,7 @@ export default function DoctorsDesk({
         assignedBedNumber: bedNumber,
         initialSymptoms: symptoms || "Direct Admission from Doctor's Desk",
         initialDiagnosis: diagnosis || "Inpatient Care Required",
-        attendingDoctorName: "Dr. On Duty",
+        attendingDoctorName: currentDoctorName,
         recordedBy: "Doctor Consultation Desk"
       });
 
@@ -499,7 +505,7 @@ export default function DoctorsDesk({
     // Auto queue patient to Pharmacy in real-time
     if (selectedPatient) {
       try {
-        const doctorName = activeSpecialistId ? `Dr. Specialist (${activeSpecialistId})` : "Doctor on Duty";
+        const doctorName = currentDoctorName;
         const isResultsReview = !!(selectedPatient?.visits && selectedPatient.visits.length > 0);
 
         // 1. Sync consultation & prescriptions to Patient Live Cart
@@ -598,7 +604,7 @@ export default function DoctorsDesk({
 
     if (selectedPatient) {
       try {
-        const doctorName = activeSpecialistId ? `Dr. Specialist (${activeSpecialistId})` : "Doctor on Duty";
+        const doctorName = currentDoctorName;
         const isResultsReview = !!(selectedPatient?.visits && selectedPatient.visits.length > 0);
 
         // Sync updated prescriptions to Patient Live Cart
@@ -770,7 +776,7 @@ export default function DoctorsDesk({
           labTestsOrdered: testsToOrder,
           notes: `Doctor Order: ${testsToOrder.join(", ")}${diagnosis ? ` (Dx: ${diagnosis})` : ""}`,
           timestamp: new Date().toISOString(),
-          originDoctorName: "Dr. On Duty"
+          originDoctorName: currentDoctorName
         });
       } else {
         // Fallback: Create new queue ticket directly
@@ -790,7 +796,7 @@ export default function DoctorsDesk({
           labTestsOrdered: testsToOrder,
           notes: `Doctor Direct Cue: ${testsToOrder.join(", ")}${diagnosis ? ` (Dx: ${diagnosis})` : ""}`,
           timestamp: new Date().toISOString(),
-          originDoctorName: "Dr. On Duty"
+          originDoctorName: currentDoctorName
         });
       }
 
@@ -959,7 +965,7 @@ export default function DoctorsDesk({
           labTestsOrdered: labReferralTests,
           notes: `Referred by Doctor: ${diagnosis || "Diagnostic referral"}. Tests: ${draftReferrals.map(r => r.testName).join(", ")}`,
           timestamp: new Date().toISOString(),
-          originDoctorName: "Dr. On Duty"
+          originDoctorName: currentDoctorName
         };
 
         if (ticketId) {
@@ -984,7 +990,7 @@ export default function DoctorsDesk({
         instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Pharmacy`;
         routingDetails = `Prescriptions queued for dispensing (${draftPrescriptions.length} items): ${draftPrescriptions.map(p => p.drugName).join(", ")}`;
 
-        const docName = activeSpecialistId ? `Dr. Specialist (${activeSpecialistId})` : "Doctor on Duty";
+        const docName = currentDoctorName;
         const pharmaPayload: any = {
           currentDepartment: "pharmacy",
           ticketNo: assignedTicketNo,
@@ -1519,8 +1525,8 @@ export default function DoctorsDesk({
                                   gender: selectedPatient?.gender,
                                   patientNo: selectedPatient?.nationalId || selectedPatient?.patientNumber || selectedPatient?.phone,
                                   date: res.date,
-                                  doctor: "Dr. On Duty",
-                                  facilityName: "TASSIAHILL HOSPITAL Diagnostic Center"
+                                  doctor: currentDoctorName,
+                                  facilityName: "The Tassia Hill Hospital Diagnostic Center"
                                 }}
                                 mode="inline"
                               />
@@ -2211,7 +2217,7 @@ export default function DoctorsDesk({
             selectedFormVisit || (selectedPatient.visits && selectedPatient.visits.length > 0 ? selectedPatient.visits[0] : {
               id: "active-draft",
               date: new Date().toISOString().split("T")[0],
-              doctor: "Dr. Doctor In-Charge (KMPDC #A.4892)",
+              doctor: currentDoctorName,
               symptoms: symptoms,
               diagnosis: diagnosis || "Clinical Outpatient Evaluation",
               vitals: { temp, bp, pulse, weight },
@@ -2244,7 +2250,7 @@ export default function DoctorsDesk({
           nationalId={selectedPatient.nationalId}
           phone={selectedPatient.phone}
           ticketNo={selectedPatient.activeTicketNo}
-          currentUser={{ name: "Dr. Attending Physician", role: "Doctor" }}
+          currentUser={{ name: currentDoctorName, role: "Doctor" }}
           medications={medications}
         />
       )}

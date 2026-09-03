@@ -12,6 +12,7 @@ import {
   MASTER_SUPER_ADMIN_SEEDS, 
   PRIMARY_SUPER_ADMIN_SEED 
 } from "./superAdmins";
+import { uploadDrugDictionaryToFirestore } from "../services/drugInventorySync";
 
 export const MASTER_SUPER_ADMIN_SEED = PRIMARY_SUPER_ADMIN_SEED;
 
@@ -40,10 +41,9 @@ export interface CleanSystemReport {
 /**
  * Clean and wipe all test and dummy data across the entire system.
  * Removes test patients, queue encounters, tickets, invoices, pharmacy stocks, payroll,
- * and purges test user accounts — while strictly preserving the 3 Master Super Admins:
- * - moraasdorcah@gmail.com
- * - urbaninteriorkenya@gmail.com
- * - naisiaetext@gmail.com
+ * and purges test user accounts — while strictly preserving the 2 Sovereign Super Admins:
+ * - tassiahillhospital@gmail.com (The Tassia Hill Hospital)
+ * - moraasdorcah@gmail.com (Dorcah Moraa)
  */
 export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> {
   const collectionsToPurge = [
@@ -110,7 +110,7 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
       }
     }
 
-    // 2. Clean employees collection: remove test accounts, ensure the 3 Master Super Admins are preserved and active
+    // 2. Clean employees collection: remove test accounts and any unauthorized admins, ensuring ONLY the 2 Sovereign Super Admins are preserved
     try {
       const empSnap = await getDocs(collection(db, "employees"));
       let empDeletedCount = 0;
@@ -137,18 +137,14 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
             status: "active"
           });
           preservedEmails.add(email);
-        } else if (isMaster && email && preservedEmails.has(email)) {
-          // Remove duplicate entry for same super admin
-          batch.delete(doc(db, "employees", docSnap.id));
-          empDeletedCount++;
         } else {
-          // Purge test staff user account
+          // Purge test staff user account or unauthorized/obsolete admin account
           batch.delete(doc(db, "employees", docSnap.id));
           empDeletedCount++;
         }
       }
 
-      // Seed any of the 3 Master Super Admins that are missing
+      // Seed the 2 Sovereign Super Admins if missing
       for (const seed of MASTER_SUPER_ADMIN_SEEDS) {
         if (!preservedEmails.has(seed.email.toLowerCase())) {
           const newSuperAdminRef = doc(collection(db, "employees"));
@@ -163,11 +159,11 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
       await batch.commit();
 
       report.collectionsPurged.push({
-        name: "employees (Test Users Purged & 3 Super Admins Preserved)",
+        name: "employees (All unauthorized admins/test staff purged; 2 Sovereign Super Admins preserved)",
         deletedCount: empDeletedCount
       });
       report.totalDeleted += empDeletedCount;
-      report.superAdminPreserved = preservedEmails.size > 0;
+      report.superAdminPreserved = preservedEmails.size === 2;
     } catch (empErr) {
       console.error("Error cleaning employee registry:", empErr);
     }
@@ -179,8 +175,14 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
   }
 }
 
+const OBSOLETE_ADMIN_EMAILS = [
+  "urbaninteriorkenya@gmail.com",
+  "naisiaetext@gmail.com"
+];
+
 /**
- * Ensures all Master Super Admins are created, whitelisted, and deduplicated in Firestore
+ * Ensures ONLY the 2 Master Super Admins (The Tassia Hill Hospital & Dorcah Moraa) exist,
+ * and actively wipes any other super admins or obsolete admin accounts from Firestore.
  */
 export async function ensureSuperAdminsExist(): Promise<number> {
   try {
@@ -191,9 +193,26 @@ export async function ensureSuperAdminsExist(): Promise<number> {
 
     for (const docSnap of empSnap.docs) {
       const data = docSnap.data() as Employee;
-      const email = data.email?.toLowerCase().trim();
+      const email = data.email?.toLowerCase().trim() || "";
       const nationalId = data.nationalId?.trim();
+      const roleStr = (data.role || "").toLowerCase();
+      const accessStr = (data.accessLevel || "").toLowerCase();
+      const sysRoleStr = (data.systemRole || "").toLowerCase();
 
+      // Wipe obsolete admins
+      if (OBSOLETE_ADMIN_EMAILS.includes(email)) {
+        toDeleteIds.push(docSnap.id);
+        continue;
+      }
+
+      // Wipe any other admin that is NOT in SUPER_ADMIN_EMAILS
+      const isSuperAdminAccount = roleStr.includes("super admin") || accessStr.includes("super admin") || sysRoleStr.includes("super admin");
+      if (isSuperAdminAccount && !isSuperAdminEmail(email)) {
+        toDeleteIds.push(docSnap.id);
+        continue;
+      }
+
+      // Deduplicate valid super admins or duplicate employees
       if (email && seenEmails.has(email)) {
         toDeleteIds.push(docSnap.id);
       } else if (nationalId && seenIds.has(nationalId)) {
@@ -207,11 +226,12 @@ export async function ensureSuperAdminsExist(): Promise<number> {
     let addedCount = 0;
     const batch = writeBatch(db);
 
-    // Prune redundant duplicate Firestore documents
-    for (const dupId of toDeleteIds) {
-      batch.delete(doc(db, "employees", dupId));
+    // Prune obsolete admins and redundant duplicates
+    for (const delId of toDeleteIds) {
+      batch.delete(doc(db, "employees", delId));
     }
 
+    // Provision the 2 Sovereign Super Admins if not present
     for (const seed of MASTER_SUPER_ADMIN_SEEDS) {
       if (!seenEmails.has(seed.email.toLowerCase())) {
         const newRef = doc(collection(db, "employees"));
@@ -226,7 +246,34 @@ export async function ensureSuperAdminsExist(): Promise<number> {
 
     if (toDeleteIds.length > 0 || addedCount > 0) {
       await batch.commit();
-      console.log(`[Firestore Bootstrapper] Deduplicated ${toDeleteIds.length} redundant employee record(s) and seeded ${addedCount} missing admin(s).`);
+      console.log(`[Firestore Bootstrapper] Purged ${toDeleteIds.length} obsolete/unauthorized admin record(s) and ensured the 2 Sovereign Super Admins are active.`);
+    }
+
+    // Also purge obsolete admins from system_users collection if any exist
+    try {
+      const usersSnap = await getDocs(collection(db, "system_users"));
+      if (!usersSnap.empty) {
+        const userBatch = writeBatch(db);
+        let userPurged = 0;
+        usersSnap.docs.forEach((uDoc) => {
+          const uData = uDoc.data();
+          const uEmail = (uData.email || "").toLowerCase().trim();
+          const isObs = OBSOLETE_ADMIN_EMAILS.includes(uEmail);
+          const isUnauthAdmin =
+            (uData.role === "Super Admin" || uData.accessLevel === "Super Admin") &&
+            !isSuperAdminEmail(uEmail);
+          if (isObs || isUnauthAdmin) {
+            userBatch.delete(uDoc.ref);
+            userPurged++;
+          }
+        });
+        if (userPurged > 0) {
+          await userBatch.commit();
+          console.log(`[Firestore Bootstrapper] Purged ${userPurged} user accounts from system_users.`);
+        }
+      }
+    } catch {
+      // Ignored if collection is empty or not queried
     }
 
     return addedCount;
@@ -280,6 +327,19 @@ export async function bootstrapCloudFirestore(): Promise<{
     counts.invoices = invSnap.size;
     counts.medications = medSnap.size;
     counts.payroll = paySnap.size;
+
+    // Auto-seed drug dictionary if medication catalogue is empty or minimal
+    if (counts.medications < 20) {
+      console.log(`[Firestore Bootstrapper] Medications catalogue has ${counts.medications} items. Uploading full drug reference dictionary...`);
+      try {
+        const syncResult = await uploadDrugDictionaryToFirestore();
+        console.log(`[Firestore Bootstrapper] Drug dictionary synced: ${syncResult.message}`);
+        const updatedMedSnap = await getDocs(collection(db, "medications"));
+        counts.medications = updatedMedSnap.size;
+      } catch (err) {
+        console.error("Failed to auto-seed drug reference dictionary:", err);
+      }
+    }
 
     return { seeded: counts.employees > 0, counts };
   } catch (err) {

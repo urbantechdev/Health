@@ -38,6 +38,7 @@ import RolePortalLogin from "./components/RolePortalLogin";
 import SystemPolicyTermsModal from "./components/SystemPolicyTermsModal";
 import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
+import SplashScreenLoader from "./components/SplashScreenLoader";
 import UserGuide from "./components/UserGuide";
 import { bootstrapCloudFirestore, ensureSuperAdminsExist } from "./lib/dbInit";
 import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "./lib/superAdmins";
@@ -349,7 +350,7 @@ const HEADER_BG_STYLES: Record<string, { name: string; bgClass: string; fillClas
 export default function App() {
   const [tenant, setTenant] = useState<Tenant>({
     id: "tenant-9943",
-    name: "TASSIAHILL HOSPITAL",
+    name: "The Tassia Hill Hospital",
     type: "clinic",
     county: "Nairobi",
   });
@@ -391,6 +392,7 @@ export default function App() {
   const [brandFontId, setBrandFontId] = useState<string>(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
   const [brandThemeColor, setBrandThemeColor] = useState<string>(() => localStorage.getItem("platform_theme_color") || "emerald");
   const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "#059669");
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Global M-Pesa, SHA & Logo Modal states
@@ -511,8 +513,7 @@ export default function App() {
     if (brandCustomName) {
       document.title = brandCustomName;
     } else {
-      const tierLabel = tenant.type === "hospital_level_4" ? "HMIS Level 4" : tenant.type === "hospital_level_5" ? "HMIS Level 5" : "HMIS Tier Clinic";
-      document.title = tierLabel;
+      document.title = "HMIS";
     }
   }, [brandFontId, brandThemeColor, brandFaviconUrl, brandCustomName, brandBlockEdgeColor, tenant.type]);
 
@@ -639,7 +640,7 @@ export default function App() {
           // Strictly reject unauthorized Google users
           setUser(null);
           setAuthError(
-            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, or naisiaetext@gmail.com) to onboard you and generate your credentials.`
+            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (tassiahillhospital@gmail.com or moraasdorcah@gmail.com) to onboard you and generate your credentials.`
           );
           signOut(auth).catch(() => {});
         }
@@ -736,7 +737,7 @@ export default function App() {
   };
 
   // Dynamic Super Admin check:
-  // Strictly requires the active user's or logged-in employee's email to be in SUPER_ADMIN_EMAILS (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, naisiaetext@gmail.com)
+  // Strictly requires the active user's or logged-in employee's email to be in SUPER_ADMIN_EMAILS (tassiahillhospital@gmail.com, moraasdorcah@gmail.com)
   const isSuperAdmin = Boolean(
     isSuperAdminEmail(activeUser?.email) ||
     isSuperAdminEmail(loggedInEmployee?.email)
@@ -754,40 +755,6 @@ export default function App() {
   const activeRoleConfig = getRoleConfig(currentSystemRole);
   const activeRoleName = activeRoleConfig.title || currentSystemRole;
   const activeDepartmentName = activeRoleConfig.department;
-
-  const [loginEmailInput, setLoginEmailInput] = useState("");
-
-  const handleStaffEmailLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    const cleanEmail = loginEmailInput.trim().toLowerCase();
-    if (!cleanEmail) return;
-
-    // Check if user is registered in employees collection
-    const matched = employees.find(
-      (emp) => emp.email?.trim().toLowerCase() === cleanEmail
-    );
-
-    if (matched) {
-      setSimulatedUser({
-        email: matched.email,
-        displayName: matched.name,
-        isSimulated: true,
-        photoURL: matched.photoURL || matched.avatarUrl || "https://lh3.googleusercontent.com/a/default-user=s96-c"
-      });
-    } else if (isSuperAdminEmail(cleanEmail)) {
-      setSimulatedUser({
-        email: cleanEmail,
-        displayName: "Super Admin Sovereign",
-        isSimulated: true,
-        photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
-      });
-    } else {
-      setAuthError(
-        `Access Denied: Email '${cleanEmail}' is not registered in the System User Registry. Please ask HR or the Super Admin to create your user account and assign your system role.`
-      );
-    }
-  };
 
   const checkTabPermission = (tabId: string): { allowed: boolean; reason?: string } => {
     // Admin module strictly requires one of the listed Super Admin Gmail accounts
@@ -1335,9 +1302,16 @@ export default function App() {
   if (!activeUser) {
     return (
       <>
+        {/* Splash Screen Loader with Animated Logo Only */}
+        <SplashScreenLoader
+          isVisible={isInitialLoading}
+          minDurationMs={1000}
+          onComplete={() => setIsInitialLoading(false)}
+          logoUrl={brandLogoUrl}
+        />
         <RolePortalLogin
           employees={employees}
-          hospitalName={brandCustomName || tenant.name || "TASSIAHILL HOSPITAL"}
+          hospitalName={brandCustomName || "HMIS"}
           hospitalLogoUrl={brandLogoUrl}
           authError={authError}
           onGoogleLogin={handleGoogleLogin}
@@ -1465,25 +1439,9 @@ export default function App() {
                 </div>
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <h1 className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight ${currentHeaderStyle.titleClass} uppercase leading-none font-sans truncate drop-shadow-xs group-hover:text-slate-800 transition-colors duration-200`}>
-                    {brandCustomName || "HMIS"}
-                  </h1>
-                  <span className="hidden sm:inline-flex px-2.5 py-0.5 bg-yellow-500/90 hover:bg-yellow-500 text-slate-950 border border-yellow-600/40 text-[10px] sm:text-xs font-black rounded-lg uppercase tracking-wider shrink-0 transition-all duration-200 shadow-xs">
-                    {tenant.type === "hospital_level_4" 
-                      ? "Level 4" 
-                      : tenant.type === "hospital_level_5" 
-                      ? "Level 5" 
-                      : "Tier Clinic"}
-                  </span>
-                </div>
-                <p className={`text-xs sm:text-sm font-bold truncate hidden sm:block mt-0.5 tracking-wide ${currentHeaderStyle.textClass || "text-slate-800"}`}>
-                  {tenant.type === "hospital_level_4" 
-                    ? "HMIS Level 4 Sub-County Hospital ERP" 
-                    : tenant.type === "hospital_level_5" 
-                    ? "HMIS Level 5 Referral Hospital ERP" 
-                    : "HMIS Tier Clinic Management System"}
-                </p>
+                <h1 className={`text-base sm:text-lg md:text-2xl lg:text-3xl font-black tracking-tight ${currentHeaderStyle.titleClass} leading-tight font-sans truncate drop-shadow-xs group-hover:text-slate-800 transition-colors duration-200`}>
+                  {brandCustomName || "HMIS"}
+                </h1>
               </div>
             </div>
 
@@ -1633,7 +1591,7 @@ export default function App() {
                   aria-label="Admin Account Jumper"
                   className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                 >
-                  <option value="" className="bg-slate-900 text-white">System Admin (Dr. Sarah Naisiae)</option>
+                  <option value="" className="bg-slate-900 text-white">System Admin ({user?.displayName || "Administrator"})</option>
                   {employees.map(emp => (
                     <option key={emp.id} value={emp.id} className="bg-slate-900 text-white">
                       {emp.name} ({emp.role})
@@ -2361,7 +2319,7 @@ export default function App() {
                       <span>User Guide</span>
                     </button>
                     <button
-                      onClick={() => downloadReadmeFile("Tassiahill-Hospital-HMS-Documentation.md")}
+                      onClick={() => downloadReadmeFile("The-Tassia-Hill-Hospital-HMS-Documentation.md")}
                       className="p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <FileDown className="w-4 h-4 text-emerald-400" />
@@ -2577,6 +2535,11 @@ export default function App() {
                         toggles={toggles}
                         onRefreshQueue={() => setActiveTab("queue")}
                         activeSpecialistId={activeSpecialistId}
+                        currentUser={{
+                          name: activeUser?.displayName || "Medical Officer",
+                          role: currentSystemRole,
+                          email: user?.email || ""
+                        }}
                         onOpenTransferModal={(pat) => {
                           setTransferInitialPatient(pat || null);
                           setTransferInitialTicket(null);
@@ -2655,14 +2618,14 @@ export default function App() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 font-bold text-slate-700">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>TASSIAHILL HOSPITAL Enterprise HMS</span>
+                  <span>The Tassia Hill Hospital Enterprise HMS</span>
                 </div>
                 <span className="text-slate-300">•</span>
                 <span className="text-slate-500 text-[11px] font-medium">SHA Portal API v4.2 • KRA eTIMS v2.0 Live Sync</span>
                 <span className="text-slate-300">•</span>
                 <button
                   id="btn-footer-download-readme"
-                  onClick={() => downloadReadmeFile("Tassiahill-Hospital-HMS-Documentation.md")}
+                  onClick={() => downloadReadmeFile("The-Tassia-Hill-Hospital-HMS-Documentation.md")}
                   title="Download complete system documentation and architecture (README.md)"
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold border border-slate-300/80 hover:border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95 text-[11px]"
                 >
@@ -2837,7 +2800,7 @@ export default function App() {
       onClose={() => setShowChatModal(false)}
       currentUser={{
         name: activeUser?.displayName || "Hospital Staff",
-        email: activeUser?.email || "urbaninteriorkenya@gmail.com",
+        email: activeUser?.email || "tassiahillhospital@gmail.com",
         role: currentSystemRole,
         photoURL: resolvedPhotoURL
       }}
@@ -2872,7 +2835,7 @@ export default function App() {
       onClose={() => setShowTransferModal(false)}
       currentUser={{
         name: activeUser?.displayName || "Hospital Staff",
-        email: activeUser?.email || "urbaninteriorkenya@gmail.com",
+        email: activeUser?.email || "tassiahillhospital@gmail.com",
         role: currentSystemRole,
         department: loggedInEmployee?.department || "medical"
       }}
@@ -2925,7 +2888,7 @@ export default function App() {
         localStorage.setItem("platform_favicon_url", url);
         window.dispatchEvent(new Event("platform_branding_changed"));
       }}
-      hospitalName={brandCustomName || tenant.name || "TASSIAHILL HOSPITAL"}
+      hospitalName={brandCustomName || tenant.name || "The Tassia Hill Hospital"}
     />
 
     {/* User Account Profile & Credentials Management Modal */}
@@ -2933,8 +2896,8 @@ export default function App() {
       isOpen={showProfileModal}
       onClose={() => setShowProfileModal(false)}
       currentUser={{
-        email: activeUser?.email || "urbaninteriorkenya@gmail.com",
-        displayName: activeUser?.displayName || "Super Admin (Urban Interior Kenya)",
+        email: activeUser?.email || "moraasdorcah@gmail.com",
+        displayName: activeUser?.displayName || "Dorcah Moraa (Super Admin Sovereign)",
         photoURL: resolvedPhotoURL,
         isSimulated: activeUser?.isSimulated
       }}
@@ -2990,6 +2953,14 @@ export default function App() {
 
     {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}
     <ModernPromptHost />
+
+    {/* Splash Screen Loader with Animated Logo Only */}
+    <SplashScreenLoader
+      isVisible={isInitialLoading}
+      minDurationMs={1000}
+      onComplete={() => setIsInitialLoading(false)}
+      logoUrl={brandLogoUrl}
+    />
   </div>
   );
 }

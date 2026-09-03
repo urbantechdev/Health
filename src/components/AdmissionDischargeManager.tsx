@@ -126,19 +126,19 @@ export default function AdmissionDischargeManager() {
 
   // Form states for Morgue Admission from Ward
   const [mrgTimeOfDeath, setMrgTimeOfDeath] = useState(() => new Date().toISOString().slice(0, 16));
-  const [mrgDoctorName, setMrgDoctorName] = useState("Dr. Beatrice Omwamba (Consultant Surgeon)");
-  const [mrgDoctorLicense, setMrgDoctorLicense] = useState("KMPDC-A.48921");
-  const [mrgImmediateCause, setMrgImmediateCause] = useState("Septic Shock secondary to Perforated Viscus");
-  const [mrgUnderlyingCause, setMrgUnderlyingCause] = useState("Advanced Peritonitis & Multi-organ Failure");
+  const [mrgDoctorName, setMrgDoctorName] = useState("Attending Medical Officer");
+  const [mrgDoctorLicense, setMrgDoctorLicense] = useState("KMPDC-REG-A");
+  const [mrgImmediateCause, setMrgImmediateCause] = useState("Cardiopulmonary Arrest");
+  const [mrgUnderlyingCause, setMrgUnderlyingCause] = useState("");
   const [mrgMohDeathNotice, setMrgMohDeathNotice] = useState(() => `MOH214-${Date.now().toString().slice(-6)}`);
   const [mrgUnitName, setMrgUnitName] = useState("Main Facility Mortuary & Pathology Cold Unit");
-  const [mrgCabinetNumber, setMrgCabinetNumber] = useState("Cold Bay 04 - Cabinet B");
-  const [mrgAttendantName, setMrgAttendantName] = useState("Kipchumba Bett (Mortuary Superintendent)");
-  const [mrgNurseName, setMrgNurseName] = useState("Sister Faith Wambui (Ward Charge Nurse)");
+  const [mrgCabinetNumber, setMrgCabinetNumber] = useState("Cold Bay 01");
+  const [mrgAttendantName, setMrgAttendantName] = useState("Mortuary Superintendent");
+  const [mrgNurseName, setMrgNurseName] = useState("Ward Charge Nurse");
   const [mrgKinName, setMrgKinName] = useState("");
   const [mrgKinPhone, setMrgKinPhone] = useState("");
-  const [mrgKinRelationship, setMrgKinRelationship] = useState("Spouse");
-  const [mrgBelongings, setMrgBelongings] = useState("Wristwatch, phone, wallet with ID, clothes inventoried in mortuary custody bag #849");
+  const [mrgKinRelationship, setMrgKinRelationship] = useState("Next of Kin");
+  const [mrgBelongings, setMrgBelongings] = useState("");
   const [mrgTagsVerified, setMrgTagsVerified] = useState(true);
   const [mrgNotes, setMrgNotes] = useState("Patient body tagged with dual waterproof wrist and toe identifiers. NOK notified.");
   const [mrgDailyFee, setMrgDailyFee] = useState(1000);
@@ -149,17 +149,17 @@ export default function AdmissionDischargeManager() {
   const [xferStaffName, setXferStaffName] = useState("Nurse in Charge");
 
   // Form states for Doctor Sign-off & Clearance
-  const [docSignoffName, setDocSignoffName] = useState("Dr. Beatrice Omwamba (Lead Surgeon)");
-  const [docSignoffNotes, setDocSignoffNotes] = useState("Patient is clinically stable, surgical site healing satisfactorily, afebrile, and ready for home recovery.");
+  const [docSignoffName, setDocSignoffName] = useState("Attending Physician");
+  const [docSignoffNotes, setDocSignoffNotes] = useState("Patient is clinically stable, vital signs normal, afebrile, and ready for home recovery.");
   const [docCondition, setDocCondition] = useState<"Recovered" | "Improved / Stable for Home Care" | "Transferred / Referred" | "Against Medical Advice (DAMA)" | "Deceased">("Improved / Stable for Home Care");
-  const [docDischargeMeds, setDocDischargeMeds] = useState("Tabs Augmentin 625mg PO BD x 5/7, Tabs Paracetamol 1g PO TDS PRN x 3/7");
+  const [docDischargeMeds, setDocDischargeMeds] = useState("");
   const [docFollowUpDate, setDocFollowUpDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
     return d.toISOString().split("T")[0];
   });
-  const [docFollowUpInstructions, setDocFollowUpInstructions] = useState("Review in Surgical Outpatient Clinic Room 4 in 7 days for wound review and stitch removal. Return immediately if high fever, severe wound pain, or active discharge occurs.");
-  const [docSignaturePin, setDocSignaturePin] = useState("MED-SIG-8492");
+  const [docFollowUpInstructions, setDocFollowUpInstructions] = useState("Review in Outpatient Clinic in 7 days. Return immediately if symptoms recur.");
+  const [docSignaturePin, setDocSignaturePin] = useState("DOC-SIG-AUTO");
 
   // Form states for New Admission
   const [admPatientSearch, setAdmPatientSearch] = useState("");
@@ -167,18 +167,18 @@ export default function AdmissionDischargeManager() {
   const [admPatientName, setAdmPatientName] = useState("");
   const [admNationalId, setAdmNationalId] = useState("");
   const [admPhone, setAdmPhone] = useState("");
-  const [admAge, setAdmAge] = useState(32);
+  const [admAge, setAdmAge] = useState(30);
   const [admGender, setAdmGender] = useState("Male");
   const [admBloodType, setAdmBloodType] = useState("Not Sure");
   const [admType, setAdmType] = useState<AdmissionType>("INPATIENT");
   const [admBedId, setAdmBedId] = useState("");
-  const [admSymptoms, setAdmSymptoms] = useState("Severe acute abdominal pain and pyrexia");
-  const [admDiagnosis, setAdmDiagnosis] = useState("Acute Appendicitis (Pre-Op Investigation)");
-  const [admDoctorName, setAdmDoctorName] = useState("Dr. Beatrice Omwamba (Consultant Surgeon)");
-  const [admVitalTemp, setAdmVitalTemp] = useState("38.4");
-  const [admVitalBp, setAdmVitalBp] = useState("130/85");
-  const [admVitalPulse, setAdmVitalPulse] = useState("88");
-  const [admVitalWeight, setAdmVitalWeight] = useState("72");
+  const [admSymptoms, setAdmSymptoms] = useState("");
+  const [admDiagnosis, setAdmDiagnosis] = useState("");
+  const [admDoctorName, setAdmDoctorName] = useState("Admitting Medical Officer");
+  const [admVitalTemp, setAdmVitalTemp] = useState("37.0");
+  const [admVitalBp, setAdmVitalBp] = useState("120/80");
+  const [admVitalPulse, setAdmVitalPulse] = useState("76");
+  const [admVitalWeight, setAdmVitalWeight] = useState("65");
   const [admVitalSpo2, setAdmVitalSpo2] = useState("98");
 
   // Form states for Subcollections
@@ -211,8 +211,8 @@ export default function AdmissionDischargeManager() {
   // Doctor's Notes & Ward Rounds state
   const [doctorNoteText, setDoctorNoteText] = useState("");
   const [doctorNoteCategory, setDoctorNoteCategory] = useState<"Ward Round Review" | "Treatment Plan" | "Specialist Consultation" | "Clinical Progress" | "Procedure / Intervention" | "Emergency Assessment" | "General">("Ward Round Review");
-  const [doctorNoteDoctorName, setDoctorNoteDoctorName] = useState("Dr. Beatrice Omwamba (Consultant)");
-  const [doctorNoteKmpdc, setDoctorNoteKmpdc] = useState("KMPDC-A.48921");
+  const [doctorNoteDoctorName, setDoctorNoteDoctorName] = useState("Ward Round Clinician");
+  const [doctorNoteKmpdc, setDoctorNoteKmpdc] = useState("KMPDC-REG-A");
   const [doctorNoteClinicalPlan, setDoctorNoteClinicalPlan] = useState("");
   const [doctorNoteOrders, setDoctorNoteOrders] = useState("");
 

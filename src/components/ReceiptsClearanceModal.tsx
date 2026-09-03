@@ -52,7 +52,17 @@ import {
   ExternalLink,
   ShieldAlert,
   Hospital,
-  Users
+  Users,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Eye,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Stamp,
+  Type
 } from "lucide-react";
 
 interface ReceiptsClearanceModalProps {
@@ -84,6 +94,16 @@ export default function ReceiptsClearanceModal({
   const [receiptPaperFormat, setReceiptPaperFormat] = useState<"a4" | "etr">("a4");
   const [isPrinting, setIsPrinting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Full Screen & Document Focus Mode
+  const [isFullScreen, setIsFullScreen] = useState(true);
+  const [isFullDocView, setIsFullDocView] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(100);
+
+  // Custom Watermark Overlay Option
+  const [watermarkOption, setWatermarkOption] = useState<"TASSIAHILL_HOSPITAL" | "COPY" | "ORIGINAL" | "CONFIDENTIAL" | "DRAFT" | "CUSTOM" | "NONE">("TASSIAHILL_HOSPITAL");
+  const [customWatermarkText, setCustomWatermarkText] = useState("");
+  const [showWatermarkDropdown, setShowWatermarkDropdown] = useState(false);
 
   // Real-time subscriptions
   useEffect(() => {
@@ -450,7 +470,7 @@ export default function ReceiptsClearanceModal({
       setIsDownloading(true);
       await downloadElementAsPdf("receipt-clearance-printable-document", {
         fileName: `${selectedPatient?.patientName.replace(/\s+/g, "_") || "Patient"}_${activeDocTab}_${new Date().toISOString().split("T")[0]}.pdf`,
-        title: `TASSIAHILL HOSPITAL - ${activeDocTab.toUpperCase()}`,
+        title: `THE TASSIA HILL HOSPITAL - ${activeDocTab.toUpperCase()}`,
         format: "a4",
         orientation: "portrait"
       });
@@ -467,227 +487,303 @@ export default function ReceiptsClearanceModal({
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[99990] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-md overflow-hidden animate-fade-in select-none"
+      className={
+        isFullScreen
+          ? "fixed inset-0 z-[99990] w-screen h-screen bg-white flex flex-col overflow-hidden select-none animate-fade-in"
+          : "fixed inset-0 z-[99990] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-md overflow-hidden animate-fade-in select-none"
+      }
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
+        if (!isFullScreen && e.target === e.currentTarget) {
           onClose();
         }
       }}
     >
-      <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-7xl h-[92vh] max-h-[1050px] shadow-2xl flex flex-col overflow-hidden relative text-slate-100 animate-in zoom-in-95 duration-200">
+      <div
+        className={
+          isFullScreen
+            ? "w-full h-full bg-white flex flex-col overflow-hidden relative text-slate-900"
+            : "bg-white border border-slate-200 rounded-3xl w-full max-w-7xl h-[92vh] max-h-[1050px] shadow-2xl flex flex-col overflow-hidden relative text-slate-900 animate-in zoom-in-95 duration-200"
+        }
+      >
         
         {/* TOP MODAL HEADER */}
-        <div className="px-6 py-4 bg-slate-950/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4 shrink-0">
+        <div className="px-6 py-3.5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-2xs">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-tr from-emerald-600 to-teal-500 rounded-2xl text-white shadow-lg shadow-emerald-900/40">
-              <Receipt className="w-6 h-6" />
+            <div className="p-2.5 bg-gradient-to-tr from-emerald-600 to-teal-600 rounded-2xl text-white shadow-md shadow-emerald-700/30">
+              <Receipt className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg md:text-xl font-black text-white tracking-tight">
+                <h2 className="text-base md:text-lg font-black text-slate-900 tracking-tight">
                   Patient Receipts, Invoices & Discharge Clearance Hub
                 </h2>
-                <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-bold rounded-full">
+                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-bold rounded-full">
                   KRA eTIMS • SHA Compliant
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium">
+              <p className="text-xs text-slate-500 font-medium">
                 Official institutional billing records, ETR receipts, discharge summaries, and clearance certificates for all past & present patients
               </p>
             </div>
           </div>
 
-          {/* Top Quick Stats Pill Bar */}
+          {/* Top Quick Stats Pill Bar & Window Controls */}
           <div className="flex items-center gap-2 text-xs">
-            <div className="hidden lg:flex items-center gap-3 px-4 py-2 bg-slate-900 rounded-2xl border border-slate-800">
+            <div className="hidden xl:flex items-center gap-3 px-3.5 py-1.5 bg-slate-50 rounded-2xl border border-slate-200 text-slate-700">
               <div className="flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-emerald-400" />
-                <span className="text-slate-400">Total Patients:</span>
-                <strong className="text-white font-mono">{stats.totalCount}</strong>
+                <Users className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-slate-500">Total Patients:</span>
+                <strong className="text-slate-900 font-mono">{stats.totalCount}</strong>
               </div>
-              <span className="text-slate-700">|</span>
+              <span className="text-slate-300">|</span>
               <div className="flex items-center gap-1.5">
-                <Bed className="w-4 h-4 text-blue-400" />
-                <span className="text-slate-400">Admitted:</span>
-                <strong className="text-blue-400 font-mono">{stats.inpatientsCount}</strong>
+                <Bed className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-slate-500">Admitted:</span>
+                <strong className="text-blue-700 font-mono">{stats.inpatientsCount}</strong>
               </div>
-              <span className="text-slate-700">|</span>
+              <span className="text-slate-300">|</span>
               <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-teal-400" />
-                <span className="text-slate-400">Cleared:</span>
-                <strong className="text-teal-400 font-mono">{stats.clearedCount}</strong>
+                <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+                <span className="text-slate-500">Cleared:</span>
+                <strong className="text-teal-700 font-mono">{stats.clearedCount}</strong>
               </div>
-              <span className="text-slate-700">|</span>
+              <span className="text-slate-300">|</span>
               <div className="flex items-center gap-1.5">
-                <DollarSign className="w-4 h-4 text-emerald-400" />
-                <span className="text-slate-400">Collections:</span>
-                <strong className="text-emerald-400 font-mono">KES {stats.totalGrossRevenue.toLocaleString()}</strong>
+                <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-slate-500">Collections:</span>
+                <strong className="text-emerald-700 font-mono">KES {stats.totalGrossRevenue.toLocaleString()}</strong>
               </div>
             </div>
 
+            {/* Document Full View Toggle */}
+            <button
+              onClick={() => setIsFullDocView(!isFullDocView)}
+              className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                isFullDocView
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+              }`}
+              title={isFullDocView ? "Exit Full Document View (Show Directory)" : "Full View Document (Hide Directory)"}
+            >
+              {isFullDocView ? <PanelLeftOpen className="w-4 h-4" /> : <Eye className="w-4 h-4 text-emerald-600" />}
+              <span className="hidden sm:inline">{isFullDocView ? "Show Directory" : "Full Document View"}</span>
+            </button>
+
+            {/* Window Fullscreen Mode Toggle */}
+            <button
+              onClick={() => setIsFullScreen(!isFullScreen)}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
+              title={isFullScreen ? "Restore Window Size" : "Full Screen Window"}
+            >
+              {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+
+            {/* Close Hub */}
             <button
               onClick={onClose}
-              className="p-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition-colors cursor-pointer"
               title="Close Modal"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* MAIN BODY: 2-COLUMN SPLIT LAYOUT */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {/* MAIN BODY: 2-COLUMN SPLIT OR FULL DOCUMENT FOCUS */}
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white">
           
-          {/* LEFT COLUMN: PATIENT DIRECTORY LIST */}
-          <div className="w-full md:w-96 lg:w-[420px] bg-slate-950/60 border-r border-slate-800 flex flex-col shrink-0 overflow-hidden">
-            
-            {/* Search Box */}
-            <div className="p-4 border-b border-slate-800/80 space-y-3 bg-slate-950/40">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search patient name, ID, invoice #..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700/80 focus:border-emerald-500 rounded-2xl text-xs text-white placeholder-slate-500 outline-hidden transition-colors"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-0.5"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Status Filter Chips */}
-              <div className="flex flex-wrap gap-1.5 text-[11px]">
-                {[
-                  { id: "ALL", label: "All Patients" },
-                  { id: "PRESENT_INPATIENT", label: "Inpatients" },
-                  { id: "OUTPATIENT", label: "Outpatients" },
-                  { id: "CLEARED", label: "Cleared" },
-                  { id: "PENDING_PAYMENT", label: "Pending" }
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setFilterStatus(tab.id as any)}
-                    className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
-                      filterStatus === tab.id
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Patients Scroll List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 p-2 space-y-1">
-              {filteredPatients.length === 0 ? (
-                <div className="py-16 text-center text-slate-500 space-y-2">
-                  <User className="w-10 h-10 mx-auto opacity-30" />
-                  <p className="text-xs font-semibold">No patients found</p>
-                  <p className="text-[10px] text-slate-600">Try adjusting your search criteria</p>
-                </div>
-              ) : (
-                filteredPatients.map((p) => {
-                  const isSelected = selectedPatient?.id === p.id;
-                  return (
+          {/* LEFT COLUMN: PATIENT DIRECTORY LIST (Collapsible in Full Document View) */}
+          {!isFullDocView && (
+            <div className="w-full md:w-88 lg:w-96 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 overflow-hidden animate-in slide-in-from-left duration-150">
+              
+              {/* Search Box & Filters */}
+              <div className="p-3.5 border-b border-slate-200 space-y-2.5 bg-slate-50">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search patient name, ID, invoice #..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 focus:border-emerald-500 rounded-xl text-xs text-slate-900 placeholder-slate-400 outline-hidden transition-colors shadow-2xs"
+                  />
+                  {searchQuery && (
                     <button
-                      key={p.id}
-                      onClick={() => setSelectedPatientId(p.id)}
-                      className={`w-full text-left p-3.5 rounded-2xl transition-all flex flex-col gap-2 cursor-pointer border ${
-                        isSelected
-                          ? "bg-emerald-950/40 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/30"
-                          : "bg-slate-900/50 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Status Filter Chips */}
+                <div className="flex flex-wrap gap-1 text-[11px]">
+                  {[
+                    { id: "ALL", label: "All Patients" },
+                    { id: "PRESENT_INPATIENT", label: "Inpatients" },
+                    { id: "OUTPATIENT", label: "Outpatients" },
+                    { id: "CLEARED", label: "Cleared" },
+                    { id: "PENDING_PAYMENT", label: "Pending" }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setFilterStatus(tab.id as any)}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        filterStatus === tab.id
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-100"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                            <span>{p.patientName}</span>
-                            {p.isCurrentlyAdmitted && (
-                              <span className="px-1.5 py-0.2 bg-blue-500/20 border border-blue-500/40 text-blue-400 text-[9px] rounded-md font-mono shrink-0">
-                                Inpatient
-                              </span>
-                            )}
-                          </h4>
-                          <p className="text-[10px] text-slate-400 font-mono">
-                            ID: {p.nationalId} • {p.age} Yrs • {p.gender}
-                          </p>
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Patients Scroll List */}
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-200/80 p-2 space-y-1 bg-slate-50/70">
+                {filteredPatients.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 space-y-2">
+                    <User className="w-10 h-10 mx-auto opacity-40 text-slate-400" />
+                    <p className="text-xs font-semibold text-slate-600">No patients found</p>
+                    <p className="text-[10px] text-slate-400">Try adjusting your search criteria</p>
+                  </div>
+                ) : (
+                  filteredPatients.map((p) => {
+                    const isSelected = selectedPatient?.id === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setSelectedPatientId(p.id)}
+                        className={`w-full text-left p-3 rounded-2xl transition-all flex flex-col gap-1.5 cursor-pointer border ${
+                          isSelected
+                            ? "bg-emerald-50 border-emerald-500/80 shadow-xs ring-2 ring-emerald-500/20 text-emerald-950"
+                            : "bg-white hover:bg-slate-100/80 border-slate-200 hover:border-slate-300 text-slate-800 shadow-2xs"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5">
+                              <span>{p.patientName}</span>
+                              {p.isCurrentlyAdmitted && (
+                                <span className="px-1.5 py-0.2 bg-blue-100 border border-blue-200 text-blue-800 text-[9px] rounded-md font-mono shrink-0">
+                                  Inpatient
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-[10px] text-slate-500 font-mono">
+                              ID: {p.nationalId} • {p.age} Yrs • {p.gender}
+                            </p>
+                          </div>
+
+                          {p.isCleared ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-[9px] rounded-md shrink-0 flex items-center gap-1">
+                              <CheckCircle2 className="w-2.5 h-2.5" /> Cleared
+                            </span>
+                          ) : p.netBalance > 0 ? (
+                            <span className="px-2 py-0.5 bg-amber-100 border border-amber-200 text-amber-900 font-bold text-[9px] rounded-md shrink-0">
+                              Bal: KES {p.netBalance.toLocaleString()}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[9px] rounded-md shrink-0">
+                              Outpatient
+                            </span>
+                          )}
                         </div>
 
-                        {p.isCleared ? (
-                          <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-[9px] rounded-md shrink-0 flex items-center gap-1">
-                            <CheckCircle2 className="w-2.5 h-2.5" /> Cleared
+                        {/* Financial Snippet */}
+                        <div className="flex items-center justify-between text-[10px] bg-slate-50 px-2 py-1 rounded-xl border border-slate-200 text-slate-600">
+                          <span>Billed: <strong className="text-slate-900 font-mono">KES {p.totalBilled.toLocaleString()}</strong></span>
+                          <span>Paid: <strong className="text-emerald-700 font-mono">KES {p.totalPaid.toLocaleString()}</strong></span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            {p.invoices.length} {p.invoices.length === 1 ? "Receipt" : "Receipts"}
                           </span>
-                        ) : p.netBalance > 0 ? (
-                          <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold text-[9px] rounded-md shrink-0">
-                            Bal: KES {p.netBalance.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-slate-800 text-slate-400 text-[9px] rounded-md shrink-0">
-                            Outpatient
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Financial Snippet */}
-                      <div className="flex items-center justify-between text-[10px] bg-slate-950/60 px-2.5 py-1.5 rounded-xl border border-slate-800/80 text-slate-400">
-                        <span>Billed: <strong className="text-slate-200">KES {p.totalBilled.toLocaleString()}</strong></span>
-                        <span>Paid: <strong className="text-emerald-400">KES {p.totalPaid.toLocaleString()}</strong></span>
-                        <span className="text-[9px] text-slate-500 font-mono">
-                          {p.invoices.length} {p.invoices.length === 1 ? "Receipt" : "Receipts"}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* RIGHT COLUMN: DOCUMENT CANVAS & VIEWER */}
-          <div className="flex-1 flex flex-col bg-slate-900 overflow-hidden">
+          {/* RIGHT COLUMN: DOCUMENT CANVAS & VIEWER (WHITE THEME WORKSPACE) */}
+          <div className="flex-1 flex flex-col bg-slate-100/70 overflow-hidden">
             {selectedPatient ? (
               <>
                 {/* PATIENT PROFILE TOP STRIP */}
-                <div className="px-6 py-3.5 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4 shrink-0">
+                <div className="px-6 py-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-2xs">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-950 border border-emerald-600/40 text-emerald-300 flex items-center justify-center font-bold text-sm">
+                    {/* Collapsed Directory Re-Open Button */}
+                    {isFullDocView && (
+                      <button
+                        onClick={() => setIsFullDocView(false)}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1 transition-all cursor-pointer"
+                        title="Show Patient Directory"
+                      >
+                        <PanelLeftOpen className="w-4 h-4 text-emerald-600" />
+                        <span className="text-[11px]">Show Patients</span>
+                      </button>
+                    )}
+
+                    <div className="w-9 h-9 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center font-bold text-sm">
                       {selectedPatient.patientName.charAt(0)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-white">{selectedPatient.patientName}</h3>
-                        <span className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded text-[10px] font-mono">
+                        <h3 className="text-sm font-bold text-slate-900">{selectedPatient.patientName}</h3>
+                        <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-700 rounded text-[10px] font-mono">
                           {selectedPatient.record?.patientNumber || `PAT-${selectedPatient.nationalId}`}
                         </span>
                         {selectedPatient.isCurrentlyAdmitted && selectedPatient.currentWardBed && (
-                          <span className="px-2 py-0.5 bg-blue-900/60 border border-blue-500/40 text-blue-300 rounded text-[10px] font-bold">
+                          <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-800 rounded text-[10px] font-bold">
                             {selectedPatient.currentWardBed}
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-400">
-                        Nat ID: <strong className="text-slate-300 font-mono">{selectedPatient.nationalId}</strong> • Phone: <strong className="text-slate-300">{selectedPatient.phone}</strong> • Scheme: <strong className="text-emerald-400">{selectedPatient.record?.insuranceScheme || "SHA / Cash Direct"}</strong>
+                      <p className="text-[11px] text-slate-500">
+                        Nat ID: <strong className="text-slate-800 font-mono">{selectedPatient.nationalId}</strong> • Phone: <strong className="text-slate-800">{selectedPatient.phone}</strong> • Scheme: <strong className="text-emerald-700">{selectedPatient.record?.insuranceScheme || "SHA / Cash Direct"}</strong>
                       </p>
                     </div>
                   </div>
 
-                  {/* Actions (Print & Download) */}
-                  <div className="flex items-center gap-2">
+                  {/* Actions (Full View, Zoom, Print & Download) */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Zoom controls */}
+                    <div className="hidden sm:flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs">
+                      <button
+                        onClick={() => setZoomLevel((z) => Math.max(75, z - 10))}
+                        className="p-1 text-slate-600 hover:text-slate-900 rounded hover:bg-white transition-all cursor-pointer"
+                        title="Zoom Out"
+                      >
+                        <ZoomOut className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="px-2 font-mono text-[10px] text-slate-600 font-bold">{zoomLevel}%</span>
+                      <button
+                        onClick={() => setZoomLevel((z) => Math.min(150, z + 10))}
+                        className="p-1 text-slate-600 hover:text-slate-900 rounded hover:bg-white transition-all cursor-pointer"
+                        title="Zoom In"
+                      >
+                        <ZoomIn className="w-3.5 h-3.5" />
+                      </button>
+                      {zoomLevel !== 100 && (
+                        <button
+                          onClick={() => setZoomLevel(100)}
+                          className="p-1 text-slate-400 hover:text-slate-800 rounded hover:bg-white transition-all cursor-pointer"
+                          title="Reset Zoom (100%)"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
                     {activeDocTab === "receipt" && (
-                      <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-xs">
+                      <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs">
                         <button
                           onClick={() => setReceiptPaperFormat("a4")}
                           className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                            receiptPaperFormat === "a4" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-white"
+                            receiptPaperFormat === "a4" ? "bg-emerald-600 text-white shadow-2xs" : "text-slate-600 hover:text-slate-900"
                           }`}
                         >
                           A4 Format
@@ -695,7 +791,7 @@ export default function ReceiptsClearanceModal({
                         <button
                           onClick={() => setReceiptPaperFormat("etr")}
                           className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                            receiptPaperFormat === "etr" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-white"
+                            receiptPaperFormat === "etr" ? "bg-emerald-600 text-white shadow-2xs" : "text-slate-600 hover:text-slate-900"
                           }`}
                         >
                           80mm Thermal ETR
@@ -703,30 +799,135 @@ export default function ReceiptsClearanceModal({
                       </div>
                     )}
 
+                    {/* Watermark Selector Dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowWatermarkDropdown(!showWatermarkDropdown)}
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                          watermarkOption !== "NONE"
+                            ? "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+                            : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+                        }`}
+                        title="Configure Document Watermark Overlay (Printed & Preview)"
+                      >
+                        <Stamp className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="hidden md:inline">Watermark:</span>
+                        <span className="font-semibold truncate max-w-[90px]">
+                          {watermarkOption === "TASSIAHILL_HOSPITAL" && "Tassia Hill"}
+                          {watermarkOption === "COPY" && "Copy"}
+                          {watermarkOption === "ORIGINAL" && "Original"}
+                          {watermarkOption === "CONFIDENTIAL" && "Confidential"}
+                          {watermarkOption === "DRAFT" && "Draft"}
+                          {watermarkOption === "CUSTOM" && (customWatermarkText ? `"${customWatermarkText}"` : "Custom")}
+                          {watermarkOption === "NONE" && "None"}
+                        </span>
+                        <ChevronDown className="w-3 h-3 text-slate-400" />
+                      </button>
+
+                      {showWatermarkDropdown && (
+                        <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-50 animate-in fade-in zoom-in-95">
+                          <div className="px-2 py-1.5 border-b border-slate-100 mb-1">
+                            <p className="text-[11px] font-bold text-slate-900 flex items-center gap-1.5">
+                              <Stamp className="w-3.5 h-3.5 text-amber-600" />
+                              Watermark Overlay
+                            </p>
+                            <p className="text-[10px] text-slate-500">Overlaid in full view and sent to print preview</p>
+                          </div>
+
+                          <div className="space-y-0.5 max-h-56 overflow-y-auto">
+                            {[
+                              { id: "TASSIAHILL_HOSPITAL", label: "The Tassia Hill Hospital (Default)", icon: "🏥" },
+                              { id: "COPY", label: "Copy / Customer Copy", icon: "📋" },
+                              { id: "ORIGINAL", label: "Original Document", icon: "⭐" },
+                              { id: "CONFIDENTIAL", label: "Confidential / Medical Secret", icon: "🔒" },
+                              { id: "DRAFT", label: "Draft / Interim Bill", icon: "📝" },
+                              { id: "CUSTOM", label: "Custom Text...", icon: "✏️" },
+                              { id: "NONE", label: "No Watermark (Clean)", icon: "🚫" },
+                            ].map((item) => (
+                              <button
+                                key={item.id}
+                                onClick={() => {
+                                  setWatermarkOption(item.id as any);
+                                  if (item.id !== "CUSTOM") {
+                                    setShowWatermarkDropdown(false);
+                                  }
+                                }}
+                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                                  watermarkOption === item.id
+                                    ? "bg-amber-50 text-amber-900 font-bold"
+                                    : "text-slate-700 hover:bg-slate-50"
+                                }`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span>{item.icon}</span>
+                                  <span>{item.label}</span>
+                                </span>
+                                {watermarkOption === item.id && <Check className="w-3.5 h-3.5 text-amber-600" />}
+                              </button>
+                            ))}
+                          </div>
+
+                          {watermarkOption === "CUSTOM" && (
+                            <div className="mt-2 pt-2 border-t border-slate-100 px-1 space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-600 uppercase">Custom Watermark Text:</label>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="e.g. tassiahill hospital, Copy, Paid"
+                                  value={customWatermarkText}
+                                  onChange={(e) => setCustomWatermarkText(e.target.value)}
+                                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 font-semibold"
+                                  autoFocus
+                                />
+                              </div>
+                              <button
+                                onClick={() => setShowWatermarkDropdown(false)}
+                                className="w-full py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                              >
+                                Apply Watermark
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => setIsFullDocView(!isFullDocView)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                        isFullDocView
+                          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                          : "bg-white hover:bg-slate-50 text-slate-700 border-slate-300 shadow-2xs"
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{isFullDocView ? "Standard View" : "Full View"}</span>
+                    </button>
+
                     <button
                       onClick={handlePrint}
                       disabled={isPrinting}
-                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                      className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
                     >
-                      <Printer className="w-4 h-4 text-emerald-400" />
-                      <span>{isPrinting ? "Printing..." : "Print Document"}</span>
+                      <Printer className="w-4 h-4 text-emerald-600" />
+                      <span>{isPrinting ? "Printing..." : "Print"}</span>
                     </button>
 
                     <button
                       onClick={handleDownloadPdf}
                       disabled={isDownloading}
-                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-950/40"
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                     >
                       <Download className="w-4 h-4" />
-                      <span>{isDownloading ? "Generating PDF..." : "Export PDF"}</span>
+                      <span>{isDownloading ? "Generating..." : "Export PDF"}</span>
                     </button>
                   </div>
                 </div>
 
                 {/* 5-TAB DOCUMENT NAVIGATION BAR */}
-                <div className="px-6 bg-slate-950/90 border-b border-slate-800 flex items-center gap-2 overflow-x-auto shrink-0 py-2">
+                <div className="px-6 bg-slate-50 border-b border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0 py-2">
                   {[
-                    { id: "invoice", label: "Detailed Tax Invoice", icon: FileText },
+                    { id: "invoice", label: "Detailed Invoice", icon: FileText },
                     { id: "receipt", label: "Official ETR Receipt", icon: Receipt },
                     { id: "discharge_plan", label: "Discharge Clinical Plan", icon: Stethoscope },
                     { id: "final_statement", label: "Final Consolidated Statement", icon: Layers },
@@ -738,13 +939,13 @@ export default function ReceiptsClearanceModal({
                       <button
                         key={tab.id}
                         onClick={() => setActiveDocTab(tab.id as any)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shrink-0 border ${
+                        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border ${
                           isActive
-                            ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md ring-2 ring-emerald-400/30"
-                            : "bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border-slate-800"
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
+                            : "bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border-slate-200"
                         }`}
                       >
-                        <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
+                        <Icon className={`w-3.5 h-3.5 ${isActive ? "text-white" : "text-slate-500"}`} />
                         <span>{tab.label}</span>
                       </button>
                     );
@@ -752,24 +953,85 @@ export default function ReceiptsClearanceModal({
                 </div>
 
                 {/* SCROLLABLE DOCUMENT CANVAS */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-950 flex justify-center">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-100/70 flex justify-center">
                   
-                  {/* PRINTABLE CONTAINER (White Paper Look for Perfect Printing & Export) */}
+                  {/* PRINTABLE CONTAINER (Pure White Paper Look for Perfect Printing & Full Document Inspection) */}
                   <div
                     id="receipt-clearance-printable-document"
-                    className={`bg-white text-slate-900 rounded-2xl shadow-2xl p-6 sm:p-8 border border-slate-300 w-full transition-all relative overflow-hidden ${
+                    style={{
+                      transform: zoomLevel !== 100 ? `scale(${zoomLevel / 100})` : undefined,
+                      transformOrigin: "top center",
+                      transition: "transform 0.15s ease-out"
+                    }}
+                    className={`bg-white text-slate-900 rounded-2xl shadow-xl p-6 sm:p-10 border border-slate-300 w-full transition-all relative overflow-hidden ${
                       activeDocTab === "receipt" && receiptPaperFormat === "etr"
                         ? "max-w-[380px] text-xs font-mono"
+                        : isFullDocView
+                        ? "max-w-5xl"
                         : "max-w-4xl"
                     }`}
                   >
-                    {/* Background Security Watermark */}
-                    {!(activeDocTab === "receipt" && receiptPaperFormat === "etr") && (
-                      <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-[0.035] select-none z-0">
-                        <DocumentLogo size="watermark" border={false} className="grayscale" showFallbackIcon={false} />
-                        <span className="text-5xl font-black rotate-[-25deg] text-slate-950 mt-4 tracking-widest uppercase">
-                          TASSIAHILL HOSPITAL
-                        </span>
+                    {/* Dynamic Customizable Background Security Watermark */}
+                    {!(activeDocTab === "receipt" && receiptPaperFormat === "etr") && watermarkOption !== "NONE" && (
+                      <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-[0.045] select-none z-0 overflow-hidden">
+                        {watermarkOption === "TASSIAHILL_HOSPITAL" && (
+                          <>
+                            <DocumentLogo size="watermark" border={false} className="grayscale" showFallbackIcon={false} />
+                            <span className="text-5xl font-black rotate-[-25deg] text-slate-950 mt-4 tracking-widest uppercase text-center px-4">
+                              THE TASSIA HILL HOSPITAL
+                            </span>
+                          </>
+                        )}
+                        {watermarkOption === "COPY" && (
+                          <div className="border-8 border-dashed border-slate-900 rounded-3xl p-8 rotate-[-30deg] text-center">
+                            <span className="text-7xl font-black tracking-widest uppercase block text-slate-950">
+                              COPY
+                            </span>
+                            <span className="text-xl font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                              The Tassia Hill Hospital • Patient Copy
+                            </span>
+                          </div>
+                        )}
+                        {watermarkOption === "ORIGINAL" && (
+                          <div className="border-8 border-solid border-slate-900 rounded-3xl p-8 rotate-[-25deg] text-center">
+                            <span className="text-7xl font-black tracking-widest uppercase block text-slate-950">
+                              ORIGINAL
+                            </span>
+                            <span className="text-xl font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                              Official Document • Certified True Record
+                            </span>
+                          </div>
+                        )}
+                        {watermarkOption === "CONFIDENTIAL" && (
+                          <div className="border-8 border-solid border-slate-900 rounded-3xl p-8 rotate-[-28deg] text-center">
+                            <span className="text-6xl font-black tracking-widest uppercase block text-slate-950">
+                              CONFIDENTIAL
+                            </span>
+                            <span className="text-lg font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                              Medical Records • For Authorized Use Only
+                            </span>
+                          </div>
+                        )}
+                        {watermarkOption === "DRAFT" && (
+                          <div className="border-8 border-dashed border-slate-900 rounded-3xl p-8 rotate-[-30deg] text-center">
+                            <span className="text-7xl font-black tracking-widest uppercase block text-slate-950">
+                              DRAFT
+                            </span>
+                            <span className="text-lg font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                              Subject to Audit & Clinical Review
+                            </span>
+                          </div>
+                        )}
+                        {watermarkOption === "CUSTOM" && (
+                          <div className="border-6 border-dashed border-slate-900 rounded-3xl p-8 rotate-[-25deg] text-center max-w-2xl">
+                            <span className="text-6xl font-black tracking-widest uppercase block text-slate-950 break-words">
+                              {customWatermarkText.trim() || "THE TASSIA HILL HOSPITAL"}
+                            </span>
+                            <span className="text-base font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                              Official Hospital Record
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                     
@@ -779,20 +1041,20 @@ export default function ReceiptsClearanceModal({
                         <DocumentLogo size="md" className="border-2 border-emerald-700/60 shadow-xs" />
                         <div>
                           <h1 className="text-xl font-black text-slate-950 tracking-tight uppercase">
-                            TASSIAHILL HOSPITAL
+                            THE TASSIA HILL HOSPITAL
                           </h1>
                           <p className="text-xs text-slate-600 font-medium mt-0.5">
-                            Level 5 Tertiary Teaching & Referral Hospital • MOH Facility Code: 14892
+                            Level 5 Tertiary Teaching & Referral Hospital • Reg No 024866
                           </p>
                           <p className="text-[11px] text-slate-500 font-medium">
-                            Argwings Kodhek Rd, Nairobi, Kenya • Tel: +254 (0) 711 943 210 • Email: info@tassiahillhospital.co.ke
+                            P.O. Box 1834-00100 Nairobi, Kenya • Email: tassiahillhospital@gmail.com
                           </p>
                         </div>
                       </div>
 
                       <div className="text-right space-y-1">
                         <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-xs rounded-lg uppercase">
-                          {activeDocTab === "invoice" && "Official Tax Invoice"}
+                          {activeDocTab === "invoice" && "Official Invoice"}
                           {activeDocTab === "receipt" && "Official Payment Receipt"}
                           {activeDocTab === "discharge_plan" && "Discharge Summary & Care Plan"}
                           {activeDocTab === "final_statement" && "Final Statement of Account"}
@@ -846,7 +1108,7 @@ export default function ReceiptsClearanceModal({
                     </div>
 
                     {/* ------------------------------------------------------------- */}
-                    {/* TAB 1: DETAILED TAX INVOICE */}
+                    {/* TAB 1: DETAILED INVOICE */}
                     {/* ------------------------------------------------------------- */}
                     {activeDocTab === "invoice" && (
                       <div className="space-y-6">
@@ -924,25 +1186,6 @@ export default function ReceiptsClearanceModal({
                             <strong className="text-slate-900 font-mono">KES {(activeInvoice?.split?.outOfPocket || totalPaidCalculated).toLocaleString()}</strong>
                           </div>
                         </div>
-
-                        {/* KRA eTIMS Verification Box */}
-                        <div className="border border-slate-200 p-4 rounded-xl flex items-center justify-between gap-4 text-xs bg-slate-50/50">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
-                              <ShieldCheck className="w-4 h-4" />
-                              <span>KRA eTIMS Fiscalised Signature Valid</span>
-                            </div>
-                            <p className="text-[10px] text-slate-500 font-mono">
-                              SCU No: KRA009849202 • Control Unit Serial: ET-8920194820
-                            </p>
-                            <p className="text-[10px] text-slate-500 font-mono">
-                              QR Verification Code: {activeInvoice?.kraCompliantInvoiceNo || "KRA-ETIMS-VERIFIED-492"}
-                            </p>
-                          </div>
-                          <div className="p-2 bg-white border border-slate-300 rounded-lg shrink-0">
-                            <QrCode className="w-14 h-14 text-slate-800" />
-                          </div>
-                        </div>
                       </div>
                     )}
 
@@ -957,10 +1200,11 @@ export default function ReceiptsClearanceModal({
                             <div className="flex justify-center mb-1">
                               <DocumentLogo size="thermal" className="border border-slate-300 shadow-2xs" />
                             </div>
-                            <h2 className="font-black text-sm uppercase">TASSIAHILL HOSPITAL</h2>
-                            <p className="text-[10px]">P.O BOX 29482 - 00100 NAIROBI</p>
-                            <p className="text-[10px]">PIN: P051982739M • VAT REG: 092834</p>
-                            <p className="text-[10px] font-bold">CASH SALE RECEIPT (ETR)</p>
+                            <h2 className="font-black text-sm uppercase">THE TASSIA HILL HOSPITAL</h2>
+                            <p className="text-[10px]">P.O. BOX 1834-00100 NAIROBI</p>
+                            <p className="text-[10px]">REG NO: 024866 • PIN: P051982739M</p>
+                            <p className="text-[10px]">EMAIL: tassiahillhospital@gmail.com</p>
+                            <p className="text-[10px] font-bold mt-0.5">OFFICIAL CASH SALE RECEIPT</p>
                             <div className="border-t border-b border-dashed border-slate-300 py-2 text-left space-y-1 text-[11px]">
                               <div>RCPT NO: <strong className="font-mono">{activeInvoice?.mpesaReceiptNumber || activeInvoice?.id || `RCP-${selectedPatient.id.slice(0, 6)}`}</strong></div>
                               <div>DATE: <span className="font-mono">{new Date().toLocaleString()}</span></div>
@@ -990,7 +1234,7 @@ export default function ReceiptsClearanceModal({
                             </div>
                             <div className="pt-3 text-center space-y-1 text-[10px]">
                               <QrCode className="w-16 h-16 mx-auto text-slate-800" />
-                              <p className="font-bold">THANK YOU FOR VISITING TASSIAHILL HOSPITAL</p>
+                              <p className="font-bold">THANK YOU FOR VISITING THE TASSIA HILL HOSPITAL</p>
                               <p className="text-slate-500">Quick Recovery & God Bless You</p>
                             </div>
                           </div>
@@ -1154,7 +1398,7 @@ export default function ReceiptsClearanceModal({
                         {/* Doctor's Signature */}
                         <div className="pt-6 border-t border-slate-200 flex justify-between items-end">
                           <div>
-                            <p className="text-[10px] text-slate-500">Document generated via TASSIAHILL HOSPITAL HMIS</p>
+                            <p className="text-[10px] text-slate-500">Document generated via The Tassia Hill Hospital HMIS</p>
                             <p className="text-[10px] font-mono text-slate-400">UUID: {selectedPatient.id}</p>
                           </div>
                           <div className="text-right border-t border-slate-400 pt-2 min-w-[220px]">
@@ -1307,9 +1551,9 @@ export default function ReceiptsClearanceModal({
                 </div>
 
                 {/* BOTTOM ACTION BAR */}
-                <div className="px-6 py-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 text-xs">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <div className="px-6 py-3 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0 text-xs">
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span>Real-time billing synchronization active with Central Ledger</span>
                   </div>
 
@@ -1324,7 +1568,7 @@ export default function ReceiptsClearanceModal({
                             `INV-${selectedPatient.id.slice(0, 6)}`
                           );
                         }}
-                        className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md shadow-emerald-950/50 cursor-pointer"
+                        className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md shadow-emerald-700/20 cursor-pointer"
                       >
                         <Smartphone className="w-4 h-4" />
                         <span>Settle Outstanding (KES {netBalanceCalculated.toLocaleString()})</span>
@@ -1333,7 +1577,7 @@ export default function ReceiptsClearanceModal({
 
                     <button
                       onClick={onClose}
-                      className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold border border-slate-700 transition-all cursor-pointer"
+                      className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold border border-slate-300 transition-all cursor-pointer"
                     >
                       Done & Exit Hub
                     </button>
@@ -1341,9 +1585,9 @@ export default function ReceiptsClearanceModal({
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
                 <Receipt className="w-16 h-16 opacity-30 text-slate-400 mb-4" />
-                <h3 className="text-base font-bold text-slate-300">No Patient Selected</h3>
+                <h3 className="text-base font-bold text-slate-700">No Patient Selected</h3>
                 <p className="text-xs text-slate-500 max-w-sm mt-1">
                   Select a past or present patient from the directory on the left to view their detailed invoices, official receipts, discharge plans, and hospital clearance certificates.
                 </p>

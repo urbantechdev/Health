@@ -112,9 +112,9 @@ export default function KenyanHospitalFormsModal({
   ticket,
   encounter,
   encounterSubcollections,
-  doctorName = "Dr. Sarah Naisiae, MBChB, MMed",
-  doctorKmpdc = "KMPDC/REG/A-94821",
-  facilityName = "TASSIAHILL HOSPITAL",
+  doctorName = "Attending Medical Officer",
+  doctorKmpdc = "KMPDC/REG/A-00000",
+  facilityName = "The Tassia Hill Hospital",
   facilityMfl = "MFL CODE: 18492 - NAIROBI COUNTY",
   county = "Nairobi City County"
 }: KenyanHospitalFormsModalProps) {
@@ -254,7 +254,7 @@ export default function KenyanHospitalFormsModal({
     homeCareInstructions: "1. Complete the full 5-day antibiotic course even if feeling fully recovered.\n2. Hydration: Drink 2.5 to 3 Litres of clean, warm fluids daily.\n3. Diet: Balanced, high-protein nutrition with fresh fruits and green leafy vegetables to support immune recovery.\n4. Rest & Mobility: Moderate indoor walking encouraged; avoid strenuous exercise, heavy lifting, cold baths, and exposure to dust, smoke, or cold evening air for 7 days.",
 
     // Step 10: Critical Red Flag Danger Signs (Emergency Return)
-    dangerSignsWarning: "Return immediately to Tassiahill Hospital Accident & Emergency (or call 24/7 Helpline: +254 711 943 210) if you experience:\n• Sudden onset breathlessness, wheezing, or chest tightness\n• High spiking fever (>38.5°C) or severe chills/rigors\n• Hemoptysis (coughing up blood or dark-colored sputum)\n• Severe sharp pleuritic chest pain or fainting/dizziness\n• Inability to keep fluids down due to persistent vomiting",
+    dangerSignsWarning: "Return immediately to The Tassia Hill Hospital Accident & Emergency (or call 24/7 Helpline: +254 711 943 210) if you experience:\n• Sudden onset breathlessness, wheezing, or chest tightness\n• High spiking fever (>38.5°C) or severe chills/rigors\n• Hemoptysis (coughing up blood or dark-colored sputum)\n• Severe sharp pleuritic chest pain or fainting/dizziness\n• Inability to keep fluids down due to persistent vomiting",
 
     // Step 11: Comprehensive Future Follow-Up Plan
     followUpDate: encounter?.doctorClearance?.followUpDate || new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
@@ -264,7 +264,7 @@ export default function KenyanHospitalFormsModal({
     followUpKmpdc: doctorKmpdc,
     followUpRepeatTests: "Repeat Complete Blood Count (CBC) & Follow-up Chest X-Ray (CXR AP View) upon arrival at 08:30 AM before doctor review.",
     sutureOrDressingCare: "No active surgical sutures. Check chest auscultation and peak expiratory flow rate.",
-    primaryCareTransfer: "If unable to attend Tassiahill Hospital, report with this discharge summary to your nearest Sub-County Level 4 Hospital / Medical Officer.",
+    primaryCareTransfer: "If unable to attend The Tassia Hill Hospital, report with this discharge summary to your nearest Sub-County Level 4 Hospital / Medical Officer.",
     emergencyHelpline: "+254 711 943 210 / +254 722 000 111 (24/7 Triage Desk)",
 
     // Step 12: Financial Settlement & Discharge Clearance
@@ -878,8 +878,8 @@ export default function KenyanHospitalFormsModal({
                       {facilityName}
                     </h1>
                   </div>
-                  <p className="text-xs font-sans font-bold text-slate-700">{facilityMfl} • {county}</p>
-                  <p className="text-xs font-sans text-slate-600">Tassia Hill Complex, Embakasi East • Tel: +254 711 943 210 • Email: records@tassiahillhospital.co.ke</p>
+                  <p className="text-xs font-sans font-bold text-slate-700">{facilityMfl} • Reg No: 024866 • {county}</p>
+                  <p className="text-xs font-sans text-slate-600">P.O. Box 1834-00100 Nairobi • Email: tassiahillhospital@gmail.com • Tel: +254 711 943 210</p>
                   <div className="pt-2">
                     <span className="px-4 py-1 bg-slate-900 text-white font-sans font-black text-xs uppercase tracking-widest rounded-md inline-block">
                       OFFICIAL MEDICAL CERTIFICATE OF INCAPACITY / SICK OFF SHEET
@@ -1086,8 +1086,8 @@ export default function KenyanHospitalFormsModal({
                     <DocumentLogo size="md" className="border-2 border-emerald-700/60 shadow-xs" />
                     <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950 tracking-tight">{facilityName}</h1>
                   </div>
-                  <p className="text-xs font-bold text-slate-700">{facilityMfl} • {county} • INPATIENT & OUTPATIENT CLINICAL CARE</p>
-                  <p className="text-[11px] text-slate-500">Tassia Hill Complex, Embakasi East • 24/7 Clinical Emergency & Telehealth: {formData.emergencyHelpline}</p>
+                  <p className="text-xs font-bold text-slate-700">{facilityMfl} • Reg No: 024866 • {county} • INPATIENT & OUTPATIENT CLINICAL CARE</p>
+                  <p className="text-[11px] text-slate-500">P.O. Box 1834-00100 Nairobi • Email: tassiahillhospital@gmail.com • 24/7 Helpline: {formData.emergencyHelpline}</p>
                   <div className="pt-1.5 flex items-center justify-center gap-2">
                     <span className="px-4 py-1 bg-emerald-800 text-white font-black text-xs uppercase tracking-wider rounded-md">
                       OFFICIAL PATIENT DISCHARGE SUMMARY & COMPREHENSIVE FOLLOW-UP CARE PLAN

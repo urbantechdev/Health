@@ -271,7 +271,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
   const handlePurgeAndCleanSystem = async () => {
     const confirmWipe = await modernConfirm(
-      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nThe 3 Sovereign Super Admins (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, naisiaetext@gmail.com) will be preserved to allow fresh onboarding of real hospital staff.",
+      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nThe 2 Sovereign Super Admins (The Tassia Hill Hospital & Dorcah Moraa: tassiahillhospital@gmail.com, moraasdorcah@gmail.com) will be preserved to allow fresh onboarding of real hospital staff.",
       {
         title: "PURGE ALL TEST DATA",
         type: "error",
@@ -289,7 +289,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       const report = await cleanSystemAndPurgeTestData();
       setPurgeReport(report);
       setDbSyncMessage(
-        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. The 3 Master Super Admins are preserved and active for fresh staff onboarding.`
+        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. The 2 Sovereign Super Admins (The Tassia Hill Hospital & Dorcah Moraa) are preserved and active for fresh staff onboarding.`
       );
       toast.success(`Purged ${report.totalDeleted} test records across collections.`, "System Cleaned");
     } catch (err) {
@@ -419,6 +419,15 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   };
 
   const handleUpdateSystemRole = async (userId: string, newRole: SystemRole) => {
+    const targetUser = systemUsers.find((u) => u.id === userId);
+    if (newRole === "Super Admin" && !isSuperAdminEmail(targetUser?.email)) {
+      toast.warning("Access Restriction: Only whitelisted administrative emails can be assigned the Super Admin sovereign role.", "Security Restriction");
+      return;
+    }
+    if (targetUser && isSuperAdminEmail(targetUser.email) && newRole !== "Super Admin") {
+      toast.warning("Protected Account: Master Super Admin sovereign role cannot be modified.", "Protected Sovereign");
+      return;
+    }
     const roleConfig = getRoleConfig(newRole);
     try {
       await updateDoc(doc(db, "employees", userId), {
@@ -426,12 +435,23 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
         department: roleConfig.department,
         accessLevel: newRole === "Super Admin" ? "Super Admin" : newRole === "Admin" ? "Department Admin" : "Standard Staff"
       });
+      toast.success(`System role updated to ${newRole}.`, "Role Updated");
     } catch (err) {
       console.error("Error updating system role:", err);
+      toast.error("Failed to update system role.", "Role Update Error");
     }
   };
 
   const handleUpdateAccessLevel = async (userId: string, newAccessLevel: "Super Admin" | "Department Admin" | "Standard Staff") => {
+    const targetUser = systemUsers.find((u) => u.id === userId);
+    if (newAccessLevel === "Super Admin" && !isSuperAdminEmail(targetUser?.email)) {
+      toast.warning("Access Restriction: Only whitelisted administrative emails can be assigned Super Admin access.", "Security Restriction");
+      return;
+    }
+    if (targetUser && isSuperAdminEmail(targetUser.email) && newAccessLevel !== "Super Admin") {
+      toast.warning("Protected Account: Master Super Admin cannot be downgraded.", "Protected Sovereign");
+      return;
+    }
     try {
       await updateDoc(doc(db, "employees", userId), {
         accessLevel: newAccessLevel
@@ -444,6 +464,11 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   };
 
   const handleDeleteUser = async (userId: string, name: string) => {
+    const targetUser = systemUsers.find((u) => u.id === userId);
+    if (targetUser && (isSuperAdminEmail(targetUser.email) || targetUser.role === "Super Admin" || targetUser.accessLevel === "Super Admin")) {
+      toast.error("Master Super Admin accounts are protected and cannot be deleted.", "Protected Account");
+      return;
+    }
     const confirmed = await modernConfirm(
       `Are you sure you want to remove ${name} from the System User registry? Their access token and roles will be revoked.`,
       {

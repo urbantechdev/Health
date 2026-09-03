@@ -454,7 +454,7 @@ export const MASTER_SHA_TARIFF_CATALOG: ShaTariffMapping[] = [
 // HL7 FHIR R4 JSON Transformers & Shared Health Record (SHR) Converters
 // -----------------------------------------------------------------------------------------
 
-export function convertPatientToFhirResource(patient: any, hospitalName = "TASSIAHILL HOSPITAL") {
+export function convertPatientToFhirResource(patient: any, hospitalName = "The Tassia Hill Hospital") {
   const patientName = patient.name || patient.patientName || "Patient";
   return {
     resourceType: "Patient",
@@ -517,7 +517,7 @@ export function convertVisitToFhirEncounter(
   patient: any,
   visit: any,
   encounterNumber: string,
-  doctorName = "Dr. Jane Odhiambo, MD (KMPDC #A9432)"
+  doctorName = "Attending Medical Officer"
 ) {
   const encounterId = visit.id || `enc-${Math.floor(Math.random() * 100000)}`;
 

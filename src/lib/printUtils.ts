@@ -47,9 +47,11 @@ export async function printElement(
     pageOrientation = "portrait",
     paperSize = "a4",
     margins = "8mm",
-    customStyles = "",
-    delayMs = 350
+    customStyles = ""
   } = options;
+
+  const originalDocTitle = document.title;
+  document.title = title;
 
   // Determine page size CSS
   let pageSizeCss = "A4 portrait";
@@ -61,166 +63,151 @@ export async function printElement(
     pageSizeCss = "A4 landscape";
   }
 
-  // Gather existing stylesheets from the document
-  const headStyles: string[] = [];
-  document.querySelectorAll("style, link[rel='stylesheet']").forEach((node) => {
-    headStyles.push(node.outerHTML);
+  // Inject dynamic print stylesheet ensuring clean multi-page output
+  const printStyleId = "dynamic-print-page-style";
+  let printStyleEl = document.getElementById(printStyleId);
+  if (printStyleEl) {
+    printStyleEl.remove();
+  }
+  printStyleEl = document.createElement("style");
+  printStyleEl.id = printStyleId;
+  printStyleEl.innerHTML = `
+    @media screen {
+      #print-active-portal {
+        display: none !important;
+      }
+    }
+    @media print {
+      @page {
+        size: ${pageSizeCss} !important;
+        margin: ${margins} !important;
+      }
+      *, *::before, *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      html, body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 100% !important;
+        overflow: visible !important;
+      }
+      body.printing-isolated #root {
+        display: none !important;
+      }
+      body.printing-isolated #print-active-portal {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        overflow: visible !important;
+        height: auto !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      body.printing-isolated #print-active-portal button,
+      body.printing-isolated #print-active-portal [role="button"],
+      body.printing-isolated #print-active-portal .no-print,
+      body.printing-isolated #print-active-portal [data-no-print="true"] {
+        display: none !important;
+      }
+      body.printing-isolated #print-active-portal table,
+      body.printing-isolated #print-active-portal tr,
+      body.printing-isolated #print-active-portal td,
+      body.printing-isolated #print-active-portal th,
+      body.printing-isolated #print-active-portal .avoid-break,
+      body.printing-isolated #print-active-portal .page-break-inside-avoid,
+      body.printing-isolated #print-active-portal fieldset,
+      body.printing-isolated #print-active-portal .print-card,
+      body.printing-isolated #print-active-portal img,
+      body.printing-isolated #print-active-portal svg,
+      body.printing-isolated #print-active-portal .signature-box {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      ${customStyles}
+    }
+  `;
+  document.head.appendChild(printStyleEl);
+
+  // Create isolated portal directly under document.body
+  const portalId = "print-active-portal";
+  let portal = document.getElementById(portalId);
+  if (portal) {
+    portal.remove();
+  }
+
+  portal = document.createElement("div");
+  portal.id = portalId;
+  portal.className = "printable-document-root";
+
+  // Deep clone element
+  const clone = element.cloneNode(true) as HTMLElement;
+
+  // Strip interactive non-print buttons from the clone
+  clone.querySelectorAll("button, [role='button'], .no-print, [data-no-print='true']").forEach((btn) => btn.remove());
+
+  // Copy values from any input, textarea, select
+  const originalInputs = element.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+  const clonedInputs = clone.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+  originalInputs.forEach((orig, idx) => {
+    if (clonedInputs[idx]) {
+      clonedInputs[idx].value = orig.value;
+      if (orig instanceof HTMLInputElement && (orig.type === "checkbox" || orig.type === "radio")) {
+        (clonedInputs[idx] as HTMLInputElement).checked = orig.checked;
+      }
+    }
   });
 
-  const fullPrintHtml = `
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>${title}</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Comfortaa:wght@400;600;700&family=Outfit:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-        ${headStyles.join("\n")}
-        <style>
-          @page {
-            size: ${pageSizeCss};
-            margin: ${margins};
-          }
-          *, *::before, *::after {
-            box-sizing: border-box !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-          html, body {
-            background: #ffffff !important;
-            color: #0f172a !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            overflow: visible !important;
-            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
-          }
-          .no-print, [data-no-print="true"], button, [role="button"] {
-            display: none !important;
-          }
-          .printable-content {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 auto !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-            border: none !important;
-            overflow: visible !important;
-            height: auto !important;
-          }
-          table, tr, td, th, .avoid-break, .page-break-inside-avoid, fieldset, .print-card, img, svg, .signature-box {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .force-page-break {
-            page-break-before: always !important;
-            break-before: page !important;
-          }
-          ${customStyles}
-        </style>
-      </head>
-      <body>
-        <div class="printable-content">
-          ${element.innerHTML}
-        </div>
-      </body>
-    </html>
-  `;
+  portal.appendChild(clone);
+  document.body.appendChild(portal);
+  document.body.classList.add("printing-isolated");
 
-  // Method 1: Print via dedicated full-dimension hidden iframe
+  const cleanup = () => {
+    document.body.classList.remove("printing-isolated");
+    const p = document.getElementById(portalId);
+    if (p && p.parentNode) p.remove();
+    const s = document.getElementById(printStyleId);
+    if (s && s.parentNode) s.remove();
+    document.title = originalDocTitle;
+  };
+
+  // Microtask yield so DOM updates render in the portal before print dialog opens
+  await new Promise((resolve) => setTimeout(resolve, 60));
+
   try {
-    const iframeId = "print-utility-isolated-frame";
-    let printIframe = document.getElementById(iframeId) as HTMLIFrameElement | null;
-    if (printIframe) {
-      printIframe.remove();
-    }
+    const onAfterPrint = () => {
+      cleanup();
+      window.removeEventListener("afterprint", onAfterPrint);
+    };
+    window.addEventListener("afterprint", onAfterPrint, { once: true });
 
-    printIframe = document.createElement("iframe");
-    printIframe.id = iframeId;
-    printIframe.style.position = "fixed";
-    printIframe.style.top = "0";
-    printIframe.style.left = "0";
-    printIframe.style.width = "100%";
-    printIframe.style.height = "100%";
-    printIframe.style.border = "none";
-    printIframe.style.opacity = "0.001";
-    printIframe.style.pointerEvents = "none";
-    printIframe.style.zIndex = "-999";
-    document.body.appendChild(printIframe);
+    // Open actual native printer dialog
+    window.print();
 
-    const iframeDoc = printIframe.contentWindow?.document || printIframe.contentDocument;
-    if (!iframeDoc || !printIframe.contentWindow) {
-      throw new Error("Cannot access print iframe document");
-    }
-
-    iframeDoc.open();
-    iframeDoc.write(fullPrintHtml);
-    iframeDoc.close();
-
-    // Wait for fonts and images to load in the iframe
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-
-    // Trigger focus and print
-    printIframe.contentWindow.focus();
-    printIframe.contentWindow.print();
-
-    // Remove iframe after print dialog completes
-    setTimeout(() => {
-      if (printIframe && printIframe.parentNode) {
-        printIframe.remove();
-      }
-    }, 4000);
-
+    // Fallback cleanup
+    setTimeout(cleanup, 2500);
     return true;
   } catch (err) {
-    console.warn("[printElement] Iframe print failed, falling back to direct DOM isolation:", err);
-
-    // Method 2 (Fallback): Direct Document Body Isolation
-    const originalDocTitle = document.title;
-    document.title = title;
-
-    const portalId = "print-active-portal";
-    let portal = document.getElementById(portalId);
-    if (portal) {
-      portal.remove();
-    }
-
-    portal = document.createElement("div");
-    portal.id = portalId;
-    portal.className = "printable-document-root";
-    portal.style.position = "absolute";
-    portal.style.top = "0";
-    portal.style.left = "0";
-    portal.style.width = "100%";
-    portal.style.backgroundColor = "#ffffff";
-    portal.style.zIndex = "999999";
-    portal.innerHTML = element.innerHTML;
-
-    // Strip buttons from portal clone
-    portal.querySelectorAll("button, [data-no-print='true'], .no-print, [role='button']").forEach((btn) => btn.remove());
-
-    document.body.appendChild(portal);
-    document.body.classList.add("printing-isolated");
-
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    try {
-      window.print();
-    } finally {
-      // Clean up after print
-      setTimeout(() => {
-        document.body.classList.remove("printing-isolated");
-        if (portal && portal.parentNode) {
-          portal.remove();
-        }
-        document.title = originalDocTitle;
-      }, 2500);
-    }
-
+    console.warn("[printElement] Direct window.print() failed or restricted by sandbox environment. Exporting PDF:", err);
+    cleanup();
+    // Guarantee real document generation even if iframe sandbox restricts window.print()
+    await downloadElementAsPdf(element, {
+      fileName: `${title.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`,
+      title: title.replace(/_/g, " "),
+      format: paperSize === "receipt80mm" || paperSize === "a5" ? "a5" : "a4",
+      orientation: pageOrientation,
+      scale: 2
+    });
     return true;
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Smartphone, 
   CheckCircle2, 
@@ -53,6 +53,14 @@ export default function MpesaPaymentModal({
   const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
   const [timerSeconds, setTimerSeconds] = useState(30);
   const [printReceiptOpen, setPrintReceiptOpen] = useState(false);
+  const pollIntervalRef = useRef<any>(null);
+
+  const clearPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -63,7 +71,12 @@ export default function MpesaPaymentModal({
       setStatusMessage("");
       setReceiptNumber(null);
       setTimerSeconds(30);
+    } else {
+      clearPolling();
     }
+    return () => {
+      clearPolling();
+    };
   }, [isOpen, defaultPhone, defaultAmount, defaultReference]);
 
   // Handle countdown during waiting state
@@ -74,6 +87,7 @@ export default function MpesaPaymentModal({
         setTimerSeconds((prev) => prev - 1);
       }, 1000);
     } else if (timerSeconds === 0 && step === "waiting") {
+      clearPolling();
       setStep("failed");
       setStatusMessage("Transaction timed out. Handset did not respond with user PIN in time.");
     }
@@ -134,7 +148,8 @@ export default function MpesaPaymentModal({
   };
 
   const pollStatus = (checkoutId: string) => {
-    const pollInterval = setInterval(async () => {
+    clearPolling();
+    pollIntervalRef.current = setInterval(async () => {
       try {
         const response = await fetch("/api/integrations/mpesa/status", {
           method: "POST",
@@ -144,7 +159,7 @@ export default function MpesaPaymentModal({
         const data = await response.json();
 
         if (data.status === "Success") {
-          clearInterval(pollInterval);
+          clearPolling();
           const genReceipt = data.mpesaReceiptNumber || `TL${Math.floor(Math.random() * 89999 + 10000)}KES`;
           setReceiptNumber(genReceipt);
           setStep("success");
@@ -153,7 +168,7 @@ export default function MpesaPaymentModal({
             onPaymentSuccess(genReceipt, amount, phone);
           }
         } else if (data.status === "Failed" || data.status === "Cancelled") {
-          clearInterval(pollInterval);
+          clearPolling();
           setStep("failed");
           setStatusMessage("Payment was cancelled or rejected by user on handset.");
         }

@@ -38,7 +38,7 @@ interface StaffOnboardingModalProps {
 export default function StaffOnboardingModal({
   isOpen,
   onClose,
-  hospitalName = "TASSIAHILL HOSPITAL",
+  hospitalName = "The Tassia Hill Hospital",
   onStaffCreated
 }: StaffOnboardingModalProps) {
   // Form State
@@ -59,6 +59,9 @@ export default function StaffOnboardingModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdStaffResult, setCreatedStaffResult] = useState<Employee | null>(null);
   const [copied, setCopied] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   if (!isOpen) return null;
 
@@ -182,10 +185,6 @@ export default function StaffOnboardingModal({
       setSubmitting(false);
     }
   };
-
-  const [printing, setPrinting] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const copyCredentialsToClipboard = () => {
     if (!createdStaffResult) return;

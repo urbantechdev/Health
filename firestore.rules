@@ -10,20 +10,35 @@ service cloud.firestore {
     // Sovereign Master Super Admin Email Whitelist
     function isSuperAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email == "moraasdorcah@gmail.com" ||
-        request.auth.token.email == "urbaninteriorkenya@gmail.com" ||
-        request.auth.token.email == "naisiaetext@gmail.com"
+        request.auth.token.email == "tassiahillhospital@gmail.com" ||
+        request.auth.token.email == "moraasdorcah@gmail.com"
       );
     }
 
-    // Hospital Staff & Employees Directory
+    // Hospital Staff & Employees Directory - Protected from privilege escalation
     match /employees/{employeeId} {
       allow read: if true;
-      allow write: if true;
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (
+        request.resource.data.role != "Super Admin" &&
+        request.resource.data.accessLevel != "Super Admin"
+      );
     }
     match /staff/{staffId} {
       allow read: if true;
-      allow write: if true;
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (
+        request.resource.data.role != "Super Admin" &&
+        request.resource.data.accessLevel != "Super Admin"
+      );
+    }
+    match /system_users/{userId} {
+      allow read: if true;
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (
+        request.resource.data.role != "Super Admin" &&
+        request.resource.data.accessLevel != "Super Admin"
+      );
     }
 
     // Hospital Patients & EHR Medical Records
@@ -40,7 +55,6 @@ service cloud.firestore {
     match /encounters/{encounterId} {
       allow read, write: if true;
       
-      // Encounter Dynamic Forms & Line Items Subcollections
       match /vitals/{vitalId} {
         allow read, write: if true;
       }
@@ -65,14 +79,50 @@ service cloud.firestore {
     match /hospital_beds/{bedId} {
       allow read, write: if true;
     }
+    match /wards/{wardId} {
+      allow read, write: if true;
+    }
+    match /beds/{bedId} {
+      allow read, write: if true;
+    }
+    match /ward_bed_rates/{rateId} {
+      allow read, write: if true;
+    }
 
     // Live Queue & Routing Tokens
     match /queue/{queueId} {
       allow read, write: if true;
     }
+    match /patient_transfers/{transferId} {
+      allow read, write: if true;
+    }
+    match /patient_carts/{cartId} {
+      allow read, write: if true;
+    }
 
-    // Hospital Billing & Invoices
+    // Hospital Billing, Invoices & Claims
     match /invoices/{invoiceId} {
+      allow read, write: if true;
+    }
+    match /cashier_shifts/{shiftId} {
+      allow read, write: if true;
+    }
+    match /debtor_claims/{claimId} {
+      allow read, write: if true;
+    }
+    match /remittance_batches/{batchId} {
+      allow read, write: if true;
+    }
+    match /payment_vouchers/{voucherId} {
+      allow read, write: if true;
+    }
+    match /expenses/{expenseId} {
+      allow read, write: if true;
+    }
+    match /general_ledger/{entryId} {
+      allow read, write: if true;
+    }
+    match /procedure_tariffs/{tariffId} {
       allow read, write: if true;
     }
 
@@ -86,12 +136,20 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Security Gate Logs
+    // Security Gate Logs & Watchlists
     match /security_logs/{logId} {
       allow read, write: if true;
     }
+    match /security_watchlists/{watchId} {
+      allow read, write: if true;
+    }
 
-    // Procurement & Requisitions
+    // Internal Communication
+    match /internal_messages/{messageId} {
+      allow read, write: if true;
+    }
+
+    // Procurement, Suppliers & Requisitions
     match /suppliers/{supplierId} {
       allow read, write: if true;
     }
@@ -104,18 +162,36 @@ service cloud.firestore {
     match /goods_received/{grnId} {
       allow read, write: if true;
     }
+    match /procurement_suppliers/{sId} {
+      allow read, write: if true;
+    }
+    match /procurement_orders/{oId} {
+      allow read, write: if true;
+    }
+    match /procurement_requisitions/{rId} {
+      allow read, write: if true;
+    }
+    match /procurement_grns/{gId} {
+      allow read, write: if true;
+    }
+    match /supplier_invoices/{invId} {
+      allow read, write: if true;
+    }
 
-    // System Settings & Facility Branding
+    // System Settings, Audit Logs & Facility Branding
     match /system_settings/{settingId} {
+      allow read, write: if true;
+    }
+    match /settings_audit_logs/{logId} {
       allow read, write: if true;
     }
     match /branding/{brandId} {
       allow read, write: if true;
     }
     
-    // Catch-all fallback for extensions & custom collections
+    // Default secure catch-all: Only Sovereign Super Admin can access unknown collections
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isSuperAdmin();
     }
   }
 }

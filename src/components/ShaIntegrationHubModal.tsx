@@ -89,133 +89,23 @@ export default function ShaIntegrationHubModal({
   // ==========================================
   // MODULE 3: ELECTRONIC CLAIMS (e-Claims) STATE
   // ==========================================
-  const [claimsList, setClaimsList] = useState<EClaimRecord[]>([
-    {
-      id: "CLM-001",
-      claimNumber: "CLM-SHA-842109",
-      preAuthCode: "AUTH-KDHA-99432",
-      patientId: "PAT-001",
-      patientName: "Alice Wambui Kamau",
-      nationalId: "32441928",
-      shaNumber: "SHA-K-3244-8841",
-      visitDate: "2026-08-30",
-      admissionType: "Outpatient",
-      facilityCode: "HOSP-NRB-042",
-      facilityName: "TASSIAHILL HOSPITAL",
-      attendingDoctor: {
-        name: "Dr. Jane Odhiambo",
-        kmpdcNumber: "KMPDC-A9432",
-        specialty: "General Practice"
-      },
-      primaryDiagnosis: {
-        icd10Code: "J06.9",
-        icd10Title: "Acute upper respiratory infection, unspecified"
-      },
-      biometricVerificationProof: {
-        verified: true,
-        method: "Fingerprint",
-        auditToken: "BIO-AUDIT-SHA-8841-9921",
-        timestamp: "2026-08-30T09:14:00Z"
-      },
-      items: [
-        {
-          id: "item-1",
-          serviceCode: "CONS-GP-001",
-          serviceName: "General Outpatient Consultation",
-          shaTariffCode: "SHA-OP-001",
-          quantity: 1,
-          unitPriceKes: 1200,
-          claimedAmountKes: 1200,
-          approvedAmountKes: 1200,
-          category: "consultation"
-        },
-        {
-          id: "item-2",
-          serviceCode: "LAB-FBC-010",
-          serviceName: "Full Haemogram Panel",
-          shaTariffCode: "SHA-LAB-101",
-          quantity: 1,
-          unitPriceKes: 800,
-          claimedAmountKes: 800,
-          approvedAmountKes: 800,
-          category: "laboratory"
-        }
-      ],
-      totalClaimAmountKes: 2000,
-      approvedClaimAmountKes: 2000,
-      copayCollectedKes: 0,
-      status: "Approved",
-      validationScore: 100,
-      validationErrors: [],
-      submissionTimestamp: "2026-08-30T10:00:00Z",
-      adjudicationNotes: "Clean claim auto-scrubbed. Approved for electronic remittance.",
-      batchNumber: "BATCH-SHA-2026-W35"
-    },
-    {
-      id: "CLM-002",
-      claimNumber: "CLM-SHA-773190",
-      preAuthCode: "AUTH-KDHA-11042",
-      patientId: "PAT-002",
-      patientName: "David Omondi Otieno",
-      nationalId: "20445981",
-      shaNumber: "SHA-K-2044-1290",
-      visitDate: "2026-08-29",
-      admissionType: "Outpatient",
-      facilityCode: "HOSP-NRB-042",
-      facilityName: "TASSIAHILL HOSPITAL",
-      attendingDoctor: {
-        name: "Dr. Peter Kimani",
-        kmpdcNumber: "KMPDC-B4210",
-        specialty: "Internal Medicine"
-      },
-      primaryDiagnosis: {
-        icd10Code: "I10",
-        icd10Title: "Essential (primary) hypertension"
-      },
-      biometricVerificationProof: {
-        verified: true,
-        method: "Fingerprint",
-        auditToken: "BIO-AUDIT-SHA-1290-7731",
-        timestamp: "2026-08-29T14:30:00Z"
-      },
-      items: [
-        {
-          id: "item-3",
-          serviceCode: "CONS-SPEC-002",
-          serviceName: "Specialist Physician Review",
-          shaTariffCode: "SHA-OP-002",
-          quantity: 1,
-          unitPriceKes: 2500,
-          claimedAmountKes: 2500,
-          category: "consultation"
-        }
-      ],
-      totalClaimAmountKes: 2500,
-      copayCollectedKes: 500,
-      status: "Submitted",
-      validationScore: 95,
-      validationErrors: [],
-      submissionTimestamp: "2026-08-29T15:00:00Z",
-      adjudicationNotes: "Awaiting final clearance from KDHA batch clearinghouse.",
-      batchNumber: "BATCH-SHA-2026-W35"
-    }
-  ]);
+  const [claimsList, setClaimsList] = useState<EClaimRecord[]>([]);
   const [selectedClaimForInspection, setSelectedClaimForInspection] = useState<EClaimRecord | null>(null);
   const [isSubmittingNewClaim, setIsSubmittingNewClaim] = useState(false);
 
   // New Claim Form State
-  const [newClaimPatientName, setNewClaimPatientName] = useState(defaultPatientName || "Alice Wambui Kamau");
-  const [newClaimNationalId, setNewClaimNationalId] = useState(defaultNationalId || "32441928");
+  const [newClaimPatientName, setNewClaimPatientName] = useState(defaultPatientName || "");
+  const [newClaimNationalId, setNewClaimNationalId] = useState(defaultNationalId || "");
   const [newClaimIcdCode, setNewClaimIcdCode] = useState("B50.9");
   const [newClaimIcdTitle, setNewClaimIcdTitle] = useState("Plasmodium falciparum malaria, unspecified");
-  const [newClaimDoctor, setNewClaimDoctor] = useState("Dr. Jane Odhiambo");
-  const [newClaimKmpdc, setNewClaimKmpdc] = useState("KMPDC-A9432");
-  const [newClaimAmount, setNewClaimAmount] = useState(3500);
+  const [newClaimDoctor, setNewClaimDoctor] = useState("Attending Medical Officer");
+  const [newClaimKmpdc, setNewClaimKmpdc] = useState("KMPDC-REG-A");
+  const [newClaimAmount, setNewClaimAmount] = useState(0);
 
   // ==========================================
   // MODULE 4: SHARED HEALTH RECORD (SHR) STATE
   // ==========================================
-  const [shrPatientId, setShrPatientId] = useState(defaultNationalId || "32441928");
+  const [shrPatientId, setShrPatientId] = useState(defaultNationalId || "");
   const [shrPushLoading, setShrPushLoading] = useState(false);
   const [shrPushResult, setShrPushResult] = useState<any | null>(null);
   const [shrPullLoading, setShrPullLoading] = useState(false);
@@ -285,7 +175,7 @@ export default function ShaIntegrationHubModal({
         visitDate: new Date().toISOString().split("T")[0],
         admissionType: "Outpatient",
         facilityCode: "HOSP-NRB-042",
-        facilityName: "TASSIAHILL HOSPITAL",
+        facilityName: "The Tassia Hill Hospital",
         attendingDoctor: {
           name: newClaimDoctor,
           kmpdcNumber: newClaimKmpdc,
@@ -352,7 +242,7 @@ export default function ShaIntegrationHubModal({
         visitDate: claimPayload.visitDate!,
         admissionType: "Outpatient",
         facilityCode: "HOSP-NRB-042",
-        facilityName: "TASSIAHILL HOSPITAL",
+        facilityName: "The Tassia Hill Hospital",
         attendingDoctor: claimPayload.attendingDoctor!,
         primaryDiagnosis: claimPayload.primaryDiagnosis!,
         biometricVerificationProof: claimPayload.biometricVerificationProof!,

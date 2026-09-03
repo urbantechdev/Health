@@ -4,6 +4,7 @@ import { collection, onSnapshot, doc, addDoc, updateDoc, writeBatch, deleteDoc, 
 import { Employee, PayrollRecord } from "../types";
 import { checkDuplicateEmployee } from "../lib/deduplicationService";
 import StaffOnboardingModal from "./StaffOnboardingModal";
+import EditStaffModal from "./EditStaffModal";
 import { 
   Users, 
   UserPlus, 
@@ -37,7 +38,8 @@ import {
   ArrowRight,
   Stethoscope,
   BedDouble,
-  AlertTriangle
+  AlertTriangle,
+  Pencil
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import DocumentLogo from "./DocumentLogo";
@@ -159,8 +161,9 @@ export default function HumanResources() {
   const [printOpen, setPrintOpen] = useState(false);
   const [printTarget, setPrintTarget] = useState<PayrollRecord | null>(null);
 
-  // Detailed Employee profile state
+  // Detailed Employee profile & edit states
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showStaffOnboardingModal, setShowStaffOnboardingModal] = useState(false);
   const [copiedStaffId, setCopiedStaffId] = useState<string | null>(null);
   const [dossierPrinting, setDossierPrinting] = useState(false);
@@ -1110,6 +1113,15 @@ export default function HumanResources() {
                           <td className="p-3 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
+                                id={`btn-edit-staff-${emp.id}`}
+                                onClick={() => setEditingEmployee(emp)}
+                                className="p-1.5 text-emerald-700 hover:text-emerald-950 hover:bg-emerald-50 border border-emerald-200/80 rounded-lg cursor-pointer transition-all inline-flex items-center gap-1 font-bold text-xs shadow-2xs"
+                                title="Edit Staff Details, Role & Salary"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="hidden md:inline">Edit</span>
+                              </button>
+                              <button
                                 onClick={() => setViewingEmployee(emp)}
                                 className="p-1.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg cursor-pointer transition-all inline-flex items-center justify-center"
                                 title="View & Print Full Details"
@@ -1211,10 +1223,23 @@ export default function HumanResources() {
                     .filter(r => r.month === payrollMonth)
                     .map((rec) => {
                       const totalDeductions = rec.deductions.paye + rec.deductions.shif + rec.deductions.housingLevy + rec.deductions.nssf;
+                      const linkedEmp = employees.find(e => e.id === rec.employeeId);
                       return (
                         <tr key={rec.id} className="hover:bg-gray-50/40">
                           <td className="p-3">
-                            <p className="font-extrabold text-gray-950">{rec.employeeName}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-extrabold text-gray-950">{rec.employeeName}</p>
+                              {linkedEmp && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingEmployee(linkedEmp)}
+                                  className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
+                                  title={`Edit details and base salary for ${rec.employeeName}`}
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                             <p className="text-gray-400 text-[10px] uppercase font-bold">Month: {rec.month}</p>
                           </td>
                           <td className="p-3 text-right font-bold text-gray-800 font-mono">
@@ -1296,6 +1321,17 @@ export default function HumanResources() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  id="btn-edit-from-dossier"
+                  onClick={() => setEditingEmployee(viewingEmployee)}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer border border-slate-700"
+                  title="Edit staff details, role and salary"
+                >
+                  <Pencil className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Edit Details & Salary</span>
+                </button>
+
+                <button
+                  type="button"
                   id="btn-print-dossier"
                   disabled={dossierPrinting}
                   onClick={handlePrintDossier}
@@ -1367,7 +1403,7 @@ export default function HumanResources() {
               >
                 {/* Security Watermark for Screen View */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] select-none z-0">
-                  <span className="text-5xl font-black rotate-45 text-slate-950 uppercase">TASSIAHILL HOSPITAL</span>
+                  <span className="text-5xl font-black rotate-45 text-slate-950 uppercase">THE TASSIA HILL HOSPITAL</span>
                 </div>
 
                 <div className="relative z-10 space-y-8">
@@ -1376,9 +1412,9 @@ export default function HumanResources() {
                     <div className="flex items-center gap-3.5">
                       <DocumentLogo size="md" className="border border-slate-300 shadow-xs" />
                       <div>
-                        <h2 className="text-xl font-black tracking-tight text-slate-950">TASSIAHILL HOSPITAL</h2>
-                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Healthcare Management System Staff Register</p>
-                        <p className="text-[10px] text-gray-400 font-medium">Registry Code: ODPC-KE-2026 / MOH-STAFF-REG</p>
+                        <h2 className="text-xl font-black tracking-tight text-slate-950">THE TASSIA HILL HOSPITAL</h2>
+                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Reg No: 024866 • P.O. Box 1834-00100 Nairobi</p>
+                        <p className="text-[10px] text-gray-500 font-medium">Email: tassiahillhospital@gmail.com • Staff Registry</p>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -1524,6 +1560,23 @@ export default function HumanResources() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Staff & Salary Modal */}
+      {editingEmployee && (
+        <EditStaffModal
+          isOpen={!!editingEmployee}
+          employee={editingEmployee}
+          onClose={() => setEditingEmployee(null)}
+          onStaffUpdated={(updatedStaff) => {
+            setEmployees((prev) =>
+              prev.map((emp) => (emp.id === updatedStaff.id ? updatedStaff : emp))
+            );
+            if (viewingEmployee && viewingEmployee.id === updatedStaff.id) {
+              setViewingEmployee(updatedStaff);
+            }
+          }}
+        />
       )}
 
       {/* Super Admin Staff Onboarding & Passcard Modal */}

@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Employee, QueueTicket } from "../types";
-import { DEFAULT_HOSPITAL_PHYSICIANS } from "../lib/queueLoadBalancer";
 import {
   Stethoscope,
   Heart,
@@ -45,190 +44,6 @@ interface StationRoutingPromptModalProps {
     priority?: "normal" | "urgent" | "emergency";
   }) => Promise<void>;
 }
-
-// Default Nurse Roster if database has few nurses registered
-const DEFAULT_NURSES: Employee[] = [
-  {
-    id: "nurse-tri-001",
-    name: "Nurse Mercy Wanjiku, KRCHN",
-    nationalId: "28192019",
-    role: "Senior Triage Nurse",
-    department: "nursing",
-    specialty: "Nurse Triage & Vitals Assessment",
-    salary: 120000,
-    phone: "+254 722 900 001",
-    email: "mercy.wanjiku@hms.co.ke",
-    status: "active",
-    hireDate: "2022-01-15",
-    systemRole: "Nurse"
-  },
-  {
-    id: "nurse-tri-002",
-    name: "Nurse Faith Chebet, KRCHN",
-    nationalId: "29102938",
-    role: "Staff Triage Nurse",
-    department: "nursing",
-    specialty: "Rapid Triage & Vitals Bay",
-    salary: 110000,
-    phone: "+254 722 900 002",
-    email: "faith.chebet@hms.co.ke",
-    status: "active",
-    hireDate: "2023-04-10",
-    systemRole: "Nurse"
-  },
-  {
-    id: "nurse-tri-003",
-    name: "Nurse John Otieno, BScN",
-    nationalId: "27481920",
-    role: "Emergency Triage Officer",
-    department: "nursing",
-    specialty: "Emergency & Resuscitation Triage",
-    salary: 130000,
-    phone: "+254 722 900 003",
-    email: "john.otieno@hms.co.ke",
-    status: "active",
-    hireDate: "2021-11-01",
-    systemRole: "Nurse"
-  },
-  {
-    id: "nurse-tri-004",
-    name: "Nurse Beatrice Akinyi, KRCHN",
-    nationalId: "26381920",
-    role: "MCH / Antenatal Nurse",
-    department: "nursing",
-    specialty: "MCH, Immunization & Vitals",
-    salary: 115000,
-    phone: "+254 722 900 004",
-    email: "beatrice.akinyi@hms.co.ke",
-    status: "active",
-    hireDate: "2023-08-15",
-    systemRole: "Nurse"
-  }
-];
-
-// Default Diagnostic Technologists & Units
-const DEFAULT_DIAGNOSTIC_STAFF: Employee[] = [
-  {
-    id: "diag-lab-001",
-    name: "Peter Mutiso, KMLTTB",
-    nationalId: "27381921",
-    role: "Chief Laboratory Technologist",
-    department: "laboratory",
-    specialty: "Main Hematology & LIS Laboratory (Room 201)",
-    salary: 140000,
-    phone: "+254 722 950 001",
-    email: "peter.mutiso@hms.co.ke",
-    status: "active",
-    hireDate: "2021-06-01",
-    systemRole: "Lab"
-  },
-  {
-    id: "diag-lab-002",
-    name: "Susan Ochieng, KMLTTB",
-    nationalId: "28491028",
-    role: "Senior Biochemist & Serologist",
-    department: "laboratory",
-    specialty: "Clinical Biochemistry & Serology Lab (Room 202)",
-    salary: 135000,
-    phone: "+254 722 950 002",
-    email: "susan.ochieng@hms.co.ke",
-    status: "active",
-    hireDate: "2022-03-15",
-    systemRole: "Lab"
-  },
-  {
-    id: "diag-rad-001",
-    name: "Daniel Waweru, Rad Tech",
-    nationalId: "26192039",
-    role: "Senior Radiographer",
-    department: "radiology",
-    specialty: "Digital X-Ray & CT Suite (Room 205)",
-    salary: 145000,
-    phone: "+254 722 950 003",
-    email: "daniel.waweru@hms.co.ke",
-    status: "active",
-    hireDate: "2022-09-01",
-    systemRole: "Lab"
-  },
-  {
-    id: "diag-rad-002",
-    name: "Dr. Anthony Omondi, MD",
-    nationalId: "25491029",
-    role: "Consultant Sonographer & Radiologist",
-    department: "radiology",
-    specialty: "Ultrasound & Sonography Bay (Room 206)",
-    salary: 210000,
-    phone: "+254 722 950 004",
-    email: "anthony.omondi@hms.co.ke",
-    status: "active",
-    hireDate: "2020-05-10",
-    systemRole: "Doctor"
-  }
-];
-
-// Default Pharmacy Staff
-const DEFAULT_PHARMACY_STAFF: Employee[] = [
-  {
-    id: "pharm-001",
-    name: "Pharm. Peter Kamau, BPharm",
-    nationalId: "27481920",
-    role: "Chief Pharmacist",
-    department: "pharmacy",
-    specialty: "Main Outpatient Dispensary (Desk 1)",
-    salary: 160000,
-    phone: "+254 722 960 001",
-    email: "peter.kamau@hms.co.ke",
-    status: "active",
-    hireDate: "2021-08-01",
-    systemRole: "Pharmacy"
-  },
-  {
-    id: "pharm-002",
-    name: "Pharm. Linda Achieng, Dip Pharm",
-    nationalId: "28491029",
-    role: "Pharmaceutical Technologist",
-    department: "pharmacy",
-    specialty: "Fast-Track Pharmacy (Desk 2)",
-    salary: 125000,
-    phone: "+254 722 960 002",
-    email: "linda.achieng@hms.co.ke",
-    status: "active",
-    hireDate: "2023-01-10",
-    systemRole: "Pharmacy"
-  }
-];
-
-// Default Billing Staff
-const DEFAULT_BILLING_STAFF: Employee[] = [
-  {
-    id: "bill-001",
-    name: "Faith Njeri, CPA(K)",
-    nationalId: "28491029",
-    role: "Senior Billing Cashier",
-    department: "billing",
-    specialty: "Cashier Desk 1 - M-PESA & eTIMS",
-    salary: 110000,
-    phone: "+254 722 970 001",
-    email: "faith.njeri@hms.co.ke",
-    status: "active",
-    hireDate: "2022-11-01",
-    systemRole: "Billing & Accounts"
-  },
-  {
-    id: "bill-002",
-    name: "Jackson Kiprono, BCom",
-    nationalId: "27381920",
-    role: "SHA & Claims Officer",
-    department: "billing",
-    specialty: "Cashier Desk 2 - SHA / Insurance & Invoices",
-    salary: 115000,
-    phone: "+254 722 970 002",
-    email: "jackson.kiprono@hms.co.ke",
-    status: "active",
-    hireDate: "2023-02-15",
-    systemRole: "Billing & Accounts"
-  }
-];
 
 export default function StationRoutingPromptModal({
   isOpen,
@@ -387,12 +202,10 @@ export default function StationRoutingPromptModal({
     }
   }, [targetStation]);
 
-  // Merge registered DB employees with default roster to ensure full coverage
+  // Retrieve registered DB employees for this station
   const candidateStaffList = useMemo(() => {
-    let baseList: Employee[] = [];
-
     if (targetStation === "triage") {
-      const dbNurses = allEmployees.filter((emp) => {
+      return allEmployees.filter((emp) => {
         const d = (emp.department || "").toLowerCase();
         const r = (emp.role || "").toLowerCase();
         const s = (emp.systemRole || "").toLowerCase();
@@ -405,15 +218,8 @@ export default function StationRoutingPromptModal({
           s.includes("nurse")
         );
       });
-      const names = new Set(dbNurses.map((n) => n.name.toLowerCase().trim()));
-      baseList = [...dbNurses];
-      DEFAULT_NURSES.forEach((seed) => {
-        if (!names.has(seed.name.toLowerCase().trim())) {
-          baseList.push(seed);
-        }
-      });
     } else if (targetStation === "doctor") {
-      const dbDoctors = allEmployees.filter((emp) => {
+      return allEmployees.filter((emp) => {
         const d = (emp.department || "").toLowerCase();
         const r = (emp.role || "").toLowerCase();
         const s = (emp.systemRole || "").toLowerCase();
@@ -431,15 +237,8 @@ export default function StationRoutingPromptModal({
           s.includes("doctor")
         );
       });
-      const names = new Set(dbDoctors.map((n) => n.name.toLowerCase().trim()));
-      baseList = [...dbDoctors];
-      DEFAULT_HOSPITAL_PHYSICIANS.forEach((seed) => {
-        if (!names.has(seed.name.toLowerCase().trim())) {
-          baseList.push(seed);
-        }
-      });
     } else if (targetStation === "diagnostics") {
-      const dbDiag = allEmployees.filter((emp) => {
+      return allEmployees.filter((emp) => {
         const d = (emp.department || "").toLowerCase();
         const r = (emp.role || "").toLowerCase();
         const s = (emp.systemRole || "").toLowerCase();
@@ -453,44 +252,21 @@ export default function StationRoutingPromptModal({
           s.includes("lab")
         );
       });
-      const names = new Set(dbDiag.map((n) => n.name.toLowerCase().trim()));
-      baseList = [...dbDiag];
-      DEFAULT_DIAGNOSTIC_STAFF.forEach((seed) => {
-        if (!names.has(seed.name.toLowerCase().trim())) {
-          baseList.push(seed);
-        }
-      });
     } else if (targetStation === "pharmacy") {
-      const dbPharm = allEmployees.filter((emp) => {
+      return allEmployees.filter((emp) => {
         const d = (emp.department || "").toLowerCase();
         const r = (emp.role || "").toLowerCase();
         const s = (emp.systemRole || "").toLowerCase();
         return d.includes("pharm") || r.includes("pharm") || s.includes("pharm");
       });
-      const names = new Set(dbPharm.map((n) => n.name.toLowerCase().trim()));
-      baseList = [...dbPharm];
-      DEFAULT_PHARMACY_STAFF.forEach((seed) => {
-        if (!names.has(seed.name.toLowerCase().trim())) {
-          baseList.push(seed);
-        }
-      });
     } else {
-      const dbBilling = allEmployees.filter((emp) => {
+      return allEmployees.filter((emp) => {
         const d = (emp.department || "").toLowerCase();
         const r = (emp.role || "").toLowerCase();
         const s = (emp.systemRole || "").toLowerCase();
         return d.includes("bill") || d.includes("cash") || d.includes("fin") || r.includes("cash") || s.includes("bill");
       });
-      const names = new Set(dbBilling.map((n) => n.name.toLowerCase().trim()));
-      baseList = [...dbBilling];
-      DEFAULT_BILLING_STAFF.forEach((seed) => {
-        if (!names.has(seed.name.toLowerCase().trim())) {
-          baseList.push(seed);
-        }
-      });
     }
-
-    return baseList;
   }, [allEmployees, targetStation]);
 
   // Compute workload for each staff member

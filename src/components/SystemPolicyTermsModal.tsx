@@ -59,6 +59,9 @@ export default function SystemPolicyTermsModal({
   const [signerLicense, setSignerLicense] = useState("");
   const [signerDepartment, setSignerDepartment] = useState("");
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   // Check stored acknowledgment status
   useEffect(() => {
@@ -103,10 +106,6 @@ export default function SystemPolicyTermsModal({
     setHasAcknowledged(true);
     setAcknowledgedAt(timestamp);
   };
-
-  const [printing, setPrinting] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const filterClauses = (clauses: PolicyClause[]) => {
     if (!searchQuery.trim()) return clauses;
@@ -367,7 +366,7 @@ export default function SystemPolicyTermsModal({
                 <div className="space-y-1">
                   <p className="font-bold text-sm text-blue-900">Hospital Information Management System (HMIS) End-User Agreement</p>
                   <p className="text-blue-800 leading-relaxed">
-                    By logging into or interacting with TASSIAHILL HOSPITAL HMIS, clinical officers, medical practitioners, nurses, laboratory technologists, and finance staff agree to abide by statutory confidentiality, professional medical ethics, and authorized access boundaries.
+                    By logging into or interacting with The Tassia Hill Hospital HMIS, clinical officers, medical practitioners, nurses, laboratory technologists, and finance staff agree to abide by statutory confidentiality, professional medical ethics, and authorized access boundaries.
                   </p>
                 </div>
               </div>
@@ -519,6 +518,7 @@ export default function SystemPolicyTermsModal({
                     <div className="text-xs space-y-1 text-slate-700">
                       <p><strong>Name:</strong> {REGULATORY_DIRECTORY.dpoName}</p>
                       <p><strong>Official Email:</strong> <a href={`mailto:${REGULATORY_DIRECTORY.dpoEmail}`} className="text-emerald-700 underline font-mono">{REGULATORY_DIRECTORY.dpoEmail}</a></p>
+                      <p><strong>Postal Address:</strong> <span className="font-mono">{REGULATORY_DIRECTORY.postalAddress}</span></p>
                       <p><strong>Direct Desk / Hotline:</strong> <span className="font-mono">{REGULATORY_DIRECTORY.dpoHotline}</span></p>
                     </div>
                   </div>
@@ -636,7 +636,7 @@ export default function SystemPolicyTermsModal({
         <div className="p-4 px-6 bg-slate-100 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>TASSIAHILL HOSPITAL HMIS Compliance Engine • v2026.2 (KDPA & DHA Standards)</span>
+            <span>The Tassia Hill Hospital HMIS Compliance Engine • v2026.2 (KDPA & DHA Standards)</span>
           </div>
 
           <div className="flex items-center gap-3">

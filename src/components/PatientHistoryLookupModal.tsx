@@ -59,6 +59,9 @@ export default function PatientHistoryLookupModal({
   const [activeTab, setActiveTab] = useState<"visits" | "prescriptions" | "vitals" | "billing" | "documents">("visits");
   const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   // Sync initialSearchId if changed
   useEffect(() => {
@@ -203,10 +206,6 @@ export default function PatientHistoryLookupModal({
   }, [selectedPatient]);
 
   // Active encounters for this patient
-  const [printing, setPrinting] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadSuccess, setDownloadSuccess] = useState(false);
-
   const activeEncounters = useMemo(() => {
     if (!selectedPatient) return { queue: null, ticket: null };
     const cleanNatId = (selectedPatient.nationalId || "").trim();
@@ -505,13 +504,13 @@ export default function PatientHistoryLookupModal({
                   <DocumentLogo size="md" className="border-2 border-indigo-700/60 shadow-xs" />
                   <div>
                     <h1 className="text-xl font-black text-slate-950 tracking-tight uppercase">
-                      TASSIAHILL HOSPITAL
+                      THE TASSIA HILL HOSPITAL
                     </h1>
                     <p className="text-xs text-slate-600 font-medium mt-0.5">
-                      Ministry of Health Reg: MOH/2026/14892 • Level 5 Tertiary Referral Hospital
+                      Ministry of Health Reg: Reg No 024866 • Level 5 Tertiary Referral Hospital
                     </p>
                     <p className="text-[11px] text-slate-500 font-medium">
-                      Argwings Kodhek Rd, Nairobi, Kenya • Tel: +254 (0) 711 943 210 • Email: info@tassiahillhospital.co.ke
+                      P.O. Box 1834-00100 Nairobi, Kenya • Email: tassiahillhospital@gmail.com
                     </p>
                   </div>
                 </div>

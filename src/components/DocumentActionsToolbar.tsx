@@ -46,7 +46,7 @@ export default function DocumentActionsToolbar({
     } catch (err) {
       console.error("Print error:", err);
     } finally {
-      setTimeout(() => setPrinting(false), 800);
+      setPrinting(false);
     }
   };
 

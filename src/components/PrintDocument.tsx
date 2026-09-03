@@ -18,7 +18,10 @@ import {
   FileCheck2,
   Calendar,
   UserCheck,
-  Stethoscope
+  Stethoscope,
+  Stamp,
+  ChevronDown,
+  Check
 } from "lucide-react";
 import { printElement, downloadElementAsPdf, estimatePageCount } from "../lib/printUtils";
 import DocumentLogo from "./DocumentLogo";
@@ -63,6 +66,11 @@ export default function PrintDocument({
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [pageCount, setPageCount] = useState(1);
+
+  // Custom Watermark Overlay Option
+  const [watermarkOption, setWatermarkOption] = useState<"TASSIAHILL_HOSPITAL" | "COPY" | "ORIGINAL" | "CONFIDENTIAL" | "DRAFT" | "CUSTOM" | "NONE">("TASSIAHILL_HOSPITAL");
+  const [customWatermarkText, setCustomWatermarkText] = useState("");
+  const [showWatermarkDropdown, setShowWatermarkDropdown] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -131,7 +139,7 @@ export default function PrintDocument({
     } catch (err) {
       console.error("[PrintDocument] Print failed:", err);
     } finally {
-      setTimeout(() => setPrinting(false), 800);
+      setPrinting(false);
     }
   };
 
@@ -184,7 +192,7 @@ export default function PrintDocument({
             </div>
             <div>
               <h3 className="font-bold text-slate-950 text-sm leading-snug">
-                {type === "receipt" && "Official KRA eTIMS Tax Invoice & ETR Receipt"}
+                {type === "receipt" && "Official Hospital Invoice & Payment Receipt"}
                 {type === "prescription" && "Digital Electronic Prescription (e-Rx)"}
                 {type === "payslip" && "Official Certified Staff Payslip"}
                 {type === "statement" && (statementData ? "Official Hospital Financial Statement & OpEx Ledger" : "Official Patient Account & Visit Statement")}
@@ -192,7 +200,7 @@ export default function PrintDocument({
                 {type === "sick_sheet" && "Official Certified Medical Sick Off Sheet"}
               </h3>
               <p className="text-[11px] text-slate-500 font-medium">
-                Compliant with Ministry of Health (MoH) & KRA eTIMS Fiscal Electronic Standards
+                Compliant with Ministry of Health (MoH) & Official Hospital Documentation Standards
               </p>
             </div>
           </div>
@@ -225,10 +233,107 @@ export default function PrintDocument({
                   }`}
                 >
                   <FileText className="w-3.5 h-3.5 text-blue-600" />
-                  <span>A4 Tax Invoice</span>
+                  <span>A4 Invoice</span>
                 </button>
               </div>
             )}
+
+            {/* Watermark Selector Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                id="btn-watermark-toggle"
+                onClick={() => setShowWatermarkDropdown(!showWatermarkDropdown)}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  watermarkOption !== "NONE"
+                    ? "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+                    : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+                }`}
+                title="Configure Document Watermark Overlay (Print & PDF)"
+              >
+                <Stamp className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden md:inline">Watermark:</span>
+                <span className="font-semibold truncate max-w-[85px]">
+                  {watermarkOption === "TASSIAHILL_HOSPITAL" && "Tassia Hill"}
+                  {watermarkOption === "COPY" && "Copy"}
+                  {watermarkOption === "ORIGINAL" && "Original"}
+                  {watermarkOption === "CONFIDENTIAL" && "Confidential"}
+                  {watermarkOption === "DRAFT" && "Draft"}
+                  {watermarkOption === "CUSTOM" && (customWatermarkText ? `"${customWatermarkText}"` : "Custom")}
+                  {watermarkOption === "NONE" && "None"}
+                </span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </button>
+
+              {showWatermarkDropdown && (
+                <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-[9999999] animate-in fade-in zoom-in-95">
+                  <div className="px-2 py-1.5 border-b border-slate-100 mb-1">
+                    <p className="text-[11px] font-bold text-slate-900 flex items-center gap-1.5">
+                      <Stamp className="w-3.5 h-3.5 text-amber-600" />
+                      Watermark Overlay
+                    </p>
+                    <p className="text-[10px] text-slate-500">Overlaid on full document view and sent to print</p>
+                  </div>
+
+                  <div className="space-y-0.5 max-h-56 overflow-y-auto">
+                    {[
+                      { id: "TASSIAHILL_HOSPITAL", label: "The Tassia Hill Hospital (Default)", icon: "🏥" },
+                      { id: "COPY", label: "Copy / Customer Copy", icon: "📋" },
+                      { id: "ORIGINAL", label: "Original Document", icon: "⭐" },
+                      { id: "CONFIDENTIAL", label: "Confidential / Medical Secret", icon: "🔒" },
+                      { id: "DRAFT", label: "Draft / Interim Bill", icon: "📝" },
+                      { id: "CUSTOM", label: "Custom Text...", icon: "✏️" },
+                      { id: "NONE", label: "No Watermark (Clean)", icon: "🚫" },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setWatermarkOption(item.id as any);
+                          if (item.id !== "CUSTOM") {
+                            setShowWatermarkDropdown(false);
+                          }
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                          watermarkOption === item.id
+                            ? "bg-amber-50 text-amber-900 font-bold"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span>{item.icon}</span>
+                          <span>{item.label}</span>
+                        </span>
+                        {watermarkOption === item.id && <Check className="w-3.5 h-3.5 text-amber-600" />}
+                      </button>
+                    ))}
+                  </div>
+
+                  {watermarkOption === "CUSTOM" && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 px-1 space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Custom Watermark Text:</label>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          placeholder="e.g. tassiahill hospital, Copy, Paid"
+                          value={customWatermarkText}
+                          onChange={(e) => setCustomWatermarkText(e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 font-semibold"
+                          autoFocus
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowWatermarkDropdown(false)}
+                        className="w-full py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      >
+                        Apply Watermark
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Print Action Button */}
             <button
@@ -323,14 +428,14 @@ export default function PrintDocument({
                 </div>
                 <div className="inline-flex items-center justify-center gap-1 font-sans font-black text-sm tracking-tight text-slate-950">
                   <ShieldCheck className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
-                  <span>TASSIAHILL HOSPITAL</span>
+                  <span>THE TASSIA HILL HOSPITAL</span>
                 </div>
-                <p className="text-[11px] font-bold text-slate-800">KRA PIN: P051189432K</p>
-                <p className="text-[10px] text-slate-600">TASSIA HILL COMPLEX, NAIROBI</p>
-                <p className="text-[10px] text-slate-600">TEL: +254 (0) 711 943 210</p>
+                <p className="text-[10px] font-bold text-slate-800">REG NO: 024866 • KRA PIN: P051189432K</p>
+                <p className="text-[10px] text-slate-600">P.O. BOX 1834-00100 NAIROBI</p>
+                <p className="text-[10px] text-slate-600">EMAIL: tassiahillhospital@gmail.com</p>
                 <div className="pt-1">
                   <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded font-bold text-[9px] tracking-wider uppercase inline-block border border-emerald-300">
-                    ★ KRA eTIMS ETR FISCAL RECEIPT ★
+                    ★ OFFICIAL PAYMENT RECEIPT ★
                   </span>
                 </div>
               </div>
@@ -405,43 +510,10 @@ export default function PrintDocument({
                 </div>
               </div>
 
-              {/* KRA eTIMS Fiscal Digital Signature Box */}
-              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-center space-y-2 text-[10px]">
-                <div className="flex items-center justify-center gap-1 font-bold text-emerald-950 text-[11px]">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>KRA eTIMS FISCAL DIGITAL SIGNATURE</span>
-                </div>
-                <div className="space-y-0.5 text-slate-700 font-mono text-[10px] text-left border-t border-emerald-200/80 pt-1.5">
-                  <p className="flex justify-between">
-                    <span className="text-slate-500">eTIMS CU NO:</span>
-                    <strong className="text-slate-950 font-bold">{receiptData.kraCompliantInvoiceNo || "KRAETIMS-OFF-882310"}</strong>
-                  </p>
-                  <p className="flex justify-between">
-                    <span className="text-slate-500">CONTROL CODE:</span>
-                    <span className="font-bold text-slate-900">4B7A-9F22-81C0-5DE6</span>
-                  </p>
-                  <p className="flex justify-between">
-                    <span className="text-slate-500">ESD DEV SERIAL:</span>
-                    <span className="font-mono">ETIMS-MW-0099432</span>
-                  </p>
-                </div>
-                
-                {/* QR Verification Code */}
-                <div className="pt-1 flex flex-col items-center">
-                  <div className="p-2 bg-white rounded-lg border border-emerald-300 shadow-xs inline-block">
-                    <QrCode className="w-16 h-16 text-slate-900" />
-                  </div>
-                  <p className="text-[9px] font-sans font-semibold text-slate-700 mt-1">Scan to verify ETR Fiscal Receipt with KRA iTax / eTIMS</p>
-                  <p className="text-[7.5px] text-emerald-700 font-mono mt-0.5 break-all underline select-all">
-                    https://itax.kra.go.ke/etims-verify?inv={receiptData.kraCompliantInvoiceNo || "KRAETIMS-OFF"}&amt={receiptData.total}
-                  </p>
-                </div>
-              </div>
-
               {/* Footer */}
-              <div className="text-center text-[9px] text-slate-500 space-y-0.5 pt-1">
-                <p className="font-bold text-slate-700">*** THANK YOU FOR VISITING TASSIAHILL HOSPITAL ***</p>
-                <p>PROMPT PAYMENT & COMPLIANCE APPRECIATED • GET WELL SOON!</p>
+              <div className="text-center text-[9px] text-slate-500 space-y-0.5 pt-2">
+                <p className="font-bold text-slate-700">*** THANK YOU FOR VISITING THE TASSIA HILL HOSPITAL ***</p>
+                <p>PROMPT PAYMENT APPRECIATED • GET WELL SOON!</p>
               </div>
             </div>
           ) : (
@@ -451,13 +523,69 @@ export default function PrintDocument({
               className="w-full max-w-3xl bg-white p-5 sm:p-8 md:p-12 shadow-md border border-slate-200 rounded-2xl relative text-slate-900 font-sans space-y-8"
               style={{ minHeight: "297mm" }}
             >
-              {/* Security Watermark for Screen View & PDF */}
-              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-[0.035] select-none z-0">
-                <DocumentLogo size="watermark" border={false} className="grayscale" showFallbackIcon={false} />
-                <span className="text-5xl font-black rotate-[-25deg] text-slate-950 mt-4 tracking-widest uppercase">
-                  TASSIAHILL HOSPITAL
-                </span>
-              </div>
+              {/* Dynamic Customizable Security Watermark for Screen View & PDF */}
+              {watermarkOption !== "NONE" && (
+                <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center opacity-[0.045] select-none z-0 overflow-hidden">
+                  {watermarkOption === "TASSIAHILL_HOSPITAL" && (
+                    <>
+                      <DocumentLogo size="watermark" border={false} className="grayscale" showFallbackIcon={false} />
+                      <span className="text-5xl font-black rotate-[-25deg] text-slate-950 mt-4 tracking-widest uppercase text-center px-4">
+                        THE TASSIA HILL HOSPITAL
+                      </span>
+                    </>
+                  )}
+                  {watermarkOption === "COPY" && (
+                    <div className="border-8 border-dashed border-slate-900 rounded-3xl p-8 rotate-[-30deg] text-center">
+                      <span className="text-7xl font-black tracking-widest uppercase block text-slate-950">
+                        COPY
+                      </span>
+                      <span className="text-xl font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                        The Tassia Hill Hospital • Patient Copy
+                      </span>
+                    </div>
+                  )}
+                  {watermarkOption === "ORIGINAL" && (
+                    <div className="border-8 border-solid border-slate-900 rounded-3xl p-8 rotate-[-25deg] text-center">
+                      <span className="text-7xl font-black tracking-widest uppercase block text-slate-950">
+                        ORIGINAL
+                      </span>
+                      <span className="text-xl font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                        Official Document • Certified True Record
+                      </span>
+                    </div>
+                  )}
+                  {watermarkOption === "CONFIDENTIAL" && (
+                    <div className="border-8 border-solid border-slate-900 rounded-3xl p-8 rotate-[-28deg] text-center">
+                      <span className="text-6xl font-black tracking-widest uppercase block text-slate-950">
+                        CONFIDENTIAL
+                      </span>
+                      <span className="text-lg font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                        Medical Records • For Authorized Use Only
+                      </span>
+                    </div>
+                  )}
+                  {watermarkOption === "DRAFT" && (
+                    <div className="border-8 border-dashed border-slate-900 rounded-3xl p-8 rotate-[-30deg] text-center">
+                      <span className="text-7xl font-black tracking-widest uppercase block text-slate-950">
+                        DRAFT
+                      </span>
+                      <span className="text-lg font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                        Subject to Audit & Clinical Review
+                      </span>
+                    </div>
+                  )}
+                  {watermarkOption === "CUSTOM" && (
+                    <div className="border-6 border-dashed border-slate-900 rounded-3xl p-8 rotate-[-25deg] text-center max-w-2xl">
+                      <span className="text-6xl font-black tracking-widest uppercase block text-slate-950 break-words">
+                        {customWatermarkText.trim() || "THE TASSIA HILL HOSPITAL"}
+                      </span>
+                      <span className="text-base font-bold tracking-wider uppercase block text-slate-700 mt-2">
+                        Official Hospital Record
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="relative z-10 flex flex-col justify-between min-h-full space-y-8">
                 
@@ -467,15 +595,15 @@ export default function PrintDocument({
                     <div className="flex items-center gap-4">
                       <DocumentLogo size="lg" className="border-2 border-emerald-600/60 shadow-md ring-2 ring-emerald-500/20" />
                       <div>
-                        <h1 className="text-2xl font-black tracking-tight text-slate-950">TASSIAHILL HOSPITAL</h1>
-                        <p className="text-xs text-slate-500 font-semibold tracking-wide uppercase mt-0.5">Ministry of Health Reg: Reg No. ODPC-KE-2026</p>
-                        <p className="text-xs text-slate-500">Tassia Hill Complex, Fedha/Embakasi East, Nairobi, Kenya</p>
-                        <p className="text-xs text-slate-500">Tel: +254 (0) 711 943 210 | Email: info@tassiahillhospital.co.ke</p>
+                        <h1 className="text-2xl font-black tracking-tight text-slate-950">THE TASSIA HILL HOSPITAL</h1>
+                        <p className="text-xs text-slate-500 font-semibold tracking-wide uppercase mt-0.5">Ministry of Health Reg: Reg No 024866</p>
+                        <p className="text-xs text-slate-500">P.O. Box 1834-00100 Nairobi, Kenya</p>
+                        <p className="text-xs text-slate-500">Email: tassiahillhospital@gmail.com</p>
                       </div>
                     </div>
                     <div className="text-right flex flex-col items-start md:items-end">
                       <span className="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-[10px] font-bold tracking-wider uppercase border border-slate-200">
-                        {type === "receipt" && "Tax Invoice / Official Receipt"}
+                        {type === "receipt" && "Invoice / Official Receipt"}
                         {type === "prescription" && "Medical Prescription (e-Rx)"}
                         {type === "payslip" && "Certified Staff Payslip"}
                         {type === "statement" && (statementData ? "Clinic Financial & OpEx Ledger" : "Patient Account Statement")}
@@ -513,9 +641,9 @@ export default function PrintDocument({
                         <p className="text-slate-600 mt-0.5">National ID: {receiptData.nationalId}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] uppercase font-bold text-slate-400">Compliance & Claims</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-400">Payment & Reference</p>
                         <p className="text-slate-600 mt-1">
-                          eTIMS Serial: <span className="font-mono font-bold text-slate-950">{receiptData.kraCompliantInvoiceNo || "KRA-ETIMS-2026-VERIFIED"}</span>
+                          Receipt / Invoice No: <span className="font-mono font-bold text-slate-950">{receiptData.kraCompliantInvoiceNo || receiptData.id || "RCP-OFFICIAL"}</span>
                         </p>
                         <p className="text-slate-600">
                           Payment Method: <span className="font-bold text-slate-950 uppercase">{receiptData.paymentMethod}</span>
@@ -553,13 +681,13 @@ export default function PrintDocument({
                       <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-3">
                         <QrCode className="w-16 h-16 text-slate-900 shrink-0" />
                         <div className="text-[10px] font-mono leading-tight text-slate-600">
-                          <p className="font-bold text-emerald-800 flex items-center gap-1 mb-1">
-                            <ShieldCheck className="w-3.5 h-3.5" /> KRA eTIMS SECURE TAX
+                          <p className="font-bold text-slate-800 flex items-center gap-1 mb-1">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> OFFICIAL RECEIPT VERIFICATION
                           </p>
-                          <p>KRA PIN: P051189432K</p>
+                          <p>Hospital PIN: P051189432K</p>
                           <p>Total Exclusive of 16% VAT: KES {netAmount.toLocaleString()}.00</p>
                           <p>16% Value-Added Tax: KES {taxAmount.toLocaleString()}.00</p>
-                          <p className="text-slate-400 font-sans mt-1">Scan QR code for verification</p>
+                          <p className="text-slate-400 font-sans mt-1">Scan QR code for payment verification</p>
                         </div>
                       </div>
 
@@ -670,15 +798,15 @@ export default function PrintDocument({
 
                       <div className="flex flex-col items-end justify-end text-right">
                         <div className="border-b border-slate-400 pb-1 w-44 flex flex-col items-center">
-                          <span className="font-serif italic text-emerald-800 text-lg font-bold tracking-wider select-none transform -rotate-2">
-                            Dr. J. N. Omondi
+                          <span className="font-serif italic text-emerald-800 text-base font-bold tracking-wider select-none transform -rotate-2 truncate max-w-full">
+                            {prescriptionData.visit?.doctor || "Attending Doctor"}
                           </span>
                           <span className="text-[8px] text-slate-400 font-mono mt-0.5">
                             SHA256: d8f39b...c2f82d
                           </span>
                         </div>
-                        <p className="text-[10px] font-bold text-slate-900 mt-1.5">Dr. James N. Omondi, MD</p>
-                        <p className="text-[9px] text-slate-500">Consultant Physician | KMPDC No: A-8422</p>
+                        <p className="text-[10px] font-bold text-slate-900 mt-1.5">{prescriptionData.visit?.doctor || "Medical Officer"}</p>
+                        <p className="text-[9px] text-slate-500">Registered Medical Practitioner | KMPDC Verified</p>
                         <p className="text-[9px] text-slate-400">Electronic Sign-Off Date: {new Date(prescriptionData.visit.date).toLocaleDateString()}</p>
                       </div>
                     </div>
@@ -702,7 +830,7 @@ export default function PrintDocument({
                       </div>
                       <div className="text-right space-y-1">
                         <p className="text-[9px] uppercase font-bold text-slate-400">Employer Information</p>
-                        <p className="font-bold text-slate-900">HMS Tassiahill</p>
+                        <p className="font-bold text-slate-900">The Tassia Hill Hospital</p>
                         <p className="text-slate-500">KRA PIN: <span className="font-mono">P051189432K</span></p>
                         <p className="text-slate-500">SHIF Registered No: <span className="font-mono">SHIF-EMP-2026-NGB</span></p>
                       </div>
@@ -814,7 +942,7 @@ export default function PrintDocument({
                   <div className="space-y-6 flex-1 text-slate-900">
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
                       <p className="text-[10px] uppercase font-bold text-slate-400">Statement Period</p>
-                      <p className="font-extrabold text-slate-950 text-sm mt-0.5">Live Fiscal Health & Operational Activity Report</p>
+                      <p className="font-extrabold text-slate-950 text-sm mt-0.5">Live Financial Health & Operational Activity Report</p>
                       <p className="text-slate-600 mt-1">
                         Covers all reconciled patient revenues, outstanding insurance claims, and itemized operational expenses.
                       </p>

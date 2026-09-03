@@ -45,7 +45,7 @@ export default function Procurement() {
 
   // New Requisition Form State
   const [reqDept, setReqDept] = useState("pharmacy");
-  const [reqRequestedBy, setReqRequestedBy] = useState("Dr. James Omondi");
+  const [reqRequestedBy, setReqRequestedBy] = useState("Department Head / Requester");
   const [reqPriority, setReqPriority] = useState<"Low" | "Medium" | "High" | "Emergency">("Medium");
   const [reqItems, setReqItems] = useState<{ itemName: string; category: string; quantity: number; estimatedCost: number }[]>([
     { itemName: "Amoxicillin 500mg Caps", category: "Pharmaceuticals", quantity: 500, estimatedCost: 15 }

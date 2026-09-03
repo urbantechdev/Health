@@ -421,7 +421,7 @@ export default function DesktopBottomNav({
                 <div className="absolute -inset-1.5 rounded-2xl bg-emerald-500/30 pointer-events-none opacity-0 group-hover:opacity-80 blur-md transition-opacity duration-300 animate-green-smoke-aura" />
                 <button
                   id="desktop-dock-readme-btn"
-                  onClick={() => downloadReadmeFile("Tassiahill-Hospital-HMS-Documentation.md")}
+                  onClick={() => downloadReadmeFile("The-Tassia-Hill-Hospital-HMS-Documentation.md")}
                   className="relative z-10 flex items-center gap-2 px-3.5 lg:px-4 py-2.5 lg:py-3 rounded-2xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 text-xs lg:text-sm font-black border border-slate-300/90 hover:border-emerald-300 transition-all cursor-pointer hover:shadow-md active:scale-95 group min-h-[54px] lg:min-h-[62px]"
                   title="Download complete system architecture & setup documentation (README.md)"
                 >

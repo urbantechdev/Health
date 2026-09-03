@@ -640,6 +640,11 @@ a[role="button"]:active,
   animation: logoGleamSweep 3.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
+/* Print Portal Screen Shield (Hidden on screen) */
+#print-active-portal {
+  display: none !important;
+}
+
 /* ==========================================================================
    UNIVERSAL PRINTING & MULTI-PAGE DOCUMENT STYLES
    ========================================================================== */
@@ -672,8 +677,11 @@ a[role="button"]:active,
   }
 
   /* Hide entire application shell when printing an isolated document */
-  body.printing-isolated #root > *:not(#print-active-portal):not(#print-fallback-container) {
+  body.printing-isolated #root {
     display: none !important;
+  }
+  body.printing-isolated #print-active-portal {
+    display: block !important;
   }
 
   /* Standard hidden elements during any print */

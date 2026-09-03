@@ -2244,7 +2244,7 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
             age: matchedPatient?.age || 30,
             gender: matchedPatient?.gender || "Adult",
             patientNo: matchedPatient?.nationalId || matchedPatient?.patientNumber || selectedTicket?.ticketNo || "LAB-OPD-99",
-            facilityName: "TASSIAHILL HOSPITAL Diagnostic & Laboratory Center",
+            facilityName: "The Tassia Hill Hospital Diagnostic & Laboratory Center",
             doctor: "Attending Medical Officer",
             date: new Date().toISOString().replace("T", " ").substring(0, 16)
           }}

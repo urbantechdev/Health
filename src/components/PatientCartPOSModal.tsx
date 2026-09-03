@@ -279,7 +279,7 @@ export default function PatientCartPOSModal({
         : `Finalize checkout for ${patientName} totaling KES ${netPayable.toLocaleString()} via ${paymentMethod}?`,
       {
         title: "Confirm Patient Cart Settlement",
-        confirmText: "Complete & Issue Tax Invoice",
+        confirmText: "Complete & Issue Invoice",
         cancelText: "Cancel"
       }
     );
@@ -321,7 +321,7 @@ export default function PatientCartPOSModal({
         notes: checkoutNotes || (isSplitInsurance ? `Card Cover: KES ${insuranceCover}, Balance paid via ${copayMethod}` : undefined)
       });
 
-      toast.success(`Checkout completed! Tax Invoice ${invoice.id} generated and queue cleared.`, "Patient Cleared");
+      toast.success(`Checkout completed! Invoice ${invoice.id} generated and queue cleared.`, "Patient Cleared");
       setPrintedInvoice(invoice);
       if (onCheckoutComplete) onCheckoutComplete(invoice);
       if (onCheckoutSuccess) onCheckoutSuccess(invoice);
@@ -1113,7 +1113,7 @@ export default function PatientCartPOSModal({
                     )}
                   </button>
                   <p className="text-[10px] text-center text-slate-400">
-                    Compliant with KRA eTIMS Tax Invoicing, SHA Claim Clearance & Auto-Discharge.
+                    Compliant with KRA eTIMS Invoicing, SHA Claim Clearance & Auto-Discharge.
                   </p>
                 </div>
               </div>

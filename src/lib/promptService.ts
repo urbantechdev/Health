@@ -1,5 +1,6 @@
 // Modernized Prompts & Notification Service for NextGen HMS
 // Handles Success, Error, Warning, Question, and Input Prompts with sleek animations and sound effects
+import { promptSound } from "./promptSound";
 
 export type PromptType = "success" | "error" | "warning" | "info" | "question";
 
@@ -11,6 +12,7 @@ export interface ToastNotification {
   details?: string;
   duration?: number; // ms
   timestamp: number;
+  badge?: string;
   action?: {
     label: string;
     onClick: () => void;
@@ -76,24 +78,32 @@ class PromptService {
     message: string;
     details?: string;
     duration?: number;
+    badge?: string;
+    playSound?: boolean;
     action?: { label: string; onClick: () => void };
   }): string {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    const duration = config.duration ?? (config.type === "error" ? 6000 : 4200);
+    const type = config.type || "info";
+    const duration = config.duration ?? (type === "error" ? 6500 : 4500);
 
     const newToast: ToastNotification = {
       id,
-      type: config.type || "info",
+      type,
       title: config.title,
       message: config.message,
       details: config.details,
+      badge: config.badge,
       duration,
       timestamp: Date.now(),
       action: config.action,
     };
 
-    // Keep max 5 toasts on screen
-    this.toasts = [newToast, ...this.toasts.slice(0, 4)];
+    if (config.playSound !== false) {
+      promptSound.play(type);
+    }
+
+    // Keep max 4 toasts on screen
+    this.toasts = [newToast, ...this.toasts.slice(0, 3)];
     this.notifyToasts();
 
     if (duration > 0) {
@@ -123,17 +133,25 @@ class PromptService {
       type?: PromptType;
       details?: string;
       confirmText?: string;
+      badgeText?: string;
+      playSound?: boolean;
     }
   ): Promise<void> {
     return new Promise((resolve) => {
       const type = options?.type || (message.toLowerCase().includes("error") || message.toLowerCase().includes("failed") || message.toLowerCase().includes("denied") ? "error" : "info");
+      
+      if (options?.playSound !== false) {
+        promptSound.play(type);
+      }
+
       this.currentModalPrompt = {
         id: `alert-${Date.now()}`,
         type,
-        title: options?.title || (type === "error" ? "Action Required" : type === "warning" ? "Attention" : type === "success" ? "Success" : "Notice"),
+        title: options?.title || (type === "error" ? "Action Required" : type === "warning" ? "Attention" : type === "success" ? "Operation Successful" : "System Notice"),
         message,
         details: options?.details,
         confirmText: options?.confirmText || "Understood",
+        badgeText: options?.badgeText,
         resolve: () => {
           this.currentModalPrompt = null;
           this.notifyModal();
@@ -154,11 +172,16 @@ class PromptService {
       cancelText?: string;
       destructive?: boolean;
       badgeText?: string;
+      playSound?: boolean;
     }
   ): Promise<boolean> {
     return new Promise((resolve) => {
       const isDestructive = options?.destructive ?? (options?.type === "error" || message.toLowerCase().includes("delete") || message.toLowerCase().includes("remove") || message.toLowerCase().includes("purge") || message.toLowerCase().includes("wipe") || message.toLowerCase().includes("terminate"));
       const type = options?.type || (isDestructive ? "error" : "question");
+
+      if (options?.playSound !== false) {
+        promptSound.play(type);
+      }
 
       this.currentModalPrompt = {
         id: `confirm-${Date.now()}`,
@@ -190,13 +213,19 @@ class PromptService {
       confirmText?: string;
       cancelText?: string;
       details?: string;
+      badgeText?: string;
+      playSound?: boolean;
     }
   ): Promise<string | null> {
     return new Promise((resolve) => {
+      if (options?.playSound !== false) {
+        promptSound.play("question");
+      }
+
       this.currentModalPrompt = {
         id: `prompt-${Date.now()}`,
         type: "question",
-        title: options?.title || "Input Prompt",
+        title: options?.title || "Input Required",
         message,
         details: options?.details,
         inputMode: true,
@@ -205,6 +234,7 @@ class PromptService {
         inputPlaceholder: options?.placeholder || "Enter details here...",
         confirmText: options?.confirmText || "Submit",
         cancelText: options?.cancelText || "Cancel",
+        badgeText: options?.badgeText,
         resolve: (val: string | null) => {
           this.currentModalPrompt = null;
           this.notifyModal();
@@ -226,23 +256,23 @@ export const promptService = new PromptService();
 
 // Convenient Functional Shorthands
 export const toast = {
-  success: (message: string, title = "Success", details?: string) =>
+  success: (message: string, title = "Operation Successful", details?: string) =>
     promptService.showToast({ type: "success", title, message, details }),
   error: (message: string, title = "Error Encountered", details?: string) =>
     promptService.showToast({ type: "error", title, message, details }),
-  warning: (message: string, title = "Warning", details?: string) =>
+  warning: (message: string, title = "System Warning", details?: string) =>
     promptService.showToast({ type: "warning", title, message, details }),
-  info: (message: string, title = "Information", details?: string) =>
+  info: (message: string, title = "System Notification", details?: string) =>
     promptService.showToast({ type: "info", title, message, details }),
-  question: (message: string, title = "Question", details?: string) =>
+  question: (message: string, title = "Verification Required", details?: string) =>
     promptService.showToast({ type: "question", title, message, details }),
-  custom: (config: { type?: PromptType; title?: string; message: string; details?: string; duration?: number }) =>
+  custom: (config: { type?: PromptType; title?: string; message: string; details?: string; duration?: number; badge?: string; action?: { label: string; onClick: () => void } }) =>
     promptService.showToast(config),
 };
 
 export const modernAlert = (
   message: string,
-  options?: { title?: string; type?: PromptType; details?: string; confirmText?: string }
+  options?: { title?: string; type?: PromptType; details?: string; confirmText?: string; badgeText?: string }
 ) => promptService.alert(message, options);
 
 export const modernConfirm = (
@@ -252,5 +282,6 @@ export const modernConfirm = (
 
 export const modernPrompt = (
   message: string,
-  options?: { title?: string; defaultValue?: string; placeholder?: string; inputType?: "text" | "number" | "password" | "textarea"; confirmText?: string; cancelText?: string; details?: string }
+  options?: { title?: string; defaultValue?: string; placeholder?: string; inputType?: "text" | "number" | "password" | "textarea"; confirmText?: string; cancelText?: string; details?: string; badgeText?: string }
 ) => promptService.prompt(message, options);
+

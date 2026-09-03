@@ -87,7 +87,7 @@ export default function RolePortalLogin({
   onLoginSuccess,
   onGoogleLogin,
   authError,
-  hospitalName = "TASSIAHILL HOSPITAL",
+  hospitalName = "HMIS",
   hospitalLogoUrl,
   onOpenPolicyTerms
 }: RolePortalLoginProps) {
@@ -221,7 +221,7 @@ export default function RolePortalLogin({
       department: "finance",
       targetTab: "finance",
       icon: TrendingUp,
-      description: "KRA eTIMS Fiscal Receipts, Revenue Ledger & Expenses",
+      description: "Hospital Invoices, Official Receipts, Revenue Ledger & Expenses",
       color: "text-emerald-700",
       bg: "bg-emerald-50"
     },
@@ -308,6 +308,19 @@ export default function RolePortalLogin({
 
     if (box.id === "staff") {
       setIsStaffExpanded(!isStaffExpanded);
+    } else if (box.id === "admin") {
+      if (onGoogleLogin) {
+        onGoogleLogin();
+        return;
+      }
+      setActiveModalRole({
+        role: box.defaultRole,
+        title: box.title,
+        department: box.id,
+        targetTab: box.targetTab,
+        icon: box.icon
+      });
+      setEmailInput("");
     } else {
       setActiveModalRole({
         role: box.defaultRole,
@@ -369,7 +382,7 @@ export default function RolePortalLogin({
         return;
       }
 
-      if (cleanPin !== expectedPin && cleanPin !== "2026") {
+      if (cleanPin !== expectedPin) {
         setLocalError(`Invalid Security PIN for ${chosenEmp.name}. Please enter the correct PIN provided on your onboarding passcard.`);
         return;
       }
@@ -402,7 +415,7 @@ export default function RolePortalLogin({
       return;
     }
 
-    // A. Check for Master Super Admin (moraasdorcah@gmail.com, urbaninteriorkenya@gmail.com, naisiaetext@gmail.com)
+    // A. Check for Master Super Admin (tassiahillhospital@gmail.com, moraasdorcah@gmail.com)
     const isMasterSuperAdmin = isSuperAdminEmail(cleanEmail);
     if (isMasterSuperAdmin) {
       const superAdminRecord = employees.find(
@@ -413,7 +426,7 @@ export default function RolePortalLogin({
       );
       const expectedPin = superAdminRecord?.pin || seedProfile?.pin || "2026";
 
-      if (cleanPin !== expectedPin && cleanPin !== "2026") {
+      if (cleanPin !== expectedPin) {
         setLocalError("Invalid Security PIN.");
         return;
       }
@@ -453,7 +466,7 @@ export default function RolePortalLogin({
 
     // D. Check PIN
     const expectedPin = matchedEmployee.pin || "2026";
-    if (cleanPin !== expectedPin && cleanPin !== "2026") {
+    if (cleanPin !== expectedPin) {
       setLocalError("Invalid Security PIN.");
       return;
     }
@@ -701,7 +714,7 @@ export default function RolePortalLogin({
       </div>
 
       {/* Main Presentation Area */}
-      <main className="max-w-7xl mx-auto px-6 sm:px-12 py-8 w-full flex-1 flex flex-col justify-center">
+      <main className="max-w-7xl mx-auto px-6 sm:px-12 pt-6 sm:pt-8 pb-36 sm:pb-28 w-full flex-1 flex flex-col justify-center">
         {/* Welcome Section */}
         <div className="text-center max-w-2xl mx-auto mb-8 space-y-2">
           <span className="px-3 py-1 bg-slate-900 text-white text-xs font-black rounded-full uppercase tracking-wider inline-flex items-center gap-1.5 shadow-xs">
@@ -875,31 +888,96 @@ export default function RolePortalLogin({
         </AnimatePresence>
       </main>
 
-      {/* Clean Minimal Footer with Policy & Terms Links */}
-      <footer className="w-full border-t border-slate-200 bg-white/80 py-4 px-6 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 max-w-7xl mx-auto">
-        <p>© {new Date().getFullYear()} {hospitalName} • Electronic Medical Records & Enterprise HMIS</p>
-        <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-500">
-          {onOpenPolicyTerms && (
-            <>
-              <button
-                type="button"
-                onClick={() => onOpenPolicyTerms("privacy")}
-                className="hover:text-emerald-700 underline underline-offset-2 transition-colors cursor-pointer"
-              >
-                Data Protection & Privacy (KDPA 2019)
-              </button>
-              <span>•</span>
-              <button
-                type="button"
-                onClick={() => onOpenPolicyTerms("terms")}
-                className="hover:text-emerald-700 underline underline-offset-2 transition-colors cursor-pointer"
-              >
-                Terms of Use
-              </button>
-              <span>•</span>
-            </>
-          )}
-          <span className="text-slate-400">ODPC Reg: ODPC-KE-2026</span>
+      {/* Fixed Navy Footer Nav with Single Wave Curved Top Edge - Firmly locked to bottom on mobile scroll */}
+      <footer
+        id="login-portal-footer-nav"
+        className="fixed bottom-0 left-0 right-0 z-40 w-full select-none pointer-events-none"
+        style={{
+          transform: "translate3d(0, 0, 0)",
+          WebkitTransform: "translate3d(0, 0, 0)",
+          willChange: "transform",
+        }}
+      >
+        {/* Single Wave Design at the Top Edge inheriting Navy (#0B1528) */}
+        <div className="w-full overflow-hidden leading-none pointer-events-none -mb-[1px] relative">
+          <svg
+            viewBox="0 0 1440 60"
+            preserveAspectRatio="none"
+            className="w-full h-4 sm:h-6 md:h-7 block fill-[#0B1528] drop-shadow-[0_-8px_20px_rgba(11,21,40,0.45)]"
+          >
+            <defs>
+              <linearGradient id="footerWaveBorderGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#1e3a8a" stopOpacity="0.4" />
+                <stop offset="30%" stopColor="#38bdf8" stopOpacity="0.75" />
+                <stop offset="70%" stopColor="#60a5fa" stopOpacity="0.65" />
+                <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0.4" />
+              </linearGradient>
+            </defs>
+
+            {/* Solid Wave Background inheriting Deep Navy #0B1528 */}
+            <path
+              d="M 0,38 C 360,6 1080,56 1440,16 L 1440,60 L 0,60 Z"
+              fill="#0B1528"
+            />
+
+            {/* Single Wave Luminous Crest Highlight */}
+            <path
+              d="M 0,38 C 360,6 1080,56 1440,16"
+              stroke="url(#footerWaveBorderGlow)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              fill="none"
+            />
+          </svg>
+        </div>
+
+        {/* Navy Bar Body inheriting #0B1528 */}
+        <div className="w-full bg-[#0B1528] text-white shadow-[0_-8px_24px_rgba(11,21,40,0.5)] pointer-events-auto relative overflow-hidden">
+          {/* Continuous Motion Ambient Shimmer (matching top header) */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+            <motion.div
+              className="absolute top-0 bottom-0 w-48 md:w-80 bg-gradient-to-r from-transparent via-blue-400/10 to-transparent blur-lg -skew-x-12"
+              initial={{ left: "-40%" }}
+              animate={{ left: "120%" }}
+              transition={{
+                repeat: Infinity,
+                duration: 7.0,
+                ease: "easeInOut",
+                repeatDelay: 1.5,
+              }}
+            />
+          </div>
+
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-8 md:px-12 py-2.5 sm:py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-4 text-center sm:text-left text-xs">
+            <p className="text-slate-300 font-medium text-[11px] sm:text-xs">
+              © {new Date().getFullYear()} <span className="text-white font-bold">{hospitalName}</span> • Electronic Medical Records & Enterprise HMIS
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-[11px] font-semibold text-slate-300">
+              {onOpenPolicyTerms && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onOpenPolicyTerms("privacy")}
+                    className="text-slate-300 hover:text-amber-300 underline underline-offset-2 transition-colors cursor-pointer"
+                  >
+                    Data Protection & Privacy (KDPA 2019)
+                  </button>
+                  <span className="text-slate-600 hidden sm:inline">•</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenPolicyTerms("terms")}
+                    className="text-slate-300 hover:text-amber-300 underline underline-offset-2 transition-colors cursor-pointer"
+                  >
+                    Terms of Use
+                  </button>
+                  <span className="text-slate-600 hidden sm:inline">•</span>
+                </>
+              )}
+              <span className="text-blue-300 bg-blue-950/80 border border-blue-900/70 px-2 py-0.5 rounded text-[10px] font-mono tracking-wide">
+                ODPC Reg: ODPC-KE-2026
+              </span>
+            </div>
+          </div>
         </div>
       </footer>
 
@@ -953,8 +1031,113 @@ export default function RolePortalLogin({
                 </div>
               )}
 
-              {/* Login Method Tabs */}
-              <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-2xl">
+              {/* Modal Body */}
+              {activeModalRole.role === "Super Admin" || activeModalRole.department === "admin" || activeModalRole.department === "administration" ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
+                    <div className="w-12 h-12 mx-auto rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                      <Shield className="w-6 h-6 text-purple-700" />
+                    </div>
+                    <h4 className="text-sm font-black text-slate-900">Administrative Sign-In</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
+                      Hospital Administration access is strictly restricted. Tap Sign in with Google below — only whitelisted accounts are granted clearance.
+                    </p>
+                  </div>
+
+                  {onGoogleLogin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveModalRole(null);
+                        onGoogleLogin();
+                      }}
+                      className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-2.5 transition-all shadow-md cursor-pointer"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                      </svg>
+                      <span>Sign in with Google</span>
+                    </button>
+                  )}
+
+                  <div className="pt-3 border-t border-slate-100">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block text-center mb-3">
+                      Or Authenticate with Corporate Email & PIN
+                    </span>
+                    <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                          Corporate Admin Email *
+                        </label>
+                        <input
+                          id="input-admin-email"
+                          type="email"
+                          required
+                          value={emailInput}
+                          onChange={(e) => {
+                            setEmailInput(e.target.value);
+                            setLocalError(null);
+                          }}
+                          placeholder="admin@hospital.org"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-slate-800"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                          Admin Security PIN *
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="input-admin-pin"
+                            type={showPin ? "text" : "password"}
+                            maxLength={6}
+                            required
+                            value={pinInput}
+                            onChange={(e) => {
+                              setPinInput(e.target.value);
+                              setLocalError(null);
+                            }}
+                            placeholder="Enter Security PIN"
+                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 tracking-widest focus:outline-slate-800"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPin(!showPin)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          >
+                            {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setActiveModalRole(null)}
+                          className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          id="btn-confirm-portal-login"
+                          type="submit"
+                          className="flex-2 py-3 px-4 bg-purple-700 hover:bg-purple-800 text-white font-black rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <LogIn className="w-4 h-4" />
+                          <span>Verify & Access Admin</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Login Method Tabs */}
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-2xl">
                 <button
                   type="button"
                   onClick={() => {
@@ -1114,34 +1297,9 @@ export default function RolePortalLogin({
                     <span>Authenticate & Access {activeModalRole.title}</span>
                   </button>
                 </div>
-
-                {/* Direct Instant Trial Sign-In to Admin Dashboard */}
-                <div className="pt-2 border-t border-slate-100">
-                  <button
-                    id="btn-direct-trial-admin-role-modal"
-                    type="button"
-                    onClick={() => {
-                      onLoginSuccess(
-                        {
-                          email: "moraasdorcah@gmail.com",
-                          displayName: "Dorcah Moraa (Super Admin Sovereign)",
-                          role: "Super Admin",
-                          department: "administration",
-                          accessLevel: "Super Admin",
-                          employeeId: "DIRECT_ADMIN_TRIAL"
-                        },
-                        "dashboard"
-                      );
-                      setActiveModalRole(null);
-                    }}
-                    className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
-                  >
-                    <Shield className="w-3.5 h-3.5 text-amber-100 shrink-0" />
-                    <span>Direct Trial Sign In to Admin Dashboard</span>
-                    <Sparkles className="w-3.5 h-3.5 text-amber-200 shrink-0 animate-pulse" />
-                  </button>
-                </div>
               </form>
+                </>
+              )}
             </motion.div>
           </div>
         </div>

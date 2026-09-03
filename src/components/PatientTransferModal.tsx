@@ -26,7 +26,9 @@ import {
   BedDouble,
   FileText,
   Baby,
-  ShieldAlert
+  ShieldAlert,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { toast } from "../lib/promptService";
 
@@ -119,8 +121,8 @@ export default function PatientTransferModal({
   const [bp, setBp] = useState(initialPatient?.vitals?.bp || "120/80");
   const [pulse, setPulse] = useState(initialPatient?.vitals?.pulse || "76");
   const [weight, setWeight] = useState(initialPatient?.vitals?.weight || "70");
-
   const [submitting, setSubmitting] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Sync initial patient/ticket when props change
   useEffect(() => {
@@ -272,10 +274,14 @@ export default function PatientTransferModal({
   );
 
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-xs font-sans animate-in fade-in duration-200">
+    <div className={`fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/80 backdrop-blur-xs font-sans animate-in fade-in duration-200 ${isFullScreen ? "p-0" : "p-2 sm:p-4"}`}>
       <div 
         id="patient-transfer-modal"
-        className="bg-white border border-slate-200 rounded-3xl w-full max-w-3xl max-h-[92vh] shadow-2xl flex flex-col overflow-hidden"
+        className={`bg-white shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
+          isFullScreen 
+            ? "w-full h-full max-w-none max-h-none rounded-none border-0" 
+            : "w-full max-w-4xl max-h-[92vh] rounded-3xl border border-slate-200"
+        }`}
       >
         {/* Modal Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
@@ -284,274 +290,344 @@ export default function PatientTransferModal({
               <ArrowRightLeft className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold tracking-tight">Patient Referral & Inter-Departmental Transfer</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold tracking-tight">Patient Referral & Inter-Departmental Transfer</h3>
+                {isFullScreen && (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold tracking-wider uppercase border border-emerald-500/30">
+                    Full Screen Mode
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400">
                 Initiated by <strong className="text-slate-200">{currentUser.name}</strong> ({currentUser.role})
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            id="btn-close-transfer-modal"
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Fullscreen Toggle Button */}
+            <button
+              type="button"
+              id="btn-toggle-transfer-fullscreen"
+              onClick={() => setIsFullScreen(!isFullScreen)}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold"
+              title={isFullScreen ? "Exit Full Screen" : "Full Screen View"}
+            >
+              {isFullScreen ? (
+                <>
+                  <Minimize2 className="w-4 h-4 text-emerald-400" />
+                  <span className="hidden sm:inline text-xs">Exit Full Screen</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-4 h-4 text-slate-300" />
+                  <span className="hidden sm:inline text-xs">Full Screen</span>
+                </>
+              )}
+            </button>
+
+            {/* Close Button */}
+            <button
+              onClick={onClose}
+              id="btn-close-transfer-modal"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              title="Close Transfer Modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Form Scroll Area */}
-        <form onSubmit={handleTransferSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/40">
-          {/* 1. Patient Case Selection / Verification */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
-              <User className="w-4 h-4 text-emerald-600" />
-              1. Patient Identification & Active Ticket
-            </h4>
+        <form onSubmit={handleTransferSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/40">
+          <div className={isFullScreen ? "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-7xl mx-auto" : "space-y-6"}>
+            
+            {/* Left Column in Fullscreen: Patient Demographics & Vitals */}
+            <div className={isFullScreen ? "lg:col-span-5 space-y-6" : "space-y-6"}>
+              {/* 1. Patient Case Selection / Verification */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <User className="w-4 h-4 text-emerald-600" />
+                  1. Patient Identification & Active Ticket
+                </h4>
 
-            {activeTickets.length > 0 && !initialPatient && !initialTicket && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Select Patient from Active Queue:
-                </label>
-                <select
-                  value={selectedTicketId}
-                  onChange={(e) => handleTicketSelect(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                >
-                  <option value="">-- Choose active patient ticket --</option>
-                  {activeTickets.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.ticketNo} — {t.patientName} ({t.currentDepartment} visit)
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+                {activeTickets.length > 0 && !initialPatient && !initialTicket && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Select Patient from Active Queue:
+                    </label>
+                    <select
+                      value={selectedTicketId}
+                      onChange={(e) => handleTicketSelect(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                    >
+                      <option value="">-- Choose active patient ticket --</option>
+                      {activeTickets.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.ticketNo} — {t.patientName} ({t.currentDepartment} visit)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Patient Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={patientName}
-                  onChange={(e) => setPatientName(e.target.value)}
-                  placeholder="e.g. Jane Mwangi"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Active Ticket No *</label>
-                <input
-                  type="text"
-                  required
-                  value={ticketNo}
-                  onChange={(e) => setTicketNo(e.target.value)}
-                  placeholder="e.g. GEN-004"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-emerald-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">National ID / Passport</label>
-                <input
-                  type="text"
-                  value={nationalId}
-                  onChange={(e) => setNationalId(e.target.value)}
-                  placeholder="e.g. 33445566"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Patient Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={patientName}
+                      onChange={(e) => setPatientName(e.target.value)}
+                      placeholder="e.g. Jane Mwangi"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Active Ticket No *</label>
+                    <input
+                      type="text"
+                      required
+                      value={ticketNo}
+                      onChange={(e) => setTicketNo(e.target.value)}
+                      placeholder="e.g. GEN-004"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-emerald-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">National ID / Passport</label>
+                    <input
+                      type="text"
+                      value={nationalId}
+                      onChange={(e) => setNationalId(e.target.value)}
+                      placeholder="e.g. 33445566"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Age (Years)</label>
+                    <input
+                      type="number"
+                      value={age}
+                      onChange={(e) => setAge(e.target.value)}
+                      placeholder="35"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Gender</label>
+                    <select
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                      <option value="Not Specified">Not Specified</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Vitals Snapshot */}
+                <div className="pt-2 border-t border-slate-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">
+                    Patient Triage Vitals Snapshot:
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 font-bold block">Body Temp</span>
+                      <input
+                        type="text"
+                        value={temp}
+                        onChange={(e) => setTemp(e.target.value)}
+                        className="w-full font-bold text-slate-800 bg-transparent focus:outline-hidden"
+                        placeholder="37.0 °C"
+                      />
+                    </div>
+                    <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 font-bold block">Blood Pressure</span>
+                      <input
+                        type="text"
+                        value={bp}
+                        onChange={(e) => setBp(e.target.value)}
+                        className="w-full font-bold text-slate-800 bg-transparent focus:outline-hidden"
+                        placeholder="120/80 mmHg"
+                      />
+                    </div>
+                    <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 font-bold block">Pulse Rate</span>
+                      <input
+                        type="text"
+                        value={pulse}
+                        onChange={(e) => setPulse(e.target.value)}
+                        className="w-full font-bold text-slate-800 bg-transparent focus:outline-hidden"
+                        placeholder="75 bpm"
+                      />
+                    </div>
+                    <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 font-bold block">Weight</span>
+                      <input
+                        type="text"
+                        value={weight}
+                        onChange={(e) => setWeight(e.target.value)}
+                        className="w-full font-bold text-slate-800 bg-transparent focus:outline-hidden"
+                        placeholder="70 kg"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Vitals Snapshot */}
-            <div className="pt-2 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-500 font-bold block">Body Temp</span>
-                <input
-                  type="text"
-                  value={temp}
-                  onChange={(e) => setTemp(e.target.value)}
-                  className="w-full font-bold text-slate-800 bg-transparent focus:outline-hidden"
-                  placeholder="37.0 °C"
-                />
-              </div>
-              <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-500 font-bold block">Blood Pressure</span>
-                <input
-                  type="text"
-                  value={bp}
-                  onChange={(e) => setBp(e.target.value)}
-                  className="w-full font-bold text-slate-800 bg-transparent focus:outline-hidden"
-                  placeholder="120/80 mmHg"
-                />
-              </div>
-              <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-500 font-bold block">Pulse Rate</span>
-                <input
-                  type="text"
-                  value={pulse}
-                  onChange={(e) => setPulse(e.target.value)}
-                  className="w-full font-bold text-slate-800 bg-transparent focus:outline-hidden"
-                  placeholder="75 bpm"
-                />
-              </div>
-              <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-[10px] text-slate-500 font-bold block">Weight</span>
-                <input
-                  type="text"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  className="w-full font-bold text-slate-800 bg-transparent focus:outline-hidden"
-                  placeholder="70 kg"
-                />
-              </div>
-            </div>
-          </div>
+            {/* Right Column in Fullscreen: Destination, Priority & Clinical Handover */}
+            <div className={isFullScreen ? "lg:col-span-7 space-y-6" : "space-y-6"}>
+              {/* 2. Destination Department & Specialist Target */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-emerald-600" />
+                  2. Destination Department & Specialist Roster
+                </h4>
 
-          {/* 2. Destination Department & Specialist Target */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-emerald-600" />
-              2. Destination Department & Specialist Roster
-            </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Target Department / Service Unit *
+                    </label>
+                    <select
+                      value={toDepartment}
+                      onChange={(e) => setToDepartment(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                    >
+                      {TRANSFER_DEPARTMENTS.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name} ({dept.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Target Department / Service Unit *
-                </label>
-                <select
-                  value={toDepartment}
-                  onChange={(e) => setToDepartment(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                >
-                  {TRANSFER_DEPARTMENTS.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name} ({dept.category})
-                    </option>
-                  ))}
-                </select>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Specific Specialist Physician (Optional)
+                    </label>
+                    <select
+                      value={toSpecialistId}
+                      onChange={(e) => setToSpecialistId(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                    >
+                      <option value="">-- Any Available On-Duty Specialist --</option>
+                      {availableSpecialists.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Transfer Priority */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                    Transfer Clinical Urgency *
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPriority("Routine")}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        priority === "Routine"
+                          ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      🟢 Routine / Standard
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPriority("Urgent")}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        priority === "Urgent"
+                          ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                          : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
+                      }`}
+                    >
+                      🟡 Urgent (Priority)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPriority("STAT Emergency")}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        priority === "STAT Emergency"
+                          ? "bg-red-600 text-white border-red-600 ring-2 ring-red-400 shadow-md"
+                          : "bg-red-50 text-red-900 border-red-200 hover:bg-red-100"
+                      }`}
+                    >
+                      🔴 STAT Emergency
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Specific Specialist Physician (Optional)
-                </label>
-                <select
-                  value={toSpecialistId}
-                  onChange={(e) => setToSpecialistId(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                >
-                  <option value="">-- Any Available On-Duty Specialist --</option>
-                  {availableSpecialists.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.category})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+              {/* 3. Reason & Clinical Summary */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-600" />
+                  3. Clinical Reason for Referral & Notes
+                </h4>
 
-            {/* Transfer Priority */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">
-                Transfer Clinical Urgency *
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPriority("Routine")}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    priority === "Routine"
-                      ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  🟢 Routine / Standard
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPriority("Urgent")}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    priority === "Urgent"
-                      ? "bg-amber-500 text-white border-amber-500 shadow-xs"
-                      : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
-                  }`}
-                >
-                  🟡 Urgent (Priority)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPriority("STAT Emergency")}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    priority === "STAT Emergency"
-                      ? "bg-red-600 text-white border-red-600 ring-2 ring-red-400 shadow-md"
-                      : "bg-red-50 text-red-900 border-red-200 hover:bg-red-100"
-                  }`}
-                >
-                  🔴 STAT Emergency
-                </button>
-              </div>
-            </div>
-          </div>
+                {/* Quick Reason Chips */}
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-500" /> Quick Reason Templates:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {REASON_TEMPLATES.map((tmpl, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setReasonForTransfer(tmpl)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-[11px] font-medium text-slate-700 transition-colors cursor-pointer"
+                      >
+                        {tmpl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-          {/* 3. Reason & Clinical Summary */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-emerald-600" />
-              3. Clinical Reason for Referral & Notes
-            </h4>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Primary Reason for Referral / Transfer *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reasonForTransfer}
+                    onChange={(e) => setReasonForTransfer(e.target.value)}
+                    placeholder="e.g. Acute myocardial infarction symptoms; requires immediate cardiology review & ECG"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
 
-            {/* Quick Reason Chips */}
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-500" /> Quick Reason Templates:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {REASON_TEMPLATES.map((tmpl, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setReasonForTransfer(tmpl)}
-                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-[11px] font-medium text-slate-700 transition-colors cursor-pointer"
-                  >
-                    {tmpl}
-                  </button>
-                ))}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Clinical Handover Summary & Pending Orders
+                  </label>
+                  <textarea
+                    rows={isFullScreen ? 4 : 3}
+                    value={clinicalSummary}
+                    onChange={(e) => setClinicalSummary(e.target.value)}
+                    placeholder="Include initial findings, IV fluids administered, allergies, and diagnostic requests..."
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 resize-none"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Primary Reason for Referral / Transfer *
-              </label>
-              <input
-                type="text"
-                required
-                value={reasonForTransfer}
-                onChange={(e) => setReasonForTransfer(e.target.value)}
-                placeholder="e.g. Acute myocardial infarction symptoms; requires immediate cardiology review & ECG"
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Clinical Handover Summary & Pending Orders
-              </label>
-              <textarea
-                rows={3}
-                value={clinicalSummary}
-                onChange={(e) => setClinicalSummary(e.target.value)}
-                placeholder="Include initial findings, IV fluids administered, allergies, and diagnostic requests..."
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 resize-none"
-              />
-            </div>
           </div>
 
           {/* Modal Footer Controls */}
-          <div className="pt-2 flex items-center justify-between gap-3">
+          <div className={`pt-4 mt-6 border-t border-slate-200 flex items-center justify-between gap-3 ${isFullScreen ? "max-w-7xl mx-auto" : ""}`}>
             <button
               type="button"
               onClick={onClose}

@@ -503,7 +503,16 @@ export async function syncDoctorConsultationToCart(params: {
   encounterId?: string;
   doctorName: string;
   isResultsReview?: boolean;
-  prescriptions: { drugName: string; quantity: number; dosage: string; instructions?: string; unitPrice?: number }[];
+  prescriptions: { 
+    drugName: string; 
+    quantity: number; 
+    dosage: string; 
+    instructions?: string; 
+    unitPrice?: number;
+    formulation?: string;
+    strength?: string;
+    pricedBy?: "doctor" | "pharmacist" | "system";
+  }[];
   referrals: { testName: string; department: string; standardAmount?: number }[];
   procedures?: { name: string; category?: PatientCartItem["category"]; amount: number }[];
 }): Promise<PatientCart | null> {
@@ -556,8 +565,9 @@ export async function syncDoctorConsultationToCart(params: {
     const unitPrice = Math.max(0, rx.unitPrice !== undefined ? rx.unitPrice : 150);
     const notesArr = [
       rx.dosage ? `Dosage: ${rx.dosage}` : "",
+      rx.formulation || rx.strength ? `${rx.formulation || ""} ${rx.strength || ""}`.trim() : "",
       rx.instructions ? `Instructions: ${rx.instructions}` : "",
-      `Prescribed by Dr. ${params.doctorName}`
+      `Prescribed by Dr. ${params.doctorName}${rx.pricedBy === "doctor" ? ` (Doctor-Priced: KES ${unitPrice}/unit)` : ""}`
     ].filter(Boolean);
 
     newSyncedItems.push({

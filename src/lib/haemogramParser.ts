@@ -421,8 +421,8 @@ export function parseHaemogramData(
   ];
 
   return {
-    facilityName: patientMeta?.facilityName || "TASSIAHILL HOSPITAL & DIAGNOSTIC CENTER",
-    facilityAddress: "MoH Reg. No: MOH/2026/089 • P.O. Box 45012-00100 Nairobi",
+    facilityName: patientMeta?.facilityName || "The Tassia Hill Hospital Diagnostic Center",
+    facilityAddress: "MoH Reg No: 024866 • P.O. Box 1834-00100 Nairobi • Email: tassiahillhospital@gmail.com",
     facilityCode: "MOH-LEVEL-LAB-4409",
     patientName: patientMeta?.name || "Patient Walk-in",
     patientAge: patientMeta?.age || 32,

@@ -131,7 +131,7 @@ export default function PatientDailyHistoryStatement({
   invoices,
   onOpenPatientHistory,
   onPrintPatientDocument,
-  facilityName = "TASSIAHILL HOSPITAL"
+  facilityName = "The Tassia Hill Hospital"
 }: PatientDailyHistoryStatementProps) {
   // Helper for formatting YYYY-MM-DD
   const getTodayStr = () => {
@@ -626,7 +626,7 @@ export default function PatientDailyHistoryStatement({
   const handleCopySummary = (visit: UnifiedDailyPatientVisit) => {
     const lines = [
       `=============================================`,
-      `TASSIAHILL HOSPITAL - PATIENT VISIT & STATEMENT`,
+      `THE TASSIA HILL HOSPITAL - PATIENT VISIT & STATEMENT`,
       `=============================================`,
       `Date: ${visit.visitDate} | Time: ${visit.visitTime}`,
       `Patient: ${visit.patientName}`,
@@ -1211,7 +1211,7 @@ export default function PatientDailyHistoryStatement({
                                 </h4>
                               </div>
                               <p className="text-[10px] text-slate-500 mt-0.5">
-                                KRA eTIMS Fiscal Clearance • Official Tassiahill Hospital Statement
+                                Official The Tassia Hill Hospital Patient Account Statement
                               </p>
                             </div>
 
@@ -1348,7 +1348,7 @@ export default function PatientDailyHistoryStatement({
           patientMeta={{
             name: selectedHaemogramView.patientName || "Patient Record",
             date: selectedHaemogramView.date,
-            facilityName: "TASSIAHILL HOSPITAL Diagnostic & Laboratory Center",
+            facilityName: "The Tassia Hill Hospital Diagnostic & Laboratory Center",
             doctor: "Attending Medical Officer"
           }}
         />

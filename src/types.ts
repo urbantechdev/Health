@@ -79,6 +79,10 @@ export interface QueueTicket {
 export interface Medication {
   id: string;
   name: string;
+  genericName?: string;
+  brandLabel?: string;
+  formulation?: string;
+  strength?: string;
   category: string;
   quantity: number;
   minThreshold: number;
@@ -94,6 +98,12 @@ export interface PrescriptionItem {
   dosage: string;
   instructions: string;
   status: "pending" | "dispensed";
+  medicationId?: string;
+  unitPrice?: number;
+  totalPrice?: number;
+  formulation?: string;
+  strength?: string;
+  pricedBy?: "doctor" | "pharmacist" | "default";
 }
 
 export interface MedicalRecord {
@@ -139,6 +149,8 @@ export interface MedicalRecord {
 export interface ClinicalVisit {
   id: string;
   date: string;
+  doctor?: string;
+  doctorName?: string;
   vitals: {
     temp: string; // °C
     bp: string; // mmHg e.g. 120/80
@@ -373,8 +385,8 @@ export interface EncounterNursingNote {
 
 export interface EncounterDoctorNote {
   id: string;
+  category?: "Ward Round Review" | "Treatment Plan" | "Specialist Consultation" | "Clinical Progress" | "Procedure / Intervention" | "Emergency Assessment" | "General" | string;
   note: string;
-  category?: "Ward Round Review" | "Treatment Plan" | "Specialist Consultation" | "Clinical Progress" | "Procedure / Intervention" | "Emergency Assessment" | "General";
   doctorName: string;
   doctorId?: string;
   doctorKmpdc?: string;
@@ -860,4 +872,171 @@ export interface PatientCart {
   checkedOutAt?: string;
   checkedOutBy?: string;
   finalInvoiceId?: string;
+}
+
+// ==========================================
+// ACCOUNTING & FINANCIAL OPERATIONS TYPES
+// ==========================================
+
+export interface CashierShift {
+  id: string;
+  shiftNumber: string; // e.g. SHF-20260903-01
+  cashierId: string;
+  cashierName: string;
+  stationName: string; // e.g. "Main OPD Cashier Desk 1", "Pharmacy POS Till"
+  startTime: string;
+  endTime?: string;
+  status: "open" | "reconciled" | "closed";
+  openingFloat: number;
+  expectedCash: number;
+  countedCash: number;
+  cashVariance: number;
+  expectedMpesa: number;
+  declaredMpesa: number;
+  mpesaVariance: number;
+  expectedCard: number;
+  declaredCard: number;
+  totalExpected: number;
+  totalDeclared: number;
+  totalVariance: number;
+  invoicesCount: number;
+  zReportNumber?: string;
+  reconciliationNotes?: string;
+  supervisorSignedBy?: string;
+  supervisorSignedAt?: string;
+  createdAt: string;
+}
+
+export interface DebtorInsuranceClaim {
+  id: string;
+  claimNumber: string; // e.g. CLM-SHA-2026-091
+  invoiceId: string;
+  patientId: string;
+  patientName: string;
+  nationalId: string;
+  shaNumber?: string;
+  insurerName: "Social Health Authority (SHA)" | "Jubilee Insurance" | "Britam Insurance" | "CIC General Insurance" | "AAR Health Services" | "Madison Insurance" | "First Assurance" | "Corporate Direct" | string;
+  schemeType: "SHA / NHIF Public" | "Comprehensive Corporate" | "Standard Inpatient/OPD" | "Managed Care";
+  claimDate: string;
+  originalAmount: number;
+  approvedAmount: number;
+  copayAmount: number;
+  paidAmount: number;
+  disallowedAmount: number;
+  disallowanceReason?: string;
+  balance: number;
+  status: "Submitted" | "Vetted" | "Approved" | "Remitted" | "Disallowed" | "Under Review";
+  agingDays: number;
+  agingBucket: "0-30 Days" | "31-60 Days" | "61-90 Days" | "90+ Days";
+  remittanceBatchNo?: string;
+  preAuthCode?: string;
+  icd10Code?: string;
+}
+
+export interface RemittanceBatch {
+  id: string;
+  batchNumber: string; // e.g. REM-2026-W36-JUB
+  insurerName: string;
+  remittanceDate: string;
+  bankReference: string;
+  paymentMethod: "EFT / Bank Transfer" | "Cheque" | "RTGS";
+  totalRemittedAmount: number;
+  allocatedAmount: number;
+  disallowedAmount: number;
+  unallocatedAmount: number;
+  claimsCount: number;
+  status: "Allocated" | "Partially Allocated" | "Draft";
+  processedBy: string;
+  notes?: string;
+}
+
+export interface SupplierPayableInvoice {
+  id: string;
+  invoiceNumber: string; // e.g. INV-MEDS-8841
+  supplierId: string;
+  supplierName: string;
+  supplierKraPin: string;
+  poNumber?: string; // Matching LPO
+  grnNumber?: string; // Matching GRN
+  invoiceDate: string;
+  dueDate: string;
+  category: "Pharmaceuticals" | "Medical Consumables" | "Laboratory Reagents" | "Radiology Equipment" | "General Hospital Supplies" | "Utilities & Services";
+  items: {
+    itemName: string;
+    orderedQty?: number;
+    receivedQty?: number;
+    billedQty: number;
+    unitPrice: number;
+    total: number;
+    varianceFlag?: boolean;
+    varianceNote?: string;
+  }[];
+  subtotal: number;
+  vatAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  balanceDue: number;
+  matchStatus: "3-Way Matched" | "Variance Flagged" | "Pending GRN" | "Direct Overhead";
+  paymentStatus: "Unpaid" | "Partially Paid" | "Paid" | "On Hold";
+  paymentVoucherNo?: string;
+  paymentMethod?: "EFT" | "Cheque" | "M-PESA Paybill B2B" | "Cash";
+  paymentReference?: string;
+  notes?: string;
+}
+
+export interface PaymentVoucher {
+  id: string;
+  voucherNumber: string; // e.g. PV-2026-0428
+  supplierInvoiceId: string;
+  supplierName: string;
+  supplierKraPin: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: "EFT" | "Cheque" | "M-PESA B2B" | "Cash";
+  referenceNumber: string;
+  bankAccount: string;
+  withholdingTaxAmount: number; // 5% WHT where applicable
+  netPaidAmount: number;
+  preparedBy: string;
+  approvedBy: string;
+  status: "Approved & Disbursed" | "Pending Approval" | "Cancelled";
+}
+
+export interface ChartOfAccount {
+  code: string;
+  name: string;
+  category: "Asset" | "Liability" | "Equity" | "Revenue" | "Cost of Sales" | "Operating Expense";
+  subCategory: string;
+  balance: number;
+  normalBalance: "Debit" | "Credit";
+}
+
+export interface GeneralLedgerEntry {
+  id: string;
+  entryNumber: string; // e.g. JRN-2026-1049
+  date: string;
+  sourceModule: "Patient Billing" | "Pharmacy POS" | "Procurement & AP" | "Payroll & Staff" | "Cashier Shift Closeout" | "Manual Adjustment";
+  referenceNumber: string;
+  description: string;
+  debitAccountCode: string;
+  debitAccountName: string;
+  creditAccountCode: string;
+  creditAccountName: string;
+  amount: number;
+  postedBy: string;
+  timestamp: string;
+}
+
+export interface StatutoryTaxLiability {
+  periodMonth: string; // e.g. "August 2026"
+  dueDate: string; // e.g. "9th September 2026"
+  payeAmount: number;
+  shifAmount: number;
+  nssfAmount: number;
+  housingLevyAmount: number;
+  withholdingTaxAmount: number;
+  totalStatutoryDue: number;
+  status: "Pending Remittance" | "Paid & Cleared" | "Overdue";
+  kraReceiptNo?: string;
+  remittedDate?: string;
 }

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { db } from "../lib/firebase";
 import { collection, addDoc, updateDoc, doc, onSnapshot } from "firebase/firestore";
+import { AnimatedErrorCross } from "./ModernPromptHost";
 import { 
   User, 
   CreditCard, 
@@ -1308,86 +1310,104 @@ export default function ReceptionKiosk({ onTicketCreated }: ReceptionKioskProps)
       </div>
 
       {/* DUPLICATE ENCOUNTER REJECTION MODAL */}
-      {duplicateRejectionModal?.show && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-60 animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border-2 border-rose-200 overflow-hidden animate-scale-up">
-            <div className="p-5 bg-rose-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-rose-700/60 rounded-2xl">
-                  <ShieldAlert className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-black text-sm uppercase tracking-wide">Duplicate Ticket Registration Rejected</h3>
-                  <p className="text-[11px] text-rose-100 font-medium">Hospital Patient Identity Verification Rule</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setDuplicateRejectionModal(null)}
-                className="p-1 rounded-xl hover:bg-rose-700/50 text-rose-100 hover:text-white cursor-pointer transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <AnimatePresence>
+        {duplicateRejectionModal?.show && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-60">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 25, filter: "blur(6px)" }}
+              animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, scale: 0.95, y: 15, filter: "blur(4px)" }}
+              transition={{ type: "spring", stiffness: 420, damping: 28 }}
+              className="relative bg-slate-950 text-white w-full max-w-lg rounded-3xl shadow-2xl border border-rose-500/30 overflow-hidden flex flex-col"
+              style={{
+                boxShadow: "0 30px 70px -15px rgba(0,0,0,0.8), 0 0 45px -5px rgba(244, 63, 94, 0.35)",
+              }}
+            >
+              {/* Glowing Top Ambient Ribbon */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-rose-500 via-red-400 to-rose-600" />
 
-            <div className="p-6 space-y-4 text-xs">
-              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
-                <div className="flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <p className="text-rose-900 font-medium leading-relaxed">
-                    Patient <strong className="font-bold text-rose-950">{duplicateRejectionModal.patientName}</strong> with National ID <span className="font-mono font-bold text-rose-950">{duplicateRejectionModal.nationalId}</span> already has an active hospital encounter in progress.
-                  </p>
-                </div>
-              </div>
+              <div className="p-6 flex items-start justify-between gap-4 border-b border-slate-800/80">
+                <div className="flex items-start gap-4">
+                  {/* Animated Error Cross */}
+                  <AnimatedErrorCross size="md" />
 
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">
-                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                  Active Clinical Encounter Record
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-slate-700">
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 block">Ticket No</span>
-                    <span className="font-mono font-bold text-slate-900 text-sm">
-                      {duplicateRejectionModal.checkResult.activeTicket?.ticketNumber || duplicateRejectionModal.checkResult.activeQueue?.ticketNo}
+                  <div>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border mb-1 bg-rose-500/15 text-rose-400 border-rose-500/30">
+                      <Sparkles className="w-2.5 h-2.5" />
+                      Security & Integrity Enforcement
                     </span>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 block">Department</span>
-                    <span className="font-bold text-slate-900 uppercase">
-                      {duplicateRejectionModal.checkResult.activeTicket?.department || duplicateRejectionModal.checkResult.activeQueue?.currentDepartment}
-                    </span>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 block">Current Status</span>
-                    <span className="font-bold text-amber-600 capitalize">
-                      {duplicateRejectionModal.checkResult.activeTicket?.status || duplicateRejectionModal.checkResult.activeQueue?.status || "Active in Queue"}
-                    </span>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 block">Encounter Time</span>
-                    <span className="font-bold text-slate-900 text-[11px]">
-                      {duplicateRejectionModal.checkResult.activeTicket?.createdTime || duplicateRejectionModal.checkResult.activeQueue?.timestamp ? new Date(duplicateRejectionModal.checkResult.activeQueue?.timestamp || "").toLocaleTimeString() : "Today"}
-                    </span>
+                    <h3 className="font-bold text-lg text-white leading-tight">Duplicate Ticket Registration Rejected</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Hospital Patient Identity Verification Rule</p>
                   </div>
                 </div>
-              </div>
-
-              <p className="text-[11px] text-slate-500 leading-normal">
-                To maintain single-patient clinical integrity and prevent accidental billing duplication, please resolve or close their active ticket before issuing a new one.
-              </p>
-
-              <div className="pt-2 flex justify-end gap-2.5">
-                <button
-                  type="button"
+                <button 
                   onClick={() => setDuplicateRejectionModal(null)}
-                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs uppercase cursor-pointer shadow-md transition-colors"
+                  className="p-2 rounded-2xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors"
                 >
-                  Understood & Dismiss
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </div>
+
+              <div className="p-6 space-y-4 text-xs">
+                <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <p className="text-rose-200 font-medium leading-relaxed">
+                      Patient <strong className="font-bold text-white">{duplicateRejectionModal.patientName}</strong> with National ID <span className="font-mono font-bold text-rose-300">{duplicateRejectionModal.nationalId}</span> already has an active hospital encounter in progress.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/90 rounded-2xl p-4 border border-slate-800 space-y-2.5">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Active Clinical Encounter Record
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-slate-300">
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Ticket No</span>
+                      <span className="font-mono font-bold text-emerald-400 text-sm">
+                        {duplicateRejectionModal.checkResult.activeTicket?.ticketNumber || duplicateRejectionModal.checkResult.activeQueue?.ticketNo}
+                      </span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Department</span>
+                      <span className="font-bold text-white uppercase">
+                        {duplicateRejectionModal.checkResult.activeTicket?.department || duplicateRejectionModal.checkResult.activeQueue?.currentDepartment}
+                      </span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Current Status</span>
+                      <span className="font-bold text-amber-400 capitalize">
+                        {duplicateRejectionModal.checkResult.activeTicket?.status || duplicateRejectionModal.checkResult.activeQueue?.status || "Active in Queue"}
+                      </span>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Encounter Time</span>
+                      <span className="font-bold text-slate-300 text-[11px]">
+                        {duplicateRejectionModal.checkResult.activeTicket?.createdTime || duplicateRejectionModal.checkResult.activeQueue?.timestamp ? new Date(duplicateRejectionModal.checkResult.activeQueue?.timestamp || "").toLocaleTimeString() : "Today"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-400 leading-normal">
+                  To maintain single-patient clinical integrity and prevent accidental billing duplication, please resolve or close their active ticket before issuing a new one.
+                </p>
+
+                <div className="pt-2 flex justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setDuplicateRejectionModal(null)}
+                    className="px-6 py-2.5 bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 hover:from-rose-500 hover:to-red-500 text-white font-bold rounded-2xl text-xs uppercase cursor-pointer shadow-lg active:scale-95 transition-all"
+                  >
+                    Understood & Dismiss
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Instant Patient EHR & Treatment History Modal */}
       <PatientHistoryLookupModal

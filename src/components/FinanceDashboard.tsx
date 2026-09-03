@@ -23,15 +23,30 @@ import {
   CreditCard,
   QrCode,
   Calendar,
-  User
+  User,
+  Clock,
+  FileCheck2,
+  BookOpen,
+  Scale,
+  Sparkles,
+  LayoutDashboard,
+  ArrowRight
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import CashierShiftZReport from "./finance/CashierShiftZReport";
+import DebtorClaimsAging from "./finance/DebtorClaimsAging";
+import AccountsPayable3WayMatch from "./finance/AccountsPayable3WayMatch";
+import GeneralLedgerCOA from "./finance/GeneralLedgerCOA";
+import StatutoryTaxHub from "./finance/StatutoryTaxHub";
 import { toast, modernConfirm } from "../lib/promptService";
 
 export default function FinanceDashboard() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   
+  // Master Tab Navigation
+  const [activeFinanceTab, setActiveFinanceTab] = useState<"overview" | "shifts" | "debtors" | "payables" | "ledger" | "statutory">("overview");
+
   // Printing states
   const [printOpen, setPrintOpen] = useState(false);
   const [printTarget, setPrintTarget] = useState<Invoice | null>(null);
@@ -190,6 +205,65 @@ export default function FinanceDashboard() {
         </button>
       </div>
 
+      {/* Navigation Tab Bar for Accountant Workstation */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-gray-100 mb-6 text-xs font-semibold no-scrollbar">
+        <button
+          id="btn-tab-finance-overview"
+          onClick={() => setActiveFinanceTab("overview")}
+          className={`px-3.5 py-2 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${activeFinanceTab === "overview" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+        >
+          <LayoutDashboard className="w-3.5 h-3.5" />
+          <span>Executive Overview</span>
+        </button>
+
+        <button
+          id="btn-tab-finance-shifts"
+          onClick={() => setActiveFinanceTab("shifts")}
+          className={`px-3.5 py-2 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${activeFinanceTab === "shifts" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+        >
+          <Clock className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Cashier Shifts (Z-Reports)</span>
+        </button>
+
+        <button
+          id="btn-tab-finance-debtors"
+          onClick={() => setActiveFinanceTab("debtors")}
+          className={`px-3.5 py-2 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${activeFinanceTab === "debtors" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+        >
+          <ShieldAlert className="w-3.5 h-3.5 text-blue-400" />
+          <span>Insurance & SHA Debtors</span>
+        </button>
+
+        <button
+          id="btn-tab-finance-payables"
+          onClick={() => setActiveFinanceTab("payables")}
+          className={`px-3.5 py-2 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${activeFinanceTab === "payables" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+        >
+          <FileCheck2 className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Accounts Payable (3-Way Match)</span>
+        </button>
+
+        <button
+          id="btn-tab-finance-ledger"
+          onClick={() => setActiveFinanceTab("ledger")}
+          className={`px-3.5 py-2 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${activeFinanceTab === "ledger" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+        >
+          <BookOpen className="w-3.5 h-3.5 text-teal-400" />
+          <span>General Ledger & P&L</span>
+        </button>
+
+        <button
+          id="btn-tab-finance-statutory"
+          onClick={() => setActiveFinanceTab("statutory")}
+          className={`px-3.5 py-2 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${activeFinanceTab === "statutory" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+        >
+          <Landmark className="w-3.5 h-3.5 text-rose-400" />
+          <span>Statutory Tax & eTIMS</span>
+        </button>
+      </div>
+
+      {activeFinanceTab === "overview" && (
+        <>
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="p-4 rounded-xl border border-gray-100 bg-white space-y-2 shadow-2xs">
@@ -228,6 +302,111 @@ export default function FinanceDashboard() {
             <ShieldAlert className="w-5 h-5 text-rose-600" />
           </div>
           <p className="text-[10px] text-rose-700 font-semibold">Claims Aging Status (Unpaid)</p>
+        </div>
+      </div>
+
+      {/* Daily Accountant Action Center */}
+      <div className="mb-6 bg-gradient-to-br from-slate-900 via-slate-800 to-teal-950 p-5 rounded-2xl text-white shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-3">
+          <div>
+            <h3 className="text-sm font-bold flex items-center gap-2 text-white">
+              <Sparkles className="w-4 h-4 text-teal-400" />
+              Accountant Daily Action Workstation
+            </h3>
+            <p className="text-xs text-slate-300">
+              Select an operational workflow below to execute reconciliations, audits, tax filings, and ledger postings:
+            </p>
+          </div>
+          <span className="text-[11px] font-mono font-bold text-teal-300 bg-teal-500/20 px-2.5 py-1 rounded-lg border border-teal-500/30 self-start sm:self-auto">
+            5 Modules Active
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+          {/* Action 1 */}
+          <button
+            onClick={() => setActiveFinanceTab("shifts")}
+            className="p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500/50 text-left transition-all group cursor-pointer space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-300 group-hover:scale-105 transition-transform">
+                <Clock className="w-4 h-4" />
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all" />
+            </div>
+            <p className="font-bold text-white text-xs">1. Reconcile Shift (Z-Report)</p>
+            <p className="text-[11px] text-slate-300 leading-snug">
+              Count cash float, M-PESA paybill & lock cashier shift sign-off.
+            </p>
+          </button>
+
+          {/* Action 2 */}
+          <button
+            onClick={() => setActiveFinanceTab("debtors")}
+            className="p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-blue-500/50 text-left transition-all group cursor-pointer space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2 rounded-lg bg-blue-500/20 text-blue-300 group-hover:scale-105 transition-transform">
+                <ShieldAlert className="w-4 h-4" />
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+            </div>
+            <p className="font-bold text-white text-xs">2. Insurance & SHA Claims</p>
+            <p className="text-[11px] text-slate-300 leading-snug">
+              Age debtors (0-90+ days) and allocate bulk ERA remittance payments.
+            </p>
+          </button>
+
+          {/* Action 3 */}
+          <button
+            onClick={() => setActiveFinanceTab("payables")}
+            className="p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-indigo-500/50 text-left transition-all group cursor-pointer space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-300 group-hover:scale-105 transition-transform">
+                <FileCheck2 className="w-4 h-4" />
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
+            </div>
+            <p className="font-bold text-white text-xs">3. 3-Way Payables Audit</p>
+            <p className="text-[11px] text-slate-300 leading-snug">
+              Match vendor bills against LPOs & GRNs before releasing payments.
+            </p>
+          </button>
+
+          {/* Action 4 */}
+          <button
+            onClick={() => setActiveFinanceTab("ledger")}
+            className="p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-teal-500/50 text-left transition-all group cursor-pointer space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2 rounded-lg bg-teal-500/20 text-teal-300 group-hover:scale-105 transition-transform">
+                <BookOpen className="w-4 h-4" />
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-400 group-hover:translate-x-0.5 transition-all" />
+            </div>
+            <p className="font-bold text-white text-xs">4. General Ledger & P&L</p>
+            <p className="text-[11px] text-slate-300 leading-snug">
+              Inspect live Trial Balance & post double-entry manual journal entries.
+            </p>
+          </button>
+
+          {/* Action 5 */}
+          <button
+            onClick={() => setActiveFinanceTab("statutory")}
+            className="p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-rose-500/50 text-left transition-all group cursor-pointer space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2 rounded-lg bg-rose-500/20 text-rose-300 group-hover:scale-105 transition-transform">
+                <Landmark className="w-4 h-4" />
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-400 group-hover:translate-x-0.5 transition-all" />
+            </div>
+            <p className="font-bold text-white text-xs">5. KRA & Statutory Returns</p>
+            <p className="text-[11px] text-slate-300 leading-snug">
+              Compute PAYE, SHIF (2.75%), NSSF & download iTax return CSVs.
+            </p>
+          </button>
         </div>
       </div>
 
@@ -415,6 +594,33 @@ export default function FinanceDashboard() {
           </div>
         </div>
       </div>
+        </>
+      )}
+
+      {/* Module 1: Cashier Shift Reconciliation & Z-Reports */}
+      {activeFinanceTab === "shifts" && (
+        <CashierShiftZReport invoices={invoices} />
+      )}
+
+      {/* Module 2: Insurance & SHA Debtor Aging */}
+      {activeFinanceTab === "debtors" && (
+        <DebtorClaimsAging invoices={invoices} />
+      )}
+
+      {/* Module 3: Accounts Payable (3-Way Matching) */}
+      {activeFinanceTab === "payables" && (
+        <AccountsPayable3WayMatch />
+      )}
+
+      {/* Module 4: General Ledger & Chart of Accounts */}
+      {activeFinanceTab === "ledger" && (
+        <GeneralLedgerCOA invoices={invoices} expenses={expenses} />
+      )}
+
+      {/* Module 5: Statutory Tax & eTIMS Workstation */}
+      {activeFinanceTab === "statutory" && (
+        <StatutoryTaxHub invoices={invoices} />
+      )}
 
       {/* Print Overlay Modal for Receipts & Statements */}
       <PrintDocument
@@ -503,13 +709,13 @@ export default function FinanceDashboard() {
                 </div>
               </div>
 
-              {/* Fiscal & Insurance Identification */}
+              {/* Invoice & Insurance Identification */}
               <div className="p-3.5 bg-emerald-50/50 border border-emerald-100/80 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-[11px]">
                 <div className="flex items-center gap-2">
                   <QrCode className="w-4 h-4 text-emerald-700" />
                   <div>
-                    <span className="text-emerald-900 font-bold">KRA eTIMS Fiscal Invoice:</span>{" "}
-                    <span className="font-mono text-emerald-800 font-bold">{viewTransaction.kraCompliantInvoiceNo || "ETIMS-VERIFIED-OFFLINE"}</span>
+                    <span className="text-emerald-900 font-bold">Official Invoice Voucher:</span>{" "}
+                    <span className="font-mono text-emerald-800 font-bold">{viewTransaction.kraCompliantInvoiceNo || "INV-OFFICIAL-VERIFIED"}</span>
                   </div>
                 </div>
                 {viewTransaction.shaClaimId && (
@@ -621,7 +827,7 @@ export default function FinanceDashboard() {
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
-                <span>Print Official Receipt & Tax Invoice</span>
+                <span>Print Official Receipt & Invoice</span>
               </button>
             </div>
           </div>

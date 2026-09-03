@@ -56,7 +56,7 @@ export default function LogoUploadModal({
   onSaveLogo,
   currentFavicon = "",
   onSaveFavicon,
-  hospitalName = "TASSIAHILL HOSPITAL",
+  hospitalName = "The Tassia Hill Hospital",
 }: LogoUploadModalProps) {
   const [activeTab, setActiveTab] = useState<"logo" | "favicon">("logo");
 

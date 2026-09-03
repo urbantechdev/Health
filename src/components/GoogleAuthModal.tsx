@@ -26,8 +26,17 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   employees
 }) => {
   const [customEmail, setCustomEmail] = useState("");
+  const [customPin, setCustomPin] = useState("");
   const [isPopupLoading, setIsPopupLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setCustomEmail("");
+      setCustomPin("");
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -55,18 +64,41 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
 
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customEmail.trim()) return;
+    if (!customEmail.trim()) {
+      setErrorMessage("Please enter your registered corporate email address.");
+      return;
+    }
+    if (!customPin.trim()) {
+      setErrorMessage("Please enter your Security PIN.");
+      return;
+    }
+
     const clean = customEmail.toLowerCase().trim();
+    const cleanPin = customPin.trim();
     const matched = employees.find(emp => emp.email?.toLowerCase().trim() === clean);
     
     if (isSuperAdminEmail(clean)) {
+      const expectedPin = matched?.pin || "2026";
+      if (cleanPin !== expectedPin) {
+        setErrorMessage("Invalid Security PIN for Administrator.");
+        return;
+      }
       onSelectAccount(
         clean,
-        "System Administrator",
+        matched?.name || "System Administrator",
         "Super Admin"
       );
       onClose();
     } else if (matched) {
+      if (matched.status === "terminated") {
+        setErrorMessage("Access Denied: This staff account is currently suspended.");
+        return;
+      }
+      const expectedPin = matched.pin || "2026";
+      if (cleanPin !== expectedPin) {
+        setErrorMessage("Invalid Security PIN for this staff account.");
+        return;
+      }
       onSelectAccount(
         clean,
         matched.name || "Hospital Staff",
@@ -74,7 +106,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
       );
       onClose();
     } else {
-      setErrorMessage(`Google Account '${clean}' is not registered in the hospital staff directory. Please verify your credentials or contact system administration.`);
+      setErrorMessage(`Account '${clean}' is not registered in the hospital staff directory. Please contact System Administration.`);
     }
   };
 
@@ -189,6 +221,15 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                 placeholder="staff@hospital.org"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-slate-800"
               />
+              <input
+                type="password"
+                required
+                maxLength={8}
+                value={customPin}
+                onChange={(e) => setCustomPin(e.target.value)}
+                placeholder="Security PIN"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-slate-800"
+              />
               <button
                 type="submit"
                 className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
@@ -197,55 +238,18 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </form>
-          </div>
-
-          {/* Direct Instant Trial Sign-In to Admin Dashboard */}
-          <div className="pt-3 border-t border-slate-100 space-y-2">
-            <button
-              id="btn-direct-trial-admin-modal"
-              type="button"
-              onClick={() => {
-                onSelectAccount(
-                  "moraasdorcah@gmail.com",
-                  "Dorcah Moraa (Super Admin Sovereign)",
-                  "Super Admin"
-                );
-                onClose();
-              }}
-              className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all shadow-md hover:shadow-lg cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
-            >
-              <Shield className="w-4 h-4 text-amber-100 shrink-0" />
-              <span>Direct Trial Sign In to Admin Dashboard</span>
-              <Sparkles className="w-4 h-4 text-amber-200 shrink-0 animate-pulse" />
-            </button>
-            <p className="text-[11px] text-center text-slate-400 font-medium">
-              Instant 1-tap Super Admin trial access (Bypasses external popup domain whitelist)
+            <p className="text-[11px] text-center text-slate-400 font-medium pt-1">
+              Only whitelisted Google accounts are granted administrative access.
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
-          <button
-            id="btn-footer-trial-admin"
-            type="button"
-            onClick={() => {
-              onSelectAccount(
-                "moraasdorcah@gmail.com",
-                "Dorcah Moraa (Super Admin Sovereign)",
-                "Super Admin"
-              );
-              onClose();
-            }}
-            className="text-xs font-black text-amber-700 hover:text-amber-800 underline decoration-amber-400 underline-offset-2 cursor-pointer flex items-center gap-1.5"
-          >
-            <Shield className="w-3.5 h-3.5 text-amber-600" />
-            <span>Direct Trial Admin Access</span>
-          </button>
+        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+            className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
           >
             Close
           </button>

@@ -465,7 +465,7 @@ export default function UserProfileModal({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. urbaninteriorkenya@gmail.com"
+                    placeholder="e.g. tassiahillhospital@gmail.com"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-emerald-500 focus:bg-white transition-all"
                   />
                 </div>
