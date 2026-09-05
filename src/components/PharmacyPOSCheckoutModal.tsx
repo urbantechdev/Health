@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { db, cleanFirestoreData } from "../lib/firebase";
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 import { Medication, Invoice } from "../types";
@@ -48,9 +48,35 @@ export default function PharmacyPOSCheckoutModal({
   const [stkStatus, setStkStatus] = useState<"idle" | "sending" | "prompted" | "confirmed">("idle");
   const [mpesaReceiptCode, setMpesaReceiptCode] = useState("");
 
-  // Cash states
-  const totalAmount = cart.reduce((sum, item) => sum + item.med.price * item.qty, 0);
+  // Pharmacist checkout pricing override state
+  const [checkoutPrices, setCheckoutPrices] = useState<{ [index: number]: number }>({});
+
+  useEffect(() => {
+    const initialMap: { [index: number]: number } = {};
+    cart.forEach((item, idx) => {
+      initialMap[idx] = item.med.price;
+    });
+    setCheckoutPrices(initialMap);
+  }, [cart, isOpen]);
+
+  const getItemPrice = (idx: number): number => {
+    return checkoutPrices[idx] !== undefined ? checkoutPrices[idx] : (cart[idx]?.med.price || 0);
+  };
+
+  const handleUpdatePrice = (idx: number, newPrice: number) => {
+    setCheckoutPrices((prev) => ({
+      ...prev,
+      [idx]: Math.max(0, newPrice)
+    }));
+  };
+
+  // Cash & total states
+  const totalAmount = cart.reduce((sum, item, idx) => sum + getItemPrice(idx) * item.qty, 0);
   const [tenderedAmount, setTenderedAmount] = useState<number>(totalAmount);
+
+  useEffect(() => {
+    setTenderedAmount(totalAmount);
+  }, [totalAmount]);
   
   // Processing & Receipt
   const [processing, setProcessing] = useState(false);
@@ -173,11 +199,15 @@ export default function PharmacyPOSCheckoutModal({
         patientId: ticketId || "WALK-IN",
         patientName: patientName || "Walk-in Pharmacy Patient",
         nationalId: nationalId || "N/A",
-        items: cart.map((i) => ({
-          description: `${i.med.name} (Qty: ${i.qty})`,
-          amount: i.qty * i.med.price,
-          department: "pharmacy",
-        })),
+        items: cart.map((i, idx) => {
+          const finalUnitPrice = getItemPrice(idx);
+          const spec = [i.med.formulation, i.med.strength].filter(Boolean).join(" • ");
+          return {
+            description: `${i.med.name}${spec ? ` (${spec})` : ""} (Qty: ${i.qty})`,
+            amount: i.qty * finalUnitPrice,
+            department: "pharmacy",
+          };
+        }),
         total: totalAmount,
         split: {
           sha: 0,
@@ -220,11 +250,15 @@ export default function PharmacyPOSCheckoutModal({
         patientId: ticketId || "WALK-IN",
         patientName: patientName || "Walk-in Pharmacy Patient",
         nationalId: nationalId || "N/A",
-        items: cart.map((i) => ({
-          description: `${i.med.name} (Qty: ${i.qty})`,
-          amount: i.qty * i.med.price,
-          department: "pharmacy",
-        })),
+        items: cart.map((i, idx) => {
+          const finalUnitPrice = getItemPrice(idx);
+          const spec = [i.med.formulation, i.med.strength].filter(Boolean).join(" • ");
+          return {
+            description: `${i.med.name}${spec ? ` (${spec})` : ""} (Qty: ${i.qty})`,
+            amount: i.qty * finalUnitPrice,
+            department: "pharmacy",
+          };
+        }),
         total: totalAmount,
         split: {
           sha: 0,
@@ -364,20 +398,57 @@ export default function PharmacyPOSCheckoutModal({
                   </div>
                 </div>
 
-                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-200/60">
-                  {cart.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center pt-1.5 text-xs">
-                      <div>
-                        <span className="font-semibold text-gray-800">{item.med.name}</span>
-                        <span className="text-[10px] text-gray-400 block font-mono">
-                          {item.qty} × KES {item.med.price.toLocaleString()}
-                        </span>
+                <div className="max-h-48 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-200/60">
+                  {cart.map((item, idx) => {
+                    const currentPrice = getItemPrice(idx);
+                    const isOverridden = currentPrice !== item.med.price;
+                    return (
+                      <div key={idx} className="flex justify-between items-center pt-2 text-xs gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-gray-800">{item.med.name}</span>
+                            {(item.med.formulation || item.med.strength) && (
+                              <span className="text-[9px] px-1.5 py-0.2 bg-teal-50 text-teal-800 rounded font-semibold border border-teal-200">
+                                {[item.med.formulation, item.med.strength].filter(Boolean).join(" • ")}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="text-[10px] text-gray-500 font-mono">Qty: {item.qty} ×</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500 font-bold">KES</span>
+                              <input
+                                id={`input-pos-price-${idx}`}
+                                type="number"
+                                min={0}
+                                step="1"
+                                value={currentPrice}
+                                onChange={(e) => handleUpdatePrice(idx, parseFloat(e.target.value) || 0)}
+                                className="w-16 px-1 py-0.5 border border-emerald-300 rounded text-xs font-mono font-bold text-emerald-900 bg-white text-right focus:outline-hidden"
+                                title="Pharmacist price override at checkout"
+                              />
+                            </div>
+                            {isOverridden ? (
+                              <span className="text-[8px] px-1 py-0.2 bg-amber-100 text-amber-800 rounded font-bold">
+                                Pharmacist Adjusted
+                              </span>
+                            ) : (item as any).pricedBy === "doctor" ? (
+                              <span className="text-[8px] px-1 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold">
+                                Dr. Priced
+                              </span>
+                            ) : (
+                              <span className="text-[8px] text-gray-400 font-mono">Catalog</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="font-bold text-gray-900 font-mono text-xs block">
+                            KES {(currentPrice * item.qty).toLocaleString()}
+                          </span>
+                        </div>
                       </div>
-                      <span className="font-bold text-gray-900 font-mono">
-                        KES {(item.med.price * item.qty).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm font-extrabold text-teal-950">

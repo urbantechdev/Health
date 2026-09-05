@@ -28,6 +28,7 @@ import LogoUploadModal from "./components/LogoUploadModal";
 import UserProfileModal from "./components/UserProfileModal";
 import InternalChatModal from "./components/InternalChatModal";
 import IncomingMessagePromptListener from "./components/IncomingMessagePromptListener";
+import { shouldShowPopupNotification, UserIdentity } from "./lib/messageTargeting";
 import PatientTransferModal from "./components/PatientTransferModal";
 import TransfersHub from "./components/TransfersHub";
 import AdmissionDischargeManager from "./components/AdmissionDischargeManager";
@@ -40,6 +41,8 @@ import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
 import SplashScreenLoader from "./components/SplashScreenLoader";
 import UserGuide from "./components/UserGuide";
+import { OfflineManagerModal } from "./components/OfflineManagerModal";
+import { PWAInstallButton } from "./components/PWAInstallButton";
 import { bootstrapCloudFirestore, ensureSuperAdminsExist } from "./lib/dbInit";
 import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "./lib/superAdmins";
 import { toast } from "./lib/promptService";
@@ -365,7 +368,15 @@ export default function App() {
     billing: true,
   });
 
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const search = window.location.search;
+      if (search.includes("display=signage") || search.includes("signage=true") || search.includes("tab=queue")) {
+        return "queue";
+      }
+    }
+    return "dashboard";
+  });
 
   // Authentication & Session States
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -416,6 +427,7 @@ export default function App() {
   const [showGlobalHistoryModal, setShowGlobalHistoryModal] = useState<boolean>(false);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [showPolicyTermsModal, setShowPolicyTermsModal] = useState<boolean>(false);
+  const [showOfflineManagerModal, setShowOfflineManagerModal] = useState<boolean>(false);
   const [policyTermsDefaultTab, setPolicyTermsDefaultTab] = useState<"terms" | "privacy" | "infosec" | "governance" | "signoff">("privacy");
   const [profileOverride, setProfileOverride] = useState<{
     displayName?: string;
@@ -755,6 +767,16 @@ export default function App() {
   const activeRoleConfig = getRoleConfig(currentSystemRole);
   const activeRoleName = activeRoleConfig.title || currentSystemRole;
   const activeDepartmentName = activeRoleConfig.department;
+
+  const currentUserIdentity: UserIdentity = {
+    id: activeStaffRecord?.id || loggedInEmployee?.id || activeUser?.uid || "",
+    name: activeStaffRecord?.name || loggedInEmployee?.name || activeUser?.displayName || "Staff Member",
+    email: activeStaffRecord?.email || loggedInEmployee?.email || activeUser?.email || "",
+    role: currentSystemRole,
+    department: activeStaffRecord?.department || loggedInEmployee?.department || activeDepartmentName || "",
+    specialty: (activeStaffRecord as any)?.specialty || (loggedInEmployee as any)?.specialty || "",
+    specialistTitle: (activeStaffRecord as any)?.specialty || (loggedInEmployee as any)?.specialty || ""
+  };
 
   const checkTabPermission = (tabId: string): { allowed: boolean; reason?: string } => {
     // Admin module strictly requires one of the listed Super Admin Gmail accounts
@@ -1102,23 +1124,17 @@ export default function App() {
   useEffect(() => {
     const unsubChat = onSnapshot(collection(db, "internal_messages"), (snapshot) => {
       let unread = 0;
-      const userRole = currentSystemRole.toLowerCase();
-      const userEmail = activeUser?.email?.toLowerCase() || "";
-      const userName = activeUser?.displayName?.toLowerCase() || "";
+      const userEmail = currentUserIdentity.email.toLowerCase().trim();
+      const userName = currentUserIdentity.name.toLowerCase().trim();
+      const userId = (currentUserIdentity.id || "").toLowerCase().trim();
 
       snapshot.forEach((doc) => {
-        const data = doc.data();
-        const readBy = Array.isArray(data.readBy) ? data.readBy : [];
-        const isRead = readBy.includes(userEmail) || readBy.includes(userName);
+        const msg = { id: doc.id, ...doc.data() } as any;
+        const readBy = Array.isArray(msg.readBy) ? msg.readBy.map((r: any) => String(r).toLowerCase().trim()) : [];
+        const isRead = (userEmail && readBy.includes(userEmail)) || (userName && readBy.includes(userName)) || (userId && readBy.includes(userId));
         if (!isRead) {
-          const targetType = data.targetType;
-          const targetRole = (data.targetRole || "").toLowerCase();
-          const targetEmail = (data.targetUserEmail || "").toLowerCase();
-          if (
-            targetType === "all" ||
-            (targetType === "role" && (targetRole === userRole || targetRole === "all" || userRole === "super admin")) ||
-            (targetType === "direct" && (targetEmail === userEmail || data.targetUserName === activeUser?.displayName))
-          ) {
+          // Count if this message was strictly targeted to this user or their specific clinical role/dept
+          if (shouldShowPopupNotification(msg, currentUserIdentity)) {
             unread++;
           }
         }
@@ -1126,7 +1142,7 @@ export default function App() {
       setUnreadMessagesCount(unread);
     });
     return () => unsubChat();
-  }, [currentSystemRole, activeUser]);
+  }, [currentSystemRole, activeUser, activeStaffRecord, loggedInEmployee]);
 
   // Real-time listener for patient_transfers
   useEffect(() => {
@@ -1283,6 +1299,7 @@ export default function App() {
   // Note: Tickets, Patient Journey, Live Queue, and Pharmacy are hosted on the Desktop Bottom Nav to avoid sidebar congestion
   const navItems = [
     { id: "dashboard", label: "Dashboard Overview", icon: LayoutDashboard, enabled: true },
+    { id: "queue", label: "Ticket Display / Big Screen", icon: Monitor, enabled: true },
     { id: "reception", label: "Reception Desk", icon: UserPlus, enabled: toggles.reception },
     { id: "triage", label: "Nurse Triage", icon: HeartPulse, enabled: true },
     { id: "admissions", label: "Admission & Wards", icon: Bed, enabled: true },
@@ -1516,11 +1533,11 @@ export default function App() {
 
               {/* Mobile Offline/Online Indicator - Large White Icon (No Background) */}
               <button
-                onClick={handleRefreshNetwork}
-                title={isOnline ? "Online Mode (Cloud Firestore Connected)" : "Offline Mode (Local Cache Active)"}
+                onClick={() => setShowOfflineManagerModal(true)}
+                title={isOnline ? "Online Mode (Cloud Firestore Connected) • Tap for Offline Manager" : "Offline Mode (Local Cache Active) • Tap for Offline Manager"}
                 className="p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer"
               >
-                {!isOnline ? <WifiOff className="w-5 h-5 text-white" /> : <Wifi className="w-5 h-5 text-white" />}
+                {!isOnline ? <WifiOff className="w-5 h-5 text-white animate-pulse" /> : <Wifi className="w-5 h-5 text-white" />}
               </button>
 
               {/* Mobile Profile & System Menu Button - Large Avatar / Bright Grey Icon (No Background) */}
@@ -1548,20 +1565,23 @@ export default function App() {
 
           {/* Desktop Top Header Controls - Large White Icons without Background Color */}
           <div className="hidden md:flex flex-wrap items-center gap-3 lg:gap-4 relative z-10">
+            {/* In-App PWA Install Trigger */}
+            <PWAInstallButton variant="header" />
+
             {/* Offline/Online Status Indicator & Reconnection - Large White Icon (No Background) */}
             <button
-              onClick={handleRefreshNetwork}
-              title={isOnline ? "Online Mode (Connected to Cloud Firestore)" : "Offline Mode (Click to sync with Cloud Firestore)"}
+              onClick={() => setShowOfflineManagerModal(true)}
+              title={isOnline ? "Online Mode (Connected to Cloud Firestore) • Click to inspect offline resilience" : "Offline Mode (Click to inspect local cache & sync queue)"}
               className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
             >
               {!isOnline ? (
-                <WifiOff className="w-6 h-6 lg:w-7 lg:h-7 text-white transition-transform duration-200 hover:rotate-12" />
+                <WifiOff className="w-6 h-6 lg:w-7 lg:h-7 text-white transition-transform duration-200 hover:rotate-12 animate-pulse" />
               ) : (
                 <Wifi className="w-6 h-6 lg:w-7 lg:h-7 text-white hover:text-white/80 transition-transform duration-200" />
               )}
               
               {/* Online Pulse Indicator Dot */}
-              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-emerald-600 animate-pulse" : "bg-amber-600"}`}></span>
+              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400 ring-1 ring-amber-300"}`}></span>
 
               {pendingSyncCount > 0 && (
                 <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-yellow-500 text-slate-950 text-[9px] font-mono font-bold rounded-full border border-yellow-600 animate-pulse">
@@ -1790,6 +1810,36 @@ export default function App() {
           >
             Exit Impersonation
           </button>
+        </div>
+      )}
+
+      {/* Persistent Offline Continuity Notification Banner */}
+      {!isOnline && (
+        <div className="bg-amber-600 text-white px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs shadow-md border-b border-amber-700 relative z-40 animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+            </span>
+            <span>
+              <strong>Offline Mode Active:</strong> Operating from local IndexedDB cache. Patient registrations, doctor notes, triage vitals, and dispensing work normally{pendingSyncCount > 0 ? ` (${pendingSyncCount} queued write${pendingSyncCount > 1 ? "s" : ""} pending cloud sync)` : ""}.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowOfflineManagerModal(true)}
+              className="px-2.5 py-1 bg-amber-800 hover:bg-amber-900 text-amber-100 text-[11px] font-bold rounded-lg transition cursor-pointer"
+            >
+              Offline Manager
+            </button>
+            <button
+              onClick={handleRefreshNetwork}
+              className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-950 text-[11px] font-bold rounded-lg transition cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry Sync</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -2754,6 +2804,8 @@ export default function App() {
       pharmacyEnabled={toggles.pharmacy}
       queueEnabled={toggles.queue}
       isOffline={!isOnline}
+      onOpenOfflineManager={() => setShowOfflineManagerModal(true)}
+      pendingSyncCount={pendingSyncCount}
       onOpenMpesa={() => {
         setMpesaModalData({
           defaultPhone: "0712345678",
@@ -2799,8 +2851,9 @@ export default function App() {
       isOpen={showChatModal}
       onClose={() => setShowChatModal(false)}
       currentUser={{
-        name: activeUser?.displayName || "Hospital Staff",
-        email: activeUser?.email || "tassiahillhospital@gmail.com",
+        id: currentUserIdentity.id,
+        name: currentUserIdentity.name,
+        email: currentUserIdentity.email || "tassiahillhospital@gmail.com",
         role: currentSystemRole,
         photoURL: resolvedPhotoURL
       }}
@@ -2813,13 +2866,9 @@ export default function App() {
       }}
     />
 
-    {/* Real-time Incoming Message Popup Notification Alert */}
+    {/* Real-time Incoming Message Popup Notification Alert (Strictly targeted to intended recipient only) */}
     <IncomingMessagePromptListener
-      currentUser={{
-        name: activeUser?.displayName || "Staff Member",
-        email: activeUser?.email || "",
-        role: currentSystemRole
-      }}
+      currentUser={currentUserIdentity}
       onOpenChat={(senderRole, patientContext) => {
         setChatTargetRole(senderRole);
         if (patientContext) {
@@ -2949,6 +2998,15 @@ export default function App() {
       currentUserRole={currentSystemRole}
       currentUserName={activeUser?.displayName || loggedInEmployee?.name || "Healthcare Staff"}
       defaultTab={policyTermsDefaultTab}
+    />
+
+    {/* Offline Resilience, Cache Diagnostic & PWA Installation Modal */}
+    <OfflineManagerModal
+      isOpen={showOfflineManagerModal}
+      onClose={() => setShowOfflineManagerModal(false)}
+      isOnline={isOnline}
+      pendingSyncCount={pendingSyncCount}
+      onRefreshNetwork={handleRefreshNetwork}
     />
 
     {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}

@@ -336,6 +336,67 @@ class VoiceAnnouncementService {
   }
 
   /**
+   * Announce any ticket logged on queue (whether consultation, triage, lab, pharma, radiology, etc.)
+   * Example: "Ticket number T R I, 1 0 4, Patient John Doe, logged on Laboratory queue. Please wait to be called."
+   */
+  public async announceTicketLogged(params: {
+    ticketNo: string;
+    patientName?: string;
+    department?: string;
+    service?: string;
+    status?: string;
+    roomOrDesk?: string;
+  }): Promise<void> {
+    if (!this.config.enabled) return;
+
+    const spokenTicket = this.formatTicketForSpeech(params.ticketNo);
+    const rawDept = (params.department || params.service || "Doctor Consultation").toLowerCase();
+    
+    let deptName = "Doctor Consultation";
+    if (rawDept.includes("labour")) deptName = "Maternity Labour Room";
+    else if (rawDept.includes("gyna")) deptName = "Gynecology Clinic";
+    else if (rawDept.includes("lab")) deptName = "Laboratory";
+    else if (rawDept.includes("rad") || rawDept.includes("x-ray")) deptName = "Radiology & Imaging";
+    else if (rawDept.includes("pharm")) deptName = "Pharmacy Dispensing";
+    else if (rawDept.includes("triage")) deptName = "Nurse Triage Desk";
+    else if (rawDept.includes("reception")) deptName = "Hospital Reception";
+    else if (rawDept.includes("billing")) deptName = "Billing & Cashier";
+    else if (params.service && params.service.trim()) deptName = params.service.trim();
+
+    let spokenText = "";
+    if (params.status === "serving") {
+      let room = (params.roomOrDesk || "Consultation Room").trim();
+      spokenText = `Ticket number ${spokenTicket}.`;
+      if (params.patientName && params.patientName.trim()) {
+        spokenText += ` Patient ${params.patientName.trim()}.`;
+      }
+      spokenText += ` Please proceed to ${room}.`;
+    } else {
+      spokenText = `Ticket number ${spokenTicket}.`;
+      if (params.patientName && params.patientName.trim()) {
+        spokenText += ` Patient ${params.patientName.trim()}.`;
+      }
+      spokenText += ` Logged on ${deptName} queue. Please wait to be called.`;
+    }
+
+    const item: ActiveAnnouncement = {
+      id: `ann-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      ticketNo: params.ticketNo,
+      patientName: params.patientName,
+      roomOrDesk: params.roomOrDesk || deptName,
+      departmentOrRole: deptName,
+      announcementType: params.status === "serving" ? "turn_arrived" : "new_ticket",
+      formattedText: spokenText,
+      timestamp: Date.now()
+    };
+
+    const count = this.config.repeatCount || 1;
+    for (let i = 0; i < count; i++) {
+      await this.enqueue(item);
+    }
+  }
+
+  /**
    * Manual direct announcement / custom page call
    */
   public async announceCustom(text: string, ticketNo?: string, room?: string): Promise<void> {
@@ -525,6 +586,11 @@ class VoiceAnnouncementService {
         window.speechSynthesis.cancel();
         resolve();
       }, 14000);
+
+      // Ensure speech synthesis is not stalled or paused on idle monitor screens
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
 
       window.speechSynthesis.speak(utterance);
     });

@@ -13,7 +13,9 @@ import {
   ShoppingCart,
   Monitor,
   Scale,
-  Receipt
+  Receipt,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { SystemRole, getRoleConfig } from "../constants/roles";
 import { downloadReadmeFile } from "../lib/downloadReadme";
@@ -30,6 +32,8 @@ interface DesktopBottomNavProps {
   pharmacyEnabled?: boolean;
   queueEnabled?: boolean;
   isOffline?: boolean;
+  onOpenOfflineManager?: () => void;
+  pendingSyncCount?: number;
   onOpenMpesa: () => void;
   onOpenSha: () => void;
   onOpenReceipts?: () => void;
@@ -52,6 +56,9 @@ export default function DesktopBottomNav({
   journeyCount = 0,
   pharmacyEnabled = true,
   queueEnabled = true,
+  isOffline = false,
+  onOpenOfflineManager,
+  pendingSyncCount = 0,
   onOpenMpesa,
   onOpenSha,
   onOpenReceipts,
@@ -125,7 +132,7 @@ export default function DesktopBottomNav({
     {
       id: "queue",
       label: "Live Queue",
-      subtitle: "Triage & Consult",
+      subtitle: "Ticket Display & PA",
       icon: Monitor,
       count: queueCount,
       enabled: queueEnabled && checkTabPermission("queue").allowed,
@@ -390,6 +397,44 @@ export default function DesktopBottomNav({
             {/* RIGHT: Quick Action Modal Triggers with Green Smoke Shadows */}
             <div className="flex items-center gap-2.5 lg:gap-3 shrink-0">
               
+              {/* Offline Resilience & Cloud Sync Status Trigger */}
+              {onOpenOfflineManager && (
+                <div className="relative group">
+                  <div className={`absolute -inset-1.5 rounded-2xl ${isOffline ? "bg-amber-500/40" : "bg-emerald-500/30"} pointer-events-none opacity-0 group-hover:opacity-80 blur-md transition-opacity duration-300 animate-green-smoke-aura`} />
+                  <button
+                    id="desktop-dock-offline-btn"
+                    onClick={onOpenOfflineManager}
+                    className={`relative z-10 flex items-center gap-2 px-3.5 lg:px-4 py-2.5 lg:py-3 rounded-2xl text-xs lg:text-sm font-black border transition-all cursor-pointer hover:shadow-md active:scale-95 group min-h-[54px] lg:min-h-[62px] ${
+                      isOffline 
+                        ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 ring-2 ring-amber-400/50" 
+                        : "bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 border-slate-300/90 hover:border-emerald-300"
+                    }`}
+                    title={isOffline ? "Offline Mode: Changes saved to IndexedDB. Click to inspect sync queue." : "System Connected: Real-time Cloud Sync & Offline Capacity Manager"}
+                  >
+                    <div className="relative flex items-center justify-center">
+                      {isOffline ? (
+                        <WifiOff className="w-5 h-5 text-amber-700 group-hover:scale-110 transition-transform animate-pulse" />
+                      ) : (
+                        <Wifi className="w-5 h-5 text-emerald-700 group-hover:scale-110 transition-transform" />
+                      )}
+                      {pendingSyncCount > 0 && (
+                        <span className="absolute -top-2 -right-2 px-1.5 py-0.2 bg-amber-600 text-white text-[9px] font-black rounded-full ring-1 ring-white">
+                          {pendingSyncCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <span className="whitespace-nowrap leading-tight">
+                        {isOffline ? "Offline Mode" : "Cloud Sync"}
+                      </span>
+                      <span className={`text-[10px] font-mono font-medium ${isOffline ? "text-amber-700 font-bold" : "text-emerald-700"}`}>
+                        {isOffline ? "IndexedDB Active" : "Online Live"}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              )}
+
               {/* Patient Receipts, Invoices & Discharge Clearance Launcher */}
               {onOpenReceipts && (
                 <div className="relative group">

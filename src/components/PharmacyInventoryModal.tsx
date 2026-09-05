@@ -38,10 +38,12 @@ import {
   ScanLine,
   Loader2,
   Tag,
-  ShoppingCart
+  ShoppingCart,
+  UploadCloud
 } from "lucide-react";
 import { toast, modernConfirm } from "../lib/promptService";
 import { Html5Qrcode } from "html5-qrcode";
+import { uploadDrugDictionaryToFirestore } from "../services/drugInventorySync";
 
 export interface DrugCategoryMeta {
   name: string;
@@ -338,8 +340,35 @@ export default function PharmacyInventoryModal({
   const [manualBarcodeInput, setManualBarcodeInput] = useState("");
   const [categorySearchQuery, setCategorySearchQuery] = useState("");
   const [scannedCodeFlash, setScannedCodeFlash] = useState(false);
+  const [syncingDictionary, setSyncingDictionary] = useState(false);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  const handleSyncDrugDictionary = async () => {
+    const confirmed = await modernConfirm(
+      "This will upload and synchronize the official 429+ Drug Reference Dictionary (Generic Names, Brand Labels, Formulations, Strengths, and Categorized Pricing) directly to your Firestore database. Existing custom inventory counts will be preserved. Continue?",
+      {
+        title: "Sync Drug Reference Inventory?",
+        confirmText: "Yes, Sync Dictionary",
+        cancelText: "Cancel",
+      }
+    );
+    if (!confirmed) return;
+
+    setSyncingDictionary(true);
+    try {
+      const res = await uploadDrugDictionaryToFirestore();
+      if (res.success) {
+        toast.success(res.message, "Catalog Synchronized");
+      } else {
+        toast.error(res.message, "Sync Failed");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload drug reference inventory", "Sync Error");
+    } finally {
+      setSyncingDictionary(false);
+    }
+  };
 
   // Initialize or reset based on initialMode
   useEffect(() => {
@@ -790,6 +819,23 @@ export default function PharmacyInventoryModal({
                 >
                   <PackagePlus className="w-3.5 h-3.5" />
                   <span>Manual Form</span>
+                </button>
+
+                {/* Upload & Sync Drug Reference Dictionary (429+ Items) */}
+                <button
+                  id="btn-sync-drug-dictionary"
+                  type="button"
+                  onClick={handleSyncDrugDictionary}
+                  disabled={syncingDictionary}
+                  className="px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap min-h-[38px] bg-sky-50 text-sky-850 hover:bg-sky-100 border border-sky-300 disabled:opacity-50"
+                  title="Upload or sync 429+ documented formulations from the Drug Reference Dictionary"
+                >
+                  {syncingDictionary ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
+                  ) : (
+                    <UploadCloud className="w-3.5 h-3.5 text-sky-600" />
+                  )}
+                  <span>{syncingDictionary ? "Syncing..." : "Sync 429+ Drug Reference"}</span>
                 </button>
               </>
             )}
@@ -1725,7 +1771,14 @@ export default function PharmacyInventoryModal({
                           return (
                             <tr key={med.id} className="hover:bg-teal-50/30 transition-colors">
                               <td className="p-3">
-                                <div className="font-black text-gray-900 text-xs">{med.name}</div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="font-black text-gray-900 text-xs">{med.name}</span>
+                                  {(med.formulation || med.strength) && (
+                                    <span className="text-[9px] px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded font-semibold border border-slate-200">
+                                      {[med.formulation, med.strength].filter(Boolean).join(" • ")}
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-[10px] text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 font-semibold">
                                   {med.category || "General Medication"}
                                 </span>

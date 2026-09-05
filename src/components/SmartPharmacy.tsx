@@ -1092,11 +1092,19 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                             );
                             const inStock = match ? match.quantity : 0;
                             const isMatchFound = !!match;
+                            const itemUnitPrice = (rx as any).unitPrice !== undefined ? (rx as any).unitPrice : ((rx as any).price || match?.price || 0);
 
                             return (
                               <div key={idx} className="bg-white p-2 rounded-lg border border-emerald-100/50 flex flex-col gap-1 shadow-2xs">
                                 <div className="flex justify-between items-start">
-                                  <span className="font-bold text-slate-950">{drugName}</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold text-slate-950">{drugName}</span>
+                                    {((rx as any).formulation || (rx as any).strength) && (
+                                      <span className="text-[9px] px-1.5 py-0.2 bg-teal-50 text-teal-800 rounded font-semibold border border-teal-200">
+                                        {[(rx as any).formulation, (rx as any).strength].filter(Boolean).join(" • ")}
+                                      </span>
+                                    )}
+                                  </div>
                                   {isMatchFound ? (
                                     inStock <= 0 ? (
                                       <span className="px-1 py-0.5 bg-red-100 border border-red-250 text-red-700 font-extrabold text-[8px] rounded-sm">OUT OF STOCK</span>
@@ -1107,10 +1115,21 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                                     <span className="px-1 py-0.5 bg-blue-100 border border-blue-250 text-blue-800 font-extrabold text-[8px] rounded-sm">REGISTERED TO BILL</span>
                                   )}
                                 </div>
-                                <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 font-medium">
+                                <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 font-medium">
                                   <span>Qty: <strong className="font-semibold text-gray-800">{rx.quantity}</strong></span>
                                   <span>•</span>
                                   <span>Dosage: <strong className="font-semibold text-gray-800">{rx.dosage}</strong></span>
+                                  <span>•</span>
+                                  <span>Price: <strong className="font-bold text-emerald-900 font-mono">KES {itemUnitPrice.toLocaleString()}</strong></span>
+                                  {(rx as any).pricedBy === "doctor" ? (
+                                    <span className="text-[8px] px-1 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold">
+                                      Dr. Priced
+                                    </span>
+                                  ) : (rx as any).pricedBy === "pharmacist" ? (
+                                    <span className="text-[8px] px-1 py-0.2 bg-amber-50 text-amber-700 border border-amber-200 rounded font-bold">
+                                      Pharmacist to Price
+                                    </span>
+                                  ) : null}
                                 </div>
                                 {rx.instructions && (
                                   <p className="text-[10px] text-emerald-800/80 bg-emerald-50/30 px-1.5 py-0.5 rounded-md italic">
@@ -1221,10 +1240,47 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                           }}
                         />
                         <div className="min-w-0">
-                          <p className="font-extrabold text-gray-800 truncate" title={item.med.name}>{item.med.name}</p>
-                          <p className="text-[10px] text-gray-500 font-mono">
-                            KES {item.med.price} × {item.qty} = <span className="font-bold text-emerald-700">KES {(item.med.price * item.qty).toLocaleString()}</span>
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-extrabold text-gray-800 truncate" title={item.med.name}>{item.med.name}</p>
+                            {(item.med.formulation || item.med.strength) && (
+                              <span className="text-[9px] px-1 bg-teal-50 text-teal-800 rounded font-semibold border border-teal-200">
+                                {[item.med.formulation, item.med.strength].filter(Boolean).join(" • ")}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                            <span className="text-[10px] text-gray-500 font-semibold">KES</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={item.med.price}
+                              onChange={(e) => {
+                                const newPrice = Math.max(0, parseFloat(e.target.value) || 0);
+                                const updated = [...cart];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  med: { ...updated[idx].med, price: newPrice },
+                                  pricedBy: "pharmacist",
+                                };
+                                setCart(updated);
+                              }}
+                              className="w-16 px-1 py-0.5 text-[10px] font-bold font-mono text-emerald-900 bg-emerald-50/50 border border-emerald-300 rounded text-right focus:outline-hidden"
+                              title="Adjust unit price as pharmacist"
+                            />
+                            <span className="text-[10px] text-gray-500 font-mono">
+                              × {item.qty} = <span className="font-bold text-emerald-700">KES {(item.med.price * item.qty).toLocaleString()}</span>
+                            </span>
+                            {(item as any).pricedBy === "doctor" ? (
+                              <span className="text-[8px] px-1 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold">
+                                Dr. Priced
+                              </span>
+                            ) : (item as any).pricedBy === "pharmacist" ? (
+                              <span className="text-[8px] px-1 py-0.2 bg-amber-50 text-amber-700 border border-amber-200 rounded font-bold">
+                                Pharmacist
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
 

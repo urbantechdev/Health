@@ -133,6 +133,8 @@ export default function DoctorsDesk({
   const [prescribeQty, setPrescribeQty] = useState(1);
   const [prescribeDosage, setPrescribeDosage] = useState("1x3");
   const [prescribeInstructions, setPrescribeInstructions] = useState("Take after meals");
+  const [prescribeUnitPrice, setPrescribeUnitPrice] = useState<number>(0);
+  const [prescribePricedBy, setPrescribePricedBy] = useState<"doctor" | "pharmacist">("doctor");
 
   // E-Referral inputs
   const [referralDept, setReferralDept] = useState<"laboratory" | "radiology" | "labour_room" | "gyna" | string>("laboratory");
@@ -491,11 +493,22 @@ export default function DoctorsDesk({
       return;
     }
 
+    const finalUnitPrice = Math.max(0, prescribeUnitPrice !== undefined ? prescribeUnitPrice : (selectedDrug.price || 0));
+    const calculatedTotal = finalUnitPrice * prescribeQty;
+
     const newItem: PrescriptionItem = {
       drugName: selectedDrug.name,
+      genericName: selectedDrug.genericName,
+      brandLabel: selectedDrug.brandLabel,
+      formulation: selectedDrug.formulation,
+      strength: selectedDrug.strength,
       quantity: prescribeQty,
       dosage: prescribeDosage,
       instructions: prescribeInstructions,
+      unitPrice: finalUnitPrice,
+      price: finalUnitPrice,
+      totalPrice: calculatedTotal,
+      pricedBy: prescribePricedBy,
       status: "pending",
     };
 
@@ -521,7 +534,11 @@ export default function DoctorsDesk({
             drugName: p.drugName,
             quantity: p.quantity,
             dosage: p.dosage,
-            unitPrice: medications.find((m) => m.name.toLowerCase().includes(p.drugName.toLowerCase()))?.price || 150,
+            instructions: p.instructions,
+            unitPrice: p.unitPrice !== undefined ? p.unitPrice : (p.price || medications.find((m) => m.name.toLowerCase().includes(p.drugName.toLowerCase()))?.price || 150),
+            formulation: p.formulation,
+            strength: p.strength,
+            pricedBy: p.pricedBy || "doctor",
           })),
           referrals: draftReferrals.map((r) => ({
             testName: r.testName,
@@ -621,7 +638,10 @@ export default function DoctorsDesk({
             quantity: p.quantity,
             dosage: p.dosage,
             instructions: p.instructions,
-            unitPrice: medications.find((m) => m.name.toLowerCase().includes(p.drugName.toLowerCase()))?.price || 150,
+            unitPrice: p.unitPrice !== undefined ? p.unitPrice : (p.price || medications.find((m) => m.name.toLowerCase().includes(p.drugName.toLowerCase()))?.price || 150),
+            formulation: p.formulation,
+            strength: p.strength,
+            pricedBy: p.pricedBy || "doctor",
           })),
           referrals: draftReferrals.map((r) => ({
             testName: r.testName,
@@ -889,7 +909,10 @@ export default function DoctorsDesk({
             quantity: p.quantity,
             dosage: p.dosage,
             instructions: p.instructions,
-            unitPrice: p.price || medications.find(m => m.name.toLowerCase().includes(p.drugName.toLowerCase()))?.price || 150
+            unitPrice: p.unitPrice !== undefined ? p.unitPrice : (p.price || medications.find(m => m.name.toLowerCase().includes(p.drugName.toLowerCase()))?.price || 150),
+            formulation: p.formulation,
+            strength: p.strength,
+            pricedBy: p.pricedBy || "doctor"
           })),
           referrals: compiledReferrals.map(r => ({
             testName: r.testName,
@@ -1711,15 +1734,29 @@ export default function DoctorsDesk({
                               type="button"
                               onClick={() => {
                                 setSelectedDrug(med);
+                                setPrescribeUnitPrice(med.price || 0);
+                                setPrescribePricedBy("doctor");
                                 setSearchDrugQuery("");
                               }}
                               className="w-full text-left p-2 hover:bg-gray-50 border-b border-gray-100 flex justify-between items-center"
                             >
                               <div>
-                                <p className="font-bold text-gray-800">{med.name}</p>
-                                <p className="text-[9px] text-gray-400 font-mono">Batch: {med.batchNo} • Exp: {med.expiryDate}</p>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-bold text-gray-800">{med.name}</p>
+                                  {(med.formulation || med.strength) && (
+                                    <span className="text-[9px] px-1.5 py-0.2 bg-teal-50 text-teal-800 rounded font-semibold border border-teal-200">
+                                      {[med.formulation, med.strength].filter(Boolean).join(" • ")}
+                                    </span>
+                                  )}
+                                  {med.brandLabel && (
+                                    <span className="text-[9px] text-gray-400 font-mono">({med.brandLabel})</span>
+                                  )}
+                                </div>
+                                <p className="text-[9px] text-gray-400 font-mono">
+                                  Batch: {med.batchNo} • Exp: {med.expiryDate} • Price: KES {med.price}
+                                </p>
                               </div>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ml-2 ${
                                 med.quantity <= 0
                                   ? "bg-rose-50 text-rose-700 border border-rose-100"
                                   : med.quantity < med.minThreshold
@@ -1736,22 +1773,97 @@ export default function DoctorsDesk({
                   </div>
 
                   <div className="md:col-span-4">
-                    {selectedDrug && (
-                      <div id="selected-drug-details" className="p-2 bg-gray-50 border border-gray-200 rounded-lg text-[11px] h-full flex flex-col justify-between">
+                    {selectedDrug ? (
+                      <div id="selected-drug-details" className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[11px] h-full flex flex-col justify-between space-y-1.5">
                         <div>
-                          <p className="font-bold text-gray-800">{selectedDrug.name}</p>
-                          <p className="text-gray-400">Category: {selectedDrug.category}</p>
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="font-bold text-gray-900 truncate">{selectedDrug.name}</p>
+                            {(selectedDrug.formulation || selectedDrug.strength) && (
+                              <span className="text-[9px] px-1.5 py-0.2 bg-teal-50 text-teal-800 rounded font-semibold border border-teal-200 shrink-0">
+                                {[selectedDrug.formulation, selectedDrug.strength].filter(Boolean).join(" • ")}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-500 text-[10px]">
+                            {selectedDrug.category} {selectedDrug.brandLabel ? `• ${selectedDrug.brandLabel}` : ""}
+                          </p>
                         </div>
-                        <div className="flex justify-between items-center mt-1">
-                          <span className="font-semibold text-emerald-600 font-mono">Qty Avail: {selectedDrug.quantity}</span>
-                          <span className="text-[9px] text-gray-400">Exp: {selectedDrug.expiryDate}</span>
+
+                        {/* Doctor Pricing Controls */}
+                        <div className="p-1.5 bg-white border border-gray-200 rounded-md space-y-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <label className="text-[9px] font-bold text-gray-600">Unit Price (KES):</label>
+                            <div className="flex items-center gap-1">
+                              <input
+                                id="input-prescribe-unit-price"
+                                type="number"
+                                min={0}
+                                step="1"
+                                value={prescribeUnitPrice}
+                                onChange={(e) => {
+                                  setPrescribeUnitPrice(Math.max(0, parseFloat(e.target.value) || 0));
+                                  setPrescribePricedBy("doctor");
+                                }}
+                                className="w-16 px-1.5 py-0.5 border border-emerald-300 rounded text-right text-xs font-mono font-bold text-emerald-900 bg-emerald-50/40"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPrescribeUnitPrice(selectedDrug.price || 0);
+                                  setPrescribePricedBy("doctor");
+                                }}
+                                className="text-[8px] text-gray-500 hover:text-emerald-700 underline cursor-pointer"
+                                title="Reset to standard catalog price"
+                              >
+                                Default
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[9px] pt-1 border-t border-gray-100">
+                            <span className="text-gray-500">Priced By:</span>
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="pricedByOption"
+                                  checked={prescribePricedBy === "doctor"}
+                                  onChange={() => setPrescribePricedBy("doctor")}
+                                  className="w-3 h-3 text-emerald-600"
+                                />
+                                <span className="text-gray-700 font-medium">Doctor</span>
+                              </label>
+                              <label className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="pricedByOption"
+                                  checked={prescribePricedBy === "pharmacist"}
+                                  onChange={() => setPrescribePricedBy("pharmacist")}
+                                  className="w-3 h-3 text-emerald-600"
+                                />
+                                <span className="text-gray-700 font-medium">Pharmacist</span>
+                              </label>
+                            </div>
+                          </div>
                         </div>
+
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="font-semibold text-emerald-700 font-mono">Qty Avail: {selectedDrug.quantity}</span>
+                          <span className="font-bold text-gray-800">
+                            Total: KES {(prescribeUnitPrice * prescribeQty).toLocaleString()}
+                          </span>
+                        </div>
+
                         {selectedDrug.quantity <= 0 && (
-                          <div className="text-[9px] text-rose-600 font-semibold flex items-center gap-1 mt-1">
+                          <div className="text-[9px] text-rose-600 font-semibold flex items-center gap-1">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                             <span>Triggers AI Alternatives suggestion on Prescribe</span>
                           </div>
                         )}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-[11px] text-gray-400 text-center flex items-center justify-center h-full">
+                        <span>Select a drug from inventory to configure dosage & pricing</span>
                       </div>
                     )}
                   </div>
@@ -1806,28 +1918,53 @@ export default function DoctorsDesk({
                   <div className="space-y-2 border-t border-gray-100 pt-3">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Draft Prescriptions (Dispatched on Save)</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {draftPrescriptions.map((p, idx) => (
-                        <div key={idx} className="p-2 border border-emerald-100 bg-emerald-50/10 rounded-lg text-xs flex justify-between items-center group">
-                          <div>
-                            <p className="font-bold text-gray-800">{p.drugName} (x{p.quantity})</p>
-                            <p className="text-[10px] text-emerald-700">{p.dosage} • {p.instructions}</p>
+                      {draftPrescriptions.map((p, idx) => {
+                        const unitPrice = p.unitPrice !== undefined ? p.unitPrice : (p.price || 0);
+                        const total = p.totalPrice !== undefined ? p.totalPrice : (unitPrice * p.quantity);
+                        return (
+                          <div key={idx} className="p-2.5 border border-emerald-100 bg-emerald-50/20 rounded-lg text-xs flex justify-between items-start group shadow-2xs">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="font-bold text-gray-900">{p.drugName} (x{p.quantity})</p>
+                                {(p.formulation || p.strength) && (
+                                  <span className="text-[9px] px-1 bg-teal-50 text-teal-800 rounded font-semibold border border-teal-200">
+                                    {[p.formulation, p.strength].filter(Boolean).join(" • ")}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-emerald-800 font-medium">{p.dosage} • {p.instructions}</p>
+                              <div className="flex items-center gap-2 mt-1 text-[10px]">
+                                <span className="font-bold text-gray-700">
+                                  KES {unitPrice.toLocaleString()} ea • Total: KES {total.toLocaleString()}
+                                </span>
+                                {p.pricedBy === "doctor" ? (
+                                  <span className="text-[8px] px-1 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold">
+                                    Dr. Priced
+                                  </span>
+                                ) : (
+                                  <span className="text-[8px] px-1 py-0.2 bg-amber-50 text-amber-700 border border-amber-200 rounded font-bold">
+                                    Pharmacist to Price
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                              <span className="text-[9px] text-emerald-600 font-bold hidden sm:inline">
+                                Queue Ready
+                              </span>
+                              <button
+                                id={`btn-remove-rx-${idx}`}
+                                type="button"
+                                onClick={() => handleRemoveDraftPrescription(idx)}
+                                className="p-1 hover:bg-rose-100 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer"
+                                title="Remove from prescription and pharmacy cart"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                              <Check className="w-3.5 h-3.5" /> Pending Dispense
-                            </span>
-                            <button
-                              id={`btn-remove-rx-${idx}`}
-                              type="button"
-                              onClick={() => handleRemoveDraftPrescription(idx)}
-                              className="p-1 hover:bg-rose-100 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer"
-                              title="Remove from prescription and pharmacy cart"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

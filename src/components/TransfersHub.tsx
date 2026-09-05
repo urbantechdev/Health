@@ -187,13 +187,15 @@ export default function TransfersHub({
           }
         }
 
-        // 3. Send confirmation message to referring unit
+        // 3. Send confirmation message to referring doctor / unit
         await addDoc(collection(db, "internal_messages"), {
           senderId: currentUser.email || currentUser.name,
           senderName: currentUser.name,
           senderRole: currentUser.role,
-          targetType: "department",
+          targetType: actionTransfer.referredByDoctorName ? "direct" : "department",
           targetDepartment: actionTransfer.fromDepartment,
+          targetUserId: actionTransfer.referredByEmail,
+          targetUserName: actionTransfer.referredByDoctorName,
           channelId: "doctors",
           subject: `✅ Transfer ACCEPTED: ${actionTransfer.ticketNo} - ${actionTransfer.patientName}`,
           message: `Dr. ${currentUser.name} (${currentUser.role}) has ACCEPTED the transfer of patient ${actionTransfer.patientName} (${actionTransfer.ticketNo}) to ${actionTransfer.toDepartment.toUpperCase()}.\nAssigned Station/Room: ${assignedRoom || "Immediate Intake"}.\nNotes: ${actionNote || "Patient in intake queue."}`,
@@ -224,13 +226,15 @@ export default function TransfersHub({
           declineReason: actionNote.trim()
         });
 
-        // Send alert back to referring doctor
+        // Send alert directly back to referring doctor
         await addDoc(collection(db, "internal_messages"), {
           senderId: currentUser.email || currentUser.name,
           senderName: currentUser.name,
           senderRole: currentUser.role,
-          targetType: "department",
+          targetType: actionTransfer.referredByDoctorName ? "direct" : "department",
           targetDepartment: actionTransfer.fromDepartment,
+          targetUserId: actionTransfer.referredByEmail,
+          targetUserName: actionTransfer.referredByDoctorName,
           channelId: "doctors",
           subject: `❌ Transfer DECLINED: ${actionTransfer.ticketNo} - ${actionTransfer.patientName}`,
           message: `Transfer for patient ${actionTransfer.patientName} (${actionTransfer.ticketNo}) was DECLINED by ${currentUser.name} (${currentUser.role}).\nReason: ${actionNote.trim()}.\nPlease re-evaluate or route patient to alternative specialist unit.`,
@@ -255,13 +259,15 @@ export default function TransfersHub({
           holdReason: `${actionNote.trim() || "Holding pending bed/test availability"} (Est: ${holdEstimatedTime})`
         });
 
-        // Send holding alert back
+        // Send holding alert directly back to referring doctor
         await addDoc(collection(db, "internal_messages"), {
           senderId: currentUser.email || currentUser.name,
           senderName: currentUser.name,
           senderRole: currentUser.role,
-          targetType: "department",
+          targetType: actionTransfer.referredByDoctorName ? "direct" : "department",
           targetDepartment: actionTransfer.fromDepartment,
+          targetUserId: actionTransfer.referredByEmail,
+          targetUserName: actionTransfer.referredByDoctorName,
           channelId: "doctors",
           subject: `⏸️ Transfer PLACED ON HOLD: ${actionTransfer.ticketNo} - ${actionTransfer.patientName}`,
           message: `Transfer for patient ${actionTransfer.patientName} (${actionTransfer.ticketNo}) has been placed ON HOLD by ${currentUser.name}.\nReason: ${actionNote || "Awaiting bed/test readiness"}.\nEstimated Duration: ${holdEstimatedTime}.`,

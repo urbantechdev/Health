@@ -94,6 +94,8 @@ export interface Medication {
 
 export interface PrescriptionItem {
   drugName: string;
+  genericName?: string;
+  brandLabel?: string;
   quantity: number;
   dosage: string;
   instructions: string;
@@ -101,6 +103,7 @@ export interface PrescriptionItem {
   medicationId?: string;
   unitPrice?: number;
   totalPrice?: number;
+  price?: number;
   formulation?: string;
   strength?: string;
   pricedBy?: "doctor" | "pharmacist" | "default";
@@ -666,6 +669,7 @@ export interface ChatTicketAttachment {
   fromUserName?: string;
   toDepartment?: string;
   toRole?: string;
+  toSpecialistId?: string;
   toSpecialistName?: string;
   toUserName?: string;
   // Invoice / Pre-Quote Financial details
@@ -712,6 +716,7 @@ export interface InternalMessage {
   targetDepartment?: string;
   targetUserId?: string;
   targetUserName?: string;
+  targetUserEmail?: string;
   channelId?: string; // e.g. "general", "doctors", "pharmacy", "lab", "nursing", "emergency"
   subject: string;
   message: string;

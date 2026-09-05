@@ -97,6 +97,32 @@ export default function NurseTriageStation({
   const [targetRoom, setTargetRoom] = useState<string>("Room 101 - General OPD");
   const [autoBalanceMode, setAutoBalanceMode] = useState<boolean>(true);
 
+  // Helper to parse created time consistently (epoch ms)
+  const getTicketCreatedTime = (t: QueueTicket): number => {
+    if (!t) return 0;
+    if (t.timestamp) {
+      if (typeof (t.timestamp as any)?.toMillis === "function") {
+        return (t.timestamp as any).toMillis();
+      }
+      if (typeof (t.timestamp as any)?.seconds === "number") {
+        return (t.timestamp as any).seconds * 1000;
+      }
+      const parsed = new Date(t.timestamp).getTime();
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    if ((t as any).createdAt) {
+      if (typeof (t as any).createdAt?.toMillis === "function") {
+        return (t as any).createdAt.toMillis();
+      }
+      if (typeof (t as any).createdAt?.seconds === "number") {
+        return (t as any).createdAt.seconds * 1000;
+      }
+      const parsed = new Date((t as any).createdAt).getTime();
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return 0;
+  };
+
   // Listen to Active Queue tickets awaiting Triage & Staff Directory
   useEffect(() => {
     const unsubQueue = onSnapshot(collection(db, "queue"), (snapshot) => {
@@ -104,7 +130,8 @@ export default function NurseTriageStation({
       snapshot.forEach((docSnap) => {
         allTickets.push({ id: docSnap.id, ...docSnap.data() } as QueueTicket);
       });
-      allTickets.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      // Sort chronologically: oldest created on top, newest at bottom (FIFO time prioritization)
+      allTickets.sort((a, b) => getTicketCreatedTime(a) - getTicketCreatedTime(b));
       setTickets(allTickets);
     });
 
@@ -131,14 +158,16 @@ export default function NurseTriageStation({
     };
   }, []);
 
-  // Filter queue tickets needing triage
+  // Filter queue tickets needing triage, strictly ordered by time created (oldest on top, newest at bottom for FIFO time prioritization)
   const triageTickets = useMemo(() => {
-    return tickets.filter((t) => {
-      const dept = (t.currentDepartment || "").toLowerCase();
-      const isTriageDept = dept === "triage" || dept === "reception" || dept === "nurse" || dept === "nursing" || dept === "";
-      const isPending = t.status === "pending" || t.status === "serving";
-      return isTriageDept && isPending;
-    });
+    return tickets
+      .filter((t) => {
+        const dept = (t.currentDepartment || "").toLowerCase();
+        const isTriageDept = dept === "triage" || dept === "reception" || dept === "nurse" || dept === "nursing" || dept === "";
+        const isPending = t.status === "pending" || t.status === "serving";
+        return isTriageDept && isPending;
+      })
+      .sort((a, b) => getTicketCreatedTime(a) - getTicketCreatedTime(b));
   }, [tickets]);
 
   // Derived BMI Calculation
@@ -512,7 +541,10 @@ export default function NurseTriageStation({
                 <Clock className="w-4 h-4 text-rose-600" />
                 <span>Triage Queue ({triageTickets.length})</span>
               </h3>
-              <span className="text-[10px] font-bold text-slate-400">Real-time sync</span>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1" title="Time Prioritization: Oldest tickets appear on top, newest appear at bottom">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Oldest on Top (FIFO)
+              </span>
             </div>
 
             {/* Quick Search */}
@@ -546,9 +578,13 @@ export default function NurseTriageStation({
                       (t.nationalId && t.nationalId.includes(q))
                     );
                   })
-                  .map((t) => {
+                  .map((t, idx) => {
                     const isSelected = selectedTicket?.id === t.id;
                     const pat = findUnifiedPatient(t.patientId || t.nationalId || t.patientName, patients);
+                    const ticketTime = getTicketCreatedTime(t);
+                    const waitMinutes = ticketTime > 0 ? Math.max(0, Math.floor((Date.now() - ticketTime) / 60000)) : 0;
+                    const waitLabel = waitMinutes === 0 ? "Just arrived" : waitMinutes < 60 ? `${waitMinutes}m waiting` : `${Math.floor(waitMinutes / 60)}h ${waitMinutes % 60}m waiting`;
+
                     return (
                       <button
                         key={t.id}
@@ -560,12 +596,26 @@ export default function NurseTriageStation({
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono font-black text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 border border-slate-200">
-                            #{t.ticketNo}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono font-black text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 border border-slate-200">
+                              #{t.ticketNo}
+                            </span>
+                            <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                              idx === 0
+                                ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                : "bg-slate-100 text-slate-600 border border-slate-200"
+                            }`}>
+                              #{idx + 1} {idx === 0 ? "• Next Priority" : ""}
+                            </span>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-[10px] text-slate-400 block font-mono">
+                              {ticketTime > 0 ? new Date(ticketTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                            </span>
+                            <span className={`text-[9px] font-bold ${waitMinutes >= 30 ? "text-rose-600" : waitMinutes >= 15 ? "text-amber-600" : "text-slate-500"}`}>
+                              {waitLabel}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="mt-2">

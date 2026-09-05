@@ -224,6 +224,7 @@ export default function InternalChatModal({
         targetDepartment: targetType === "channel" && activeChannel !== "all" ? activeChannel : undefined,
         targetUserId: targetType === "direct" ? selectedRecipientUser?.id : undefined,
         targetUserName: targetType === "direct" ? selectedRecipientUser?.name : undefined,
+        targetUserEmail: targetType === "direct" ? selectedRecipientUser?.email : undefined,
         channelId: targetType === "channel" ? activeChannel : undefined,
         subject: newSubject.trim() || (newPriority === "stat_emergency" ? "🚨 CODE RED EMERGENCY ALERT" : `Message from ${currentUser.role}`),
         message: newMessage.trim(),
@@ -266,14 +267,20 @@ export default function InternalChatModal({
     tgtVal: string
   ) => {
     try {
+      const isDirectSpecialist = Boolean(ticket.toSpecialistName);
       const payload: Omit<InternalMessage, "id"> = {
         senderId: currentUser.id || currentUser.email || "staff-01",
         senderName: currentUser.name || "Hospital Staff",
         senderRole: currentUser.role || "Staff",
         senderAvatar: currentUser.photoURL,
-        targetType: tgtType === "channel" ? (tgtVal === "all" ? "all" : "department") : (tgtType === "role" ? "role" : "direct"),
-        targetRole: tgtType === "role" ? tgtVal : undefined,
-        targetDepartment: tgtType === "channel" && tgtVal !== "all" ? tgtVal : undefined,
+        targetType: isDirectSpecialist
+          ? "direct"
+          : tgtType === "channel"
+            ? (tgtVal === "all" ? "all" : "department")
+            : (tgtType === "role" ? "role" : "direct"),
+        targetRole: tgtType === "role" ? tgtVal : ticket.toRole || undefined,
+        targetDepartment: tgtType === "channel" && tgtVal !== "all" ? tgtVal : ticket.toDepartment || undefined,
+        targetUserName: ticket.toSpecialistName || undefined,
         channelId: tgtType === "channel" ? tgtVal : undefined,
         subject: ticket.title,
         message: chatMessage,

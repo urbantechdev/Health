@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { db } from "../lib/firebase";
-import { collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, limit, updateDoc, doc, arrayUnion } from "firebase/firestore";
 import { InternalMessage, SystemRole } from "../types";
 import {
   MessageSquare,
@@ -17,7 +17,7 @@ import {
   ArrowRightLeft,
   FlaskRound
 } from "lucide-react";
-import { promptService } from "../lib/promptService";
+import { shouldShowPopupNotification, UserIdentity } from "../lib/messageTargeting";
 
 interface IncomingMessagePromptListenerProps {
   currentUser: {
@@ -25,6 +25,9 @@ interface IncomingMessagePromptListenerProps {
     email: string;
     role: SystemRole | string;
     id?: string;
+    department?: string;
+    specialty?: string;
+    specialistTitle?: string;
   };
   onOpenChat: (initialRole?: string, initialPatient?: any) => void;
 }
@@ -66,6 +69,19 @@ export default function IncomingMessagePromptListener({
     }
   };
 
+  const markAsRead = async (msgId: string) => {
+    try {
+      const identifier = currentUser.email || currentUser.id || currentUser.name;
+      if (identifier) {
+        await updateDoc(doc(db, "internal_messages", msgId), {
+          readBy: arrayUnion(identifier)
+        });
+      }
+    } catch (err) {
+      console.warn("Could not mark message as read:", err);
+    }
+  };
+
   useEffect(() => {
     const q = query(
       collection(db, "internal_messages"),
@@ -91,25 +107,15 @@ export default function IncomingMessagePromptListener({
 
           const msg = { id: docId, ...change.doc.data() } as InternalMessage;
 
-          // Check if message was authored by current user (don't alert yourself)
-          const isFromMe = msg.senderName === currentUser.name || msg.senderId === currentUser.id || msg.senderId === currentUser.email;
-          if (isFromMe) return;
-
-          // Check if message targets current user's role, department, or direct user
-          const myRole = (currentUser.role || "").toLowerCase();
-          const targetRole = (msg.targetRole || "").toLowerCase();
-          const isTargetedToMe =
-            msg.targetType === "all" ||
-            (msg.targetType === "role" && (targetRole === myRole || targetRole === "all" || myRole === "super admin")) ||
-            (msg.targetType === "direct" && (msg.targetUserId === currentUser.id || msg.targetUserName === currentUser.name)) ||
-            (msg.targetType === "department" && (myRole === "super admin" || myRole === "admin" || (myRole.includes("doc") && msg.targetDepartment === "doctors")));
+          // Strictly verify if popup notification is intended for this specific person
+          const isTargetedToMe = shouldShowPopupNotification(msg, currentUser);
 
           if (isTargetedToMe) {
             const isStat = msg.priority === "stat_emergency";
             playChime(isStat);
             setActivePrompt(msg);
 
-            // Auto-dismiss standard messages after 10s if not clicked
+            // Auto-dismiss standard messages after 12s if not clicked
             if (!isStat) {
               setTimeout(() => {
                 setActivePrompt((current) => (current?.id === docId ? null : current));
@@ -127,6 +133,26 @@ export default function IncomingMessagePromptListener({
 
   const isStat = activePrompt.priority === "stat_emergency";
   const isUrgent = activePrompt.priority === "urgent";
+
+  const handleDismiss = () => {
+    if (activePrompt) {
+      markAsRead(activePrompt.id);
+    }
+    setActivePrompt(null);
+  };
+
+  const handleOpenAndReply = () => {
+    if (activePrompt) {
+      markAsRead(activePrompt.id);
+      onOpenChat(
+        activePrompt.targetRole || activePrompt.senderRole,
+        activePrompt.relatedTicketNo
+          ? { patientName: activePrompt.relatedPatientName, ticketNo: activePrompt.relatedTicketNo }
+          : undefined
+      );
+    }
+    setActivePrompt(null);
+  };
 
   return (
     <div className="fixed bottom-6 right-6 z-[99999] max-w-md w-full font-sans pointer-events-auto">
@@ -161,7 +187,11 @@ export default function IncomingMessagePromptListener({
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Target: {activePrompt.targetRole || activePrompt.targetDepartment || activePrompt.channelId || "Hospital Unit"}
+                  {activePrompt.targetUserName
+                    ? `Direct to: ${activePrompt.targetUserName}`
+                    : activePrompt.ticketAttachment?.toSpecialistName
+                      ? `Directed to: ${activePrompt.ticketAttachment.toSpecialistName}`
+                      : `Target: ${activePrompt.targetRole || activePrompt.targetDepartment || activePrompt.channelId || "Department"}`}
                 </p>
               </div>
             </div>
@@ -178,8 +208,9 @@ export default function IncomingMessagePromptListener({
                 </span>
               )}
               <button
-                onClick={() => setActivePrompt(null)}
+                onClick={handleDismiss}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Dismiss"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -251,22 +282,16 @@ export default function IncomingMessagePromptListener({
 
           {/* Quick Actions */}
           <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800">
-            <span className="text-[10px] text-slate-500">Incoming Role Memo</span>
+            <span className="text-[10px] text-slate-500">Targeted Alert</span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setActivePrompt(null)}
+                onClick={handleDismiss}
                 className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Dismiss
               </button>
               <button
-                onClick={() => {
-                  onOpenChat(
-                    activePrompt.targetRole || activePrompt.senderRole,
-                    activePrompt.relatedTicketNo ? { patientName: activePrompt.relatedPatientName, ticketNo: activePrompt.relatedTicketNo } : undefined
-                  );
-                  setActivePrompt(null);
-                }}
+                onClick={handleOpenAndReply}
                 className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-emerald-950/40 transition-all cursor-pointer hover:gap-1.5"
               >
                 Open Inbox & Reply
