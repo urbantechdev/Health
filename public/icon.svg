@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="hmisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#047857" />
+      <stop offset="50%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#0f766e" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#022c22" flood-opacity="0.25" />
+    </filter>
+  </defs>
+  <!-- Background with subtle corner curve -->
+  <rect width="512" height="512" rx="112" fill="url(#hmisGrad)" />
+  
+  <!-- Subtle inner ambient ring -->
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="4" />
+
+  <!-- Medical Cross Graphic -->
+  <g filter="url(#shadow)">
+    <!-- Vertical bar of cross -->
+    <rect x="206" y="106" width="100" height="300" rx="24" fill="#ffffff" />
+    <!-- Horizontal bar of cross -->
+    <rect x="106" y="206" width="300" height="100" rx="24" fill="#ffffff" />
+  </g>
+
+  <!-- Pulse Line across center of cross in hospital emerald -->
+  <path d="M126 256 L200 256 L226 206 L256 316 L286 226 L306 270 L320 256 L386 256" 
+        fill="none" 
+        stroke="#059669" 
+        stroke-width="14" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+
+  <!-- Hospital Star / Shield Accent -->
+  <circle cx="256" cy="70" r="14" fill="#6ee7b7" />
+</svg>
