@@ -39,11 +39,9 @@ export interface CleanSystemReport {
 }
 
 /**
- * Clean and wipe all test and dummy data across the entire system.
- * Removes test patients, queue encounters, tickets, invoices, pharmacy stocks, payroll,
- * and purges test user accounts — while strictly preserving the 2 Sovereign Super Admins:
- * - tassiahillhospital@gmail.com (The Tassia Hill Hospital)
- * - moraasdorcah@gmail.com (Dorcah Moraa)
+ * Clean and wipe patient, billing, and operational transactional records.
+ * Purges patient registrations, queue tokens, carts, invoices, encounters, and financial transactions
+ * while strictly preserving all staff users (employees), hospital formulary, beds, and tariffs.
  */
 export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> {
   const collectionsToPurge = [
@@ -53,37 +51,27 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
     "system_tickets",
     "invoices",
     "patient_carts",
-    "medications",
-    "lab_orders",
-    "payroll",
-    "expenses",
-    "suppliers",
-    "procurement_orders",
-    "procurement_grns",
-    "procurement_requisitions",
-    "procurement_suppliers",
-    "notifications",
-    "internal_messages",
+    "cashier_shifts",
+    "debtor_claims",
+    "remittance_batches",
+    "payment_vouchers",
     "patient_transfers",
-    "security_logs",
-    "security_watchlists",
-    "settings_audit_logs",
-    "system_users",
-    "beds",
-    "wards",
-    "ward_bed_rates",
-    "procedure_tariffs"
+    "expenses",
+    "general_ledger",
+    "payroll",
+    "notifications",
+    "internal_messages"
   ];
 
   const report: CleanSystemReport = {
     timestamp: new Date().toISOString(),
     totalDeleted: 0,
     collectionsPurged: [],
-    superAdminPreserved: false
+    superAdminPreserved: true
   };
 
   try {
-    // 1. Purge standard data collections completely
+    // 1. Purge patient and billing data collections completely
     for (const colName of collectionsToPurge) {
       try {
         const snap = await getDocs(collection(db, colName));
@@ -110,62 +98,17 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
       }
     }
 
-    // 2. Clean employees collection: remove test accounts and any unauthorized admins, ensuring ONLY the 2 Sovereign Super Admins are preserved
+    // 2. Preserve all staff users in employees and verify Super Admin accounts
     try {
+      await ensureSuperAdminsExist();
       const empSnap = await getDocs(collection(db, "employees"));
-      let empDeletedCount = 0;
-      const preservedEmails = new Set<string>();
-
-      const batch = writeBatch(db);
-      for (const docSnap of empSnap.docs) {
-        const data = docSnap.data() as Employee;
-        const email = data.email?.toLowerCase().trim();
-        const isMaster = isSuperAdminEmail(email);
-
-        if (isMaster && email && !preservedEmails.has(email)) {
-          // Normalize to master super admin config
-          const seedMatch = MASTER_SUPER_ADMIN_SEEDS.find(s => s.email.toLowerCase() === email) || PRIMARY_SUPER_ADMIN_SEED;
-          batch.set(doc(db, "employees", docSnap.id), {
-            ...data,
-            name: data.name || seedMatch.name,
-            email: email,
-            pin: data.pin || "2026",
-            department: "administration",
-            accessLevel: "Super Admin",
-            systemRole: "Super Admin",
-            role: "Super Admin",
-            status: "active"
-          });
-          preservedEmails.add(email);
-        } else {
-          // Purge test staff user account or unauthorized/obsolete admin account
-          batch.delete(doc(db, "employees", docSnap.id));
-          empDeletedCount++;
-        }
-      }
-
-      // Seed the 2 Sovereign Super Admins if missing
-      for (const seed of MASTER_SUPER_ADMIN_SEEDS) {
-        if (!preservedEmails.has(seed.email.toLowerCase())) {
-          const newSuperAdminRef = doc(collection(db, "employees"));
-          batch.set(newSuperAdminRef, {
-            ...seed,
-            createdAt: new Date().toISOString()
-          });
-          preservedEmails.add(seed.email.toLowerCase());
-        }
-      }
-
-      await batch.commit();
-
       report.collectionsPurged.push({
-        name: "employees (All unauthorized admins/test staff purged; 2 Sovereign Super Admins preserved)",
-        deletedCount: empDeletedCount
+        name: `employees (${empSnap.size} staff users preserved)`,
+        deletedCount: 0
       });
-      report.totalDeleted += empDeletedCount;
-      report.superAdminPreserved = preservedEmails.size === 2;
+      report.superAdminPreserved = true;
     } catch (empErr) {
-      console.error("Error cleaning employee registry:", empErr);
+      console.error("Error verifying staff users:", empErr);
     }
 
     return report;
@@ -190,6 +133,8 @@ export async function ensureSuperAdminsExist(): Promise<number> {
     const seenEmails = new Set<string>();
     const seenIds = new Set<string>();
     const toDeleteIds: string[] = [];
+    let addedCount = 0;
+    const batch = writeBatch(db);
 
     for (const docSnap of empSnap.docs) {
       const data = docSnap.data() as Employee;
@@ -220,11 +165,23 @@ export async function ensureSuperAdminsExist(): Promise<number> {
       } else {
         if (email) seenEmails.add(email);
         if (nationalId) seenIds.add(nationalId);
+
+        // Ensure Dorcah Moraa is properly designated as Developer (not employee, no salary)
+        if (email === "moraasdorcah@gmail.com") {
+          if (data.salary !== 0 || data.isEmployee !== false || data.employmentType !== "developer") {
+            batch.update(doc(db, "employees", docSnap.id), {
+              name: "Dorcah Moraa (System Developer)",
+              salary: 0,
+              isEmployee: false,
+              employmentType: "developer",
+              department: "engineering",
+              specialty: "Lead System Developer & Software Architect",
+            });
+            addedCount++;
+          }
+        }
       }
     }
-
-    let addedCount = 0;
-    const batch = writeBatch(db);
 
     // Prune obsolete admins and redundant duplicates
     for (const delId of toDeleteIds) {

@@ -255,11 +255,14 @@ export default function UserProfileModal({
       if (employeeDocId) {
         await updateDoc(doc(db, "employees", employeeDocId), updatePayload);
       } else {
+        const isDev = cleanEmail === "moraasdorcah@gmail.com" || employeeRecord?.employmentType === "developer" || employeeRecord?.isEmployee === false;
         // If it's a standalone super admin or new account, persist with setDoc
         const newRef = doc(collection(db, "employees"));
         await setDoc(newRef, {
           ...updatePayload,
-          salary: employeeRecord?.salary || 380000,
+          salary: isDev ? 0 : (employeeRecord?.salary || 380000),
+          isEmployee: !isDev,
+          employmentType: isDev ? "developer" : "employee",
           status: "active",
           hireDate: employeeRecord?.hireDate || new Date().toISOString().split("T")[0],
           accessLevel: isSuperAdmin ? "Super Admin" : "Standard Staff",

@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { Employee, SystemRole } from "../types";
 import { SUPER_ADMIN_EMAILS, isSuperAdminEmail, MASTER_SUPER_ADMIN_SEEDS } from "../lib/superAdmins";
+import { PWAInstallButton } from "./PWAInstallButton";
 
 export interface RolePortalLoginProps {
   employees: Employee[];
@@ -436,7 +437,7 @@ export default function RolePortalLogin({
           email: cleanEmail,
           displayName: superAdminRecord?.name || seedProfile?.name || "System Administrator",
           role: "Super Admin",
-          department: "administration",
+          department: superAdminRecord?.department || seedProfile?.department || "administration",
           photoURL: superAdminRecord?.photoURL || superAdminRecord?.avatarUrl,
           employeeId: superAdminRecord?.id || `super-admin-${cleanEmail.split("@")[0]}`,
           accessLevel: "Super Admin"
@@ -583,7 +584,8 @@ export default function RolePortalLogin({
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <PWAInstallButton variant="portal" />
               {onGoogleLogin && (
                 <div className="relative group flex items-center gap-2">
                   <div className="absolute -inset-1 rounded-2xl opacity-60 group-hover:opacity-100 transition-opacity duration-300 blur-md pointer-events-none -z-10 overflow-hidden">
@@ -595,9 +597,6 @@ export default function RolePortalLogin({
                     onClick={onGoogleLogin}
                     className="relative px-4 py-2.5 bg-[#0F1C34]/90 hover:bg-[#162544] text-white font-bold border border-white/20 hover:border-white/40 rounded-xl text-xs sm:text-sm flex items-center gap-2.5 transition-all cursor-pointer shadow-md"
                   >
-                    <span className="font-black text-amber-300 uppercase tracking-wider text-[11px] px-2 py-0.5 bg-amber-400/20 rounded-md border border-amber-300/30">
-                      Admin
-                    </span>
                     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                       <path
                         fill="#4285F4"

@@ -76,6 +76,7 @@ export default function StatutoryTaxHub({ invoices }: StatutoryTaxHubProps) {
       });
     } else {
       employees.forEach((emp) => {
+        if (emp.isEmployee === false || emp.employmentType === "developer" || (emp.salary || 0) <= 0) return;
         const base = emp.salary || 35000;
         const allowances = Math.round(base * 0.15);
         const gross = base + allowances;
@@ -107,9 +108,10 @@ export default function StatutoryTaxHub({ invoices }: StatutoryTaxHubProps) {
     }
 
     const totalStatutoryDue = totalPAYE + totalSHIF + totalNSSF + totalHousingLevy;
+    const eligibleEmployeesCount = employees.filter(e => e.isEmployee !== false && e.employmentType !== "developer" && (e.salary || 0) > 0).length;
 
     return {
-      staffCount: employees.length || payrollRecords.length,
+      staffCount: eligibleEmployeesCount || payrollRecords.length,
       totalGrossPay,
       totalPAYE,
       totalSHIF,
@@ -153,7 +155,11 @@ export default function StatutoryTaxHub({ invoices }: StatutoryTaxHubProps) {
       "PAYE Due (KES)"
     ];
 
-    const rows = employees.map((emp) => {
+    const eligibleEmployees = employees.filter(
+      (emp) => emp.isEmployee !== false && emp.employmentType !== "developer" && (emp.salary || 0) > 0
+    );
+
+    const rows = eligibleEmployees.map((emp) => {
       const base = emp.salary || 35000;
       const allowances = Math.round(base * 0.15);
       const gross = base + allowances;
@@ -190,7 +196,10 @@ export default function StatutoryTaxHub({ invoices }: StatutoryTaxHubProps) {
   // Export SHIF CSV
   const handleExportSHIFCSV = () => {
     const headers = ["Member National ID", "Member Full Name", "Gross Salary (KES)", "SHIF Contribution (2.75%)"];
-    const rows = employees.map((emp) => {
+    const eligibleEmployees = employees.filter(
+      (emp) => emp.isEmployee !== false && emp.employmentType !== "developer" && (emp.salary || 0) > 0
+    );
+    const rows = eligibleEmployees.map((emp) => {
       const base = emp.salary || 35000;
       const gross = base * 1.15;
       const shif = Math.round(gross * 0.0275);
@@ -523,7 +532,9 @@ export default function StatutoryTaxHub({ invoices }: StatutoryTaxHubProps) {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {employees.map((emp) => (
+            {employees
+              .filter((emp) => emp.isEmployee !== false && emp.employmentType !== "developer" && (emp.salary || 0) > 0)
+              .map((emp) => (
               <div key={emp.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 text-xs">
                 <div className="flex justify-between items-start">
                   <div>

@@ -144,6 +144,8 @@ export default function EditStaffModal({
         ? (customSpecialty.trim() || specialty) 
         : (specialty || role);
 
+      const isDev = employee.employmentType === "developer" || employee.isEmployee === false || email.trim().toLowerCase() === "moraasdorcah@gmail.com";
+
       const updatePayload: Partial<Employee> & Record<string, any> = {
         name: name.trim(),
         nationalId: nationalId.trim(),
@@ -156,6 +158,8 @@ export default function EditStaffModal({
         pin: pin.trim() || "2026",
         accessLevel,
         status,
+        isEmployee: isDev ? false : (employee.isEmployee ?? true),
+        employmentType: isDev ? "developer" : (employee.employmentType ?? "employee"),
         bankName: bankName.trim(),
         bankAccount: bankAccount.trim(),
         hireDate: hireDate || employee.hireDate,

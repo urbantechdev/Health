@@ -42,7 +42,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
   const [medications, setMedications] = useState<Medication[]>([]);
   const [activePrescriptions, setActivePrescriptions] = useState<any[]>([]);
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
-  const [cart, setCart] = useState<{ med: Medication; qty: number }[]>([]);
+  const [cart, setCart] = useState<{ med: Medication; qty: number; pricedBy?: "doctor" | "pharmacist" }[]>([]);
   
   // Modals
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
@@ -147,7 +147,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
           }
 
           if (rxItems.length > 0) {
-            const newCart: { med: Medication; qty: number }[] = [];
+            const newCart: { med: Medication; qty: number; pricedBy?: "doctor" | "pharmacist" }[] = [];
             rxItems.forEach((rx) => {
               const drugName = rx.drugName || rx.name || "Medication";
               const qty = Number(rx.quantity) || 1;
@@ -158,7 +158,12 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
               );
               if (match) {
                 const dispenseQty = Math.max(1, qty);
-                newCart.push({ med: match, qty: dispenseQty });
+                const effectivePrice = rx.unitPrice !== undefined ? Number(rx.unitPrice) : (rx.price !== undefined ? Number(rx.price) : match.price);
+                newCart.push({ 
+                  med: { ...match, price: effectivePrice }, 
+                  qty: dispenseQty,
+                  pricedBy: rx.unitPrice !== undefined || rx.price !== undefined ? "doctor" : undefined
+                });
               } else {
                 const fallbackMed: Medication = {
                   id: `rx-item-${Math.random().toString(36).substr(2, 7)}`,
@@ -170,7 +175,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                   expiryDate: "2027-12-31",
                   price: rx.unitPrice || rx.price || 150
                 };
-                newCart.push({ med: fallbackMed, qty: Math.max(1, qty) });
+                newCart.push({ med: fallbackMed, qty: Math.max(1, qty), pricedBy: rx.unitPrice || rx.price ? "doctor" : undefined });
               }
             });
             setCart(newCart);
@@ -192,6 +197,21 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
       }
     }
   }, [selectedPrescriptionId, activePrescriptions, patients, medications]);
+
+  // Pharmacist Cart Price Adjustment
+  const handleUpdateCartItemPrice = (idx: number, newPrice: number) => {
+    setCart((prev) => {
+      const updated = [...prev];
+      if (updated[idx]) {
+        updated[idx] = {
+          ...updated[idx],
+          med: { ...updated[idx].med, price: Math.max(0, newPrice) },
+          pricedBy: "pharmacist",
+        };
+      }
+      return updated;
+    });
+  };
 
   // Hotkey Action Dispatch Subscriptions
   useEffect(() => {
@@ -1248,26 +1268,24 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                            <span className="text-[10px] text-gray-500 font-semibold">KES</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={item.med.price}
-                              onChange={(e) => {
-                                const newPrice = Math.max(0, parseFloat(e.target.value) || 0);
-                                const updated = [...cart];
-                                updated[idx] = {
-                                  ...updated[idx],
-                                  med: { ...updated[idx].med, price: newPrice },
-                                  pricedBy: "pharmacist",
-                                };
-                                setCart(updated);
-                              }}
-                              className="w-16 px-1 py-0.5 text-[10px] font-bold font-mono text-emerald-900 bg-emerald-50/50 border border-emerald-300 rounded text-right focus:outline-hidden"
-                              title="Adjust unit price as pharmacist"
-                            />
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="text-[10px] text-gray-500 font-semibold">Unit Price:</span>
+                            <div className="flex items-center rounded border border-emerald-300 bg-white px-1.5 py-0.5 focus-within:ring-1 focus-within:ring-emerald-500 shadow-2xs">
+                              <span className="text-[10px] font-bold text-gray-400 mr-0.5">KES</span>
+                              <input
+                                id={`cart-item-price-${idx}`}
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={item.med.price}
+                                onChange={(e) => {
+                                  const val = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                                  handleUpdateCartItemPrice(idx, isNaN(val) ? 0 : val);
+                                }}
+                                className="w-16 text-[10px] font-bold font-mono text-emerald-900 bg-transparent text-right focus:outline-hidden"
+                                title="Adjust unit price as pharmacist"
+                              />
+                            </div>
                             <span className="text-[10px] text-gray-500 font-mono">
                               × {item.qty} = <span className="font-bold text-emerald-700">KES {(item.med.price * item.qty).toLocaleString()}</span>
                             </span>
@@ -1276,8 +1294,8 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
                                 Dr. Priced
                               </span>
                             ) : (item as any).pricedBy === "pharmacist" ? (
-                              <span className="text-[8px] px-1 py-0.2 bg-amber-50 text-amber-700 border border-amber-200 rounded font-bold">
-                                Pharmacist
+                              <span className="text-[8px] px-1.5 py-0.2 bg-amber-50 text-amber-800 border border-amber-200 rounded font-bold">
+                                Pharmacist Price
                               </span>
                             ) : null}
                           </div>
@@ -1403,6 +1421,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
         nationalId={selectedTicket?.nationalId || matchedPatient?.nationalId || ""}
         patientPhone={matchedPatient?.phone || "0712345678"}
         ticketId={selectedPrescriptionId}
+        onUpdateCartItemPrice={handleUpdateCartItemPrice}
         onCheckoutComplete={() => {
           setCart([]);
           setSelectedPrescriptionId(null);

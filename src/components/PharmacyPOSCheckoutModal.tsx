@@ -15,7 +15,11 @@ import {
   ShieldCheck, 
   Sparkles,
   QrCode,
-  Check
+  Check,
+  Pencil,
+  RotateCcw,
+  Tag,
+  Percent
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { toast } from "../lib/promptService";
@@ -23,12 +27,13 @@ import { toast } from "../lib/promptService";
 interface PharmacyPOSCheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  cart: { med: Medication; qty: number }[];
+  cart: { med: Medication; qty: number; pricedBy?: string }[];
   patientName: string;
   nationalId: string;
   patientPhone?: string;
   ticketId?: string | null;
   onCheckoutComplete: () => void;
+  onUpdateCartItemPrice?: (index: number, newPrice: number) => void;
 }
 
 export default function PharmacyPOSCheckoutModal({
@@ -40,6 +45,7 @@ export default function PharmacyPOSCheckoutModal({
   patientPhone = "0712345678",
   ticketId,
   onCheckoutComplete,
+  onUpdateCartItemPrice,
 }: PharmacyPOSCheckoutModalProps) {
   const [paymentMethod, setPaymentMethod] = useState<"M-Pesa" | "Cash">("M-Pesa");
   
@@ -49,25 +55,80 @@ export default function PharmacyPOSCheckoutModal({
   const [mpesaReceiptCode, setMpesaReceiptCode] = useState("");
 
   // Pharmacist checkout pricing override state
-  const [checkoutPrices, setCheckoutPrices] = useState<{ [index: number]: number }>({});
+  // Maintain string inputs for smooth typing without premature snapping to 0 on backspace
+  const [priceInputs, setPriceInputs] = useState<{ [index: number]: string }>({});
+  const [catalogPrices, setCatalogPrices] = useState<{ [index: number]: number }>({});
 
   useEffect(() => {
-    const initialMap: { [index: number]: number } = {};
-    cart.forEach((item, idx) => {
-      initialMap[idx] = item.med.price;
-    });
-    setCheckoutPrices(initialMap);
-  }, [cart, isOpen]);
+    if (isOpen && cart.length > 0) {
+      const initialInputs: { [index: number]: string } = {};
+      const catMap: { [index: number]: number } = {};
+      cart.forEach((item, idx) => {
+        initialInputs[idx] = String(item.med.price);
+        catMap[idx] = item.med.price;
+      });
+      setPriceInputs(initialInputs);
+      setCatalogPrices(catMap);
+    }
+  }, [isOpen]);
 
   const getItemPrice = (idx: number): number => {
-    return checkoutPrices[idx] !== undefined ? checkoutPrices[idx] : (cart[idx]?.med.price || 0);
+    const raw = priceInputs[idx];
+    if (raw === undefined) return cart[idx]?.med.price || 0;
+    const parsed = parseFloat(raw);
+    return isNaN(parsed) ? 0 : Math.max(0, parsed);
   };
 
-  const handleUpdatePrice = (idx: number, newPrice: number) => {
-    setCheckoutPrices((prev) => ({
+  const handlePriceInputChange = (idx: number, val: string) => {
+    setPriceInputs((prev) => ({
       ...prev,
-      [idx]: Math.max(0, newPrice)
+      [idx]: val
     }));
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed) && parsed >= 0) {
+      onUpdateCartItemPrice?.(idx, parsed);
+    }
+  };
+
+  const handlePriceBlur = (idx: number) => {
+    const currentVal = getItemPrice(idx);
+    setPriceInputs((prev) => ({
+      ...prev,
+      [idx]: String(currentVal)
+    }));
+    onUpdateCartItemPrice?.(idx, currentVal);
+  };
+
+  const handleApplyDiscount = (idx: number, percentage: number) => {
+    const base = catalogPrices[idx] !== undefined ? catalogPrices[idx] : getItemPrice(idx);
+    const discounted = Math.max(0, Math.round(base * (1 - percentage / 100)));
+    handlePriceInputChange(idx, String(discounted));
+    toast.info(`Applied ${percentage}% discount to ${cart[idx]?.med.name || "medication"}.`, "Price Adjusted");
+  };
+
+  const handleResetToCatalog = (idx: number) => {
+    const orig = catalogPrices[idx] !== undefined ? catalogPrices[idx] : (cart[idx]?.med.price || 0);
+    handlePriceInputChange(idx, String(orig));
+    toast.info(`Reset ${cart[idx]?.med.name || "medication"} to standard catalog price.`, "Price Reset");
+  };
+
+  const handleApplyGlobalDiscount = (percentage: number) => {
+    cart.forEach((_, idx) => {
+      const base = catalogPrices[idx] !== undefined ? catalogPrices[idx] : getItemPrice(idx);
+      const discounted = Math.max(0, Math.round(base * (1 - percentage / 100)));
+      setPriceInputs((prev) => ({ ...prev, [idx]: String(discounted) }));
+      onUpdateCartItemPrice?.(idx, discounted);
+    });
+    toast.success(`Applied ${percentage}% discount across all checkout items.`, "Global Discount");
+  };
+
+  const handleResetAllToCatalog = () => {
+    cart.forEach((_, idx) => {
+      const orig = catalogPrices[idx] !== undefined ? catalogPrices[idx] : (cart[idx]?.med.price || 0);
+      setPriceInputs((prev) => ({ ...prev, [idx]: String(orig) }));
+      onUpdateCartItemPrice?.(idx, orig);
+    });
+    toast.info("Reset all items to original catalog prices.", "Prices Reset");
   };
 
   // Cash & total states
@@ -398,51 +459,121 @@ export default function PharmacyPOSCheckoutModal({
                   </div>
                 </div>
 
-                <div className="max-h-48 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-200/60">
+                {/* Pharmacist Price Adjustment Toolbar */}
+                <div className="flex items-center justify-between text-[11px] px-1 py-1 bg-emerald-50/70 border border-emerald-200/80 rounded-xl">
+                  <span className="flex items-center gap-1.5 text-emerald-900 font-bold">
+                    <Pencil className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Pharmacist Price Adjustment Active</span>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleApplyGlobalDiscount(10)}
+                      className="px-2 py-0.5 bg-white hover:bg-emerald-100 text-emerald-900 rounded-md font-bold text-[10px] border border-emerald-300 transition-colors cursor-pointer"
+                      title="Apply 10% discount across all checkout items"
+                    >
+                      -10% All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetAllToCatalog}
+                      className="px-2 py-0.5 bg-white hover:bg-slate-200 text-slate-700 rounded-md font-bold text-[10px] border border-slate-200 transition-colors cursor-pointer"
+                      title="Reset all prices to standard catalog values"
+                    >
+                      Reset All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1 divide-y divide-slate-200/60">
                   {cart.map((item, idx) => {
                     const currentPrice = getItemPrice(idx);
-                    const isOverridden = currentPrice !== item.med.price;
+                    const catalogPrice = catalogPrices[idx] !== undefined ? catalogPrices[idx] : item.med.price;
+                    const isOverridden = currentPrice !== catalogPrice;
                     return (
-                      <div key={idx} className="flex justify-between items-center pt-2 text-xs gap-2">
+                      <div key={idx} className="flex justify-between items-center pt-2.5 text-xs gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-gray-800">{item.med.name}</span>
+                            <span className="font-bold text-gray-900">{item.med.name}</span>
                             {(item.med.formulation || item.med.strength) && (
                               <span className="text-[9px] px-1.5 py-0.2 bg-teal-50 text-teal-800 rounded font-semibold border border-teal-200">
                                 {[item.med.formulation, item.med.strength].filter(Boolean).join(" • ")}
                               </span>
                             )}
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span className="text-[10px] text-gray-500 font-mono">Qty: {item.qty} ×</span>
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] text-gray-500 font-bold">KES</span>
-                              <input
-                                id={`input-pos-price-${idx}`}
-                                type="number"
-                                min={0}
-                                step="1"
-                                value={currentPrice}
-                                onChange={(e) => handleUpdatePrice(idx, parseFloat(e.target.value) || 0)}
-                                className="w-16 px-1 py-0.5 border border-emerald-300 rounded text-xs font-mono font-bold text-emerald-900 bg-white text-right focus:outline-hidden"
-                                title="Pharmacist price override at checkout"
-                              />
-                            </div>
                             {isOverridden ? (
-                              <span className="text-[8px] px-1 py-0.2 bg-amber-100 text-amber-800 rounded font-bold">
-                                Pharmacist Adjusted
+                              <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 text-amber-900 rounded-md font-bold flex items-center gap-1 border border-amber-200">
+                                <Pencil className="w-2.5 h-2.5 text-amber-700" />
+                                <span>Adjusted (Cat: KES {catalogPrice.toLocaleString()})</span>
                               </span>
                             ) : (item as any).pricedBy === "doctor" ? (
-                              <span className="text-[8px] px-1 py-0.2 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold">
-                                Dr. Priced
+                              <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold">
+                                Doctor Prescribed Price
                               </span>
                             ) : (
-                              <span className="text-[8px] text-gray-400 font-mono">Catalog</span>
+                              <span className="text-[9px] text-gray-400 font-mono">Catalog: KES {catalogPrice.toLocaleString()}</span>
                             )}
                           </div>
+
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            <span className="text-[11px] text-gray-600 font-mono">
+                              Qty: <strong className="text-gray-900">{item.qty}</strong> ×
+                            </span>
+
+                            {/* Prominent Unit Price Input */}
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Unit Price:</span>
+                              <div className="flex items-center rounded-lg border border-emerald-300 bg-white px-2 py-0.5 focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:border-emerald-500 shadow-2xs transition-all">
+                                <span className="text-[10px] font-black text-emerald-800 mr-1">KES</span>
+                                <input
+                                  id={`input-pos-price-${idx}`}
+                                  type="number"
+                                  min={0}
+                                  step="1"
+                                  value={priceInputs[idx] !== undefined ? priceInputs[idx] : item.med.price}
+                                  onChange={(e) => handlePriceInputChange(idx, e.target.value)}
+                                  onBlur={() => handlePriceBlur(idx)}
+                                  className="w-20 text-xs font-mono font-black text-emerald-950 bg-transparent text-right focus:outline-hidden"
+                                  title="Change unit price for this medication"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Quick discount chips */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleApplyDiscount(idx, 10)}
+                                className="px-1.5 py-0.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 rounded text-[9px] font-bold border border-slate-200 transition-colors cursor-pointer"
+                                title="Apply 10% discount"
+                              >
+                                -10%
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplyDiscount(idx, 20)}
+                                className="px-1.5 py-0.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 rounded text-[9px] font-bold border border-slate-200 transition-colors cursor-pointer"
+                                title="Apply 20% discount"
+                              >
+                                -20%
+                              </button>
+                              {isOverridden && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResetToCatalog(idx)}
+                                  className="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded text-[9px] font-bold border border-amber-200 transition-colors flex items-center gap-0.5 cursor-pointer"
+                                  title="Reset to catalog price"
+                                >
+                                  <RotateCcw className="w-2.5 h-2.5" />
+                                  <span>Reset</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <span className="font-bold text-gray-900 font-mono text-xs block">
+
+                        <div className="text-right shrink-0 pl-2">
+                          <span className="text-[10px] text-gray-400 block font-medium">Subtotal</span>
+                          <span className="font-bold text-gray-900 font-mono text-sm block">
                             KES {(currentPrice * item.qty).toLocaleString()}
                           </span>
                         </div>
@@ -451,7 +582,7 @@ export default function PharmacyPOSCheckoutModal({
                   })}
                 </div>
 
-                <div className="pt-2 border-t border-slate-300 flex justify-between items-center text-sm font-extrabold text-teal-950">
+                <div className="pt-2.5 border-t border-slate-300 flex justify-between items-center text-sm font-extrabold text-teal-950">
                   <span>Grand Total (Incl. 16% VAT):</span>
                   <span className="text-lg font-mono text-emerald-800">KES {totalAmount.toLocaleString()}</span>
                 </div>

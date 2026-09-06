@@ -2,16 +2,67 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Guarantee @vitejs/plugin-react preamble detection across dev middleware & iframes
+      window.$RefreshReg$ = window.$RefreshReg$ || function() {};
+      window.$RefreshSig$ = window.$RefreshSig$ || function() { return function(type) { return type; }; };
+    </script>
+    <script>
+      (function() {
+        const isViteNotice = function(arg) {
+          if (!arg) return false;
+          if (typeof arg === 'string') return arg.includes('[vite]');
+          if (arg && typeof arg.message === 'string') return arg.message.includes('[vite]');
+          if (arg && typeof arg.reason === 'string') return String(arg.reason).includes('[vite]');
+          return false;
+        };
+
+        const _origError = console.error;
+        console.error = function(...args) {
+          if (args.some(isViteNotice)) {
+            return;
+          }
+          _origError.apply(console, args);
+        };
+
+        const _origWarn = console.warn;
+        console.warn = function(...args) {
+          if (args.some(isViteNotice)) {
+            return;
+          }
+          _origWarn.apply(console, args);
+        };
+
+        window.addEventListener('error', function(event) {
+          if (
+            (event.message && event.message.includes('[vite]')) ||
+            (event.error && isViteNotice(event.error))
+          ) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isViteNotice(event.reason) || (event.reason && String(event.reason).includes('[vite]'))) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HMIS</title>
-    <meta name="description" content="The Tassia Hill Hospital Multi-Tenant Hospital Management Information System (HMIS) designed for Kenyan healthcare providers, featuring dynamic departmental workflows, paperless billing, smart pharmacy POS, and deep integrations with SHA/Taifa Care, KRA eTIMS, and Safaricom M-PESA." />
+    <meta name="description" content="The Tassia Hill Hospital Multi-Tenant Hospital Management Information System (HMIS) with offline resilience, installable PWA support, dynamic departmental workflows, paperless billing, smart pharmacy POS, and deep integrations with SHA/Taifa Care, KRA eTIMS, and Safaricom M-PESA." />
     <meta property="og:title" content="HMIS" />
-    <meta property="og:description" content="The Tassia Hill Hospital Multi-Tenant Hospital Management Information System (HMIS) designed for Kenyan healthcare providers, featuring dynamic departmental workflows, paperless billing, smart pharmacy POS, and deep integrations with SHA/Taifa Care, KRA eTIMS, and Safaricom M-PESA." />
+    <meta property="og:description" content="The Tassia Hill Hospital Multi-Tenant Hospital Management Information System (HMIS) with offline resilience, installable PWA support, dynamic departmental workflows, paperless billing, smart pharmacy POS, and deep integrations with SHA/Taifa Care, KRA eTIMS, and Safaricom M-PESA." />
     <meta name="theme-color" content="#047857" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="HMIS" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />

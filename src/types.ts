@@ -508,6 +508,8 @@ export interface Employee {
   accessLevel?: "Super Admin" | "Department Admin" | "Standard Staff";
   systemRole?: SystemRole;
   lastLogin?: string;
+  isEmployee?: boolean;
+  employmentType?: "employee" | "developer" | "contractor" | "external";
 }
 
 export interface PayrollRecord {

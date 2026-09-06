@@ -116,7 +116,9 @@ export default function Payroll() {
     setRunningBatch(true);
 
     try {
-      const activeEmps = employees.filter(e => e.status === "active");
+      const activeEmps = employees.filter(
+        (e) => e.status === "active" && e.isEmployee !== false && e.employmentType !== "developer" && (e.salary || 0) > 0
+      );
       for (const emp of activeEmps) {
         const calc = calculateKenyaPayroll(emp.salary || 65000);
 

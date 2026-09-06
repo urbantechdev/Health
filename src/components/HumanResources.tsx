@@ -564,7 +564,9 @@ export default function HumanResources() {
       const monthRecords = payrollRecords.filter(r => r.month === payrollMonth);
       const processedEmployeeIds = new Set(monthRecords.map(r => r.employeeId));
 
-      const activeEmployees = employees.filter(e => e.status === "active");
+      const activeEmployees = employees.filter(
+        (e) => e.status === "active" && e.isEmployee !== false && e.employmentType !== "developer" && (e.salary || 0) > 0
+      );
       let count = 0;
 
       for (const emp of activeEmployees) {
@@ -681,8 +683,11 @@ export default function HumanResources() {
   });
 
   // Calculate high-level HR metrics
-  const totalSalaryExpense = employees.filter(e => e.status === "active").reduce((sum, e) => sum + e.salary, 0);
-  const averageSalary = employees.length > 0 ? Math.round(totalSalaryExpense / employees.length) : 0;
+  const eligibleSalariedEmployees = employees.filter(
+    (e) => e.status === "active" && e.isEmployee !== false && e.employmentType !== "developer" && (e.salary || 0) > 0
+  );
+  const totalSalaryExpense = eligibleSalariedEmployees.reduce((sum, e) => sum + e.salary, 0);
+  const averageSalary = eligibleSalariedEmployees.length > 0 ? Math.round(totalSalaryExpense / eligibleSalariedEmployees.length) : 0;
   const activeEmployeeCount = employees.filter(e => e.status === "active").length;
 
   return (
@@ -1099,7 +1104,13 @@ export default function HumanResources() {
                             </div>
                           </td>
                           <td className="p-3 text-right font-bold text-gray-900 font-mono">
-                            KES {emp.salary.toLocaleString()}
+                            {emp.isEmployee === false || emp.employmentType === "developer" || !emp.salary ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] uppercase font-black text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+                                Developer (No Salary)
+                              </span>
+                            ) : (
+                              `KES ${emp.salary.toLocaleString()}`
+                            )}
                           </td>
                           <td className="p-3 text-center">
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
@@ -1516,7 +1527,13 @@ export default function HumanResources() {
                       <tbody>
                         <tr className="border-b border-gray-100">
                           <td className="font-bold text-gray-500 py-1.5 w-1/3">Base Monthly Salary:</td>
-                          <td className="font-bold text-slate-950 py-1.5 font-mono">KES {viewingEmployee.salary.toLocaleString()}</td>
+                          <td className="font-bold text-slate-950 py-1.5 font-mono">
+                            {viewingEmployee.isEmployee === false || viewingEmployee.employmentType === "developer" || !viewingEmployee.salary ? (
+                              <span className="text-sky-700 font-bold">N/A — Developer (Non-Employee, No Salary)</span>
+                            ) : (
+                              `KES ${viewingEmployee.salary.toLocaleString()}`
+                            )}
+                          </td>
                         </tr>
                         <tr className="border-b border-gray-100">
                           <td className="font-bold text-gray-500 py-1.5">Direct Deposit Bank:</td>

@@ -271,7 +271,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
   const handlePurgeAndCleanSystem = async () => {
     const confirmWipe = await modernConfirm(
-      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nThe 2 Sovereign Super Admins (The Tassia Hill Hospital & Dorcah Moraa: tassiahillhospital@gmail.com, moraasdorcah@gmail.com) will be preserved to allow fresh onboarding of real hospital staff.",
+      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nThe Sovereign Super Admin (The Tassia Hill Hospital) & System Developer (Dorcah Moraa: tassiahillhospital@gmail.com, moraasdorcah@gmail.com) will be preserved to allow fresh onboarding of real hospital staff.",
       {
         title: "PURGE ALL TEST DATA",
         type: "error",
@@ -289,7 +289,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       const report = await cleanSystemAndPurgeTestData();
       setPurgeReport(report);
       setDbSyncMessage(
-        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. The 2 Sovereign Super Admins (The Tassia Hill Hospital & Dorcah Moraa) are preserved and active for fresh staff onboarding.`
+        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. The Sovereign Super Admin (The Tassia Hill Hospital) & System Developer (Dorcah Moraa) are preserved and active for fresh staff onboarding.`
       );
       toast.success(`Purged ${report.totalDeleted} test records across collections.`, "System Cleaned");
     } catch (err) {

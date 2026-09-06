@@ -652,7 +652,7 @@ export default function App() {
           // Strictly reject unauthorized Google users
           setUser(null);
           setAuthError(
-            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (tassiahillhospital@gmail.com or moraasdorcah@gmail.com) to onboard you and generate your credentials.`
+            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (urbaninteriorkenya@gmail.com, tassiahillhospital@gmail.com, or moraasdorcah@gmail.com) to onboard you and generate your credentials.`
           );
           signOut(auth).catch(() => {});
         }
@@ -946,13 +946,13 @@ export default function App() {
         const host = window.location.hostname;
         console.info(`Domain ${host} is unauthorized in Firebase Auth. Activating default Super Admin workspace mode.`);
         setSimulatedUser({
-          email: "moraasdorcah@gmail.com",
-          displayName: "Dorcah Moraa (Super Admin Sovereign)",
+          email: "urbaninteriorkenya@gmail.com",
+          displayName: "System Administrator (Master Admin)",
           isSimulated: true,
           photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
         });
         setAuthError(
-          `Domain Authorization Note: Domain (${host}) is not registered in Firebase Auth Authorized Domains. Logged you in directly via administrative access mode. To enable real Google Sign-In popups, add '${host}' in Firebase Console → Authentication → Settings → Authorized domains.`
+          `Domain Authorization Note: Domain (${host}) is not registered in Firebase Auth Authorized Domains. Logged in as Master Super Admin (urbaninteriorkenya@gmail.com). To enable real Google Sign-In popups, add '${host}' in Firebase Console → Authentication → Settings → Authorized domains.`
         );
         return;
       } else if (errorCode === "auth/popup-blocked") {
@@ -1319,12 +1319,13 @@ export default function App() {
   if (!activeUser) {
     return (
       <>
-        {/* Splash Screen Loader with Animated Logo Only */}
+        {/* Splash Screen Loader with Animated Logo and Clinical Branding */}
         <SplashScreenLoader
           isVisible={isInitialLoading}
-          minDurationMs={1000}
+          minDurationMs={1800}
           onComplete={() => setIsInitialLoading(false)}
           logoUrl={brandLogoUrl}
+          hospitalName={brandCustomName || "The Tassia Hill Hospital"}
         />
         <RolePortalLogin
           employees={employees}
@@ -1530,6 +1531,9 @@ export default function App() {
               >
                 <Receipt className="w-5 h-5 text-white" />
               </button>
+
+              {/* Mobile In-App PWA Install Trigger */}
+              <PWAInstallButton variant="header-mobile" />
 
               {/* Mobile Offline/Online Indicator - Large White Icon (No Background) */}
               <button
@@ -2543,7 +2547,7 @@ export default function App() {
                             onClick={() => setShowGoogleAuthModal(true)}
                             className="px-5 py-2.5 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
                           >
-                            Sign In with Super Admin Account
+                            Sign In with Authorized Account
                           </button>
                         </div>
                       )
@@ -2946,7 +2950,7 @@ export default function App() {
       onClose={() => setShowProfileModal(false)}
       currentUser={{
         email: activeUser?.email || "moraasdorcah@gmail.com",
-        displayName: activeUser?.displayName || "Dorcah Moraa (Super Admin Sovereign)",
+        displayName: activeUser?.displayName || "Dorcah Moraa (System Developer)",
         photoURL: resolvedPhotoURL,
         isSimulated: activeUser?.isSimulated
       }}
@@ -3012,12 +3016,13 @@ export default function App() {
     {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}
     <ModernPromptHost />
 
-    {/* Splash Screen Loader with Animated Logo Only */}
+    {/* Splash Screen Loader with Animated Logo and Clinical Branding */}
     <SplashScreenLoader
       isVisible={isInitialLoading}
-      minDurationMs={1000}
+      minDurationMs={1800}
       onComplete={() => setIsInitialLoading(false)}
       logoUrl={brandLogoUrl}
+      hospitalName={brandCustomName || "The Tassia Hill Hospital"}
     />
   </div>
   );

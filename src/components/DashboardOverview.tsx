@@ -695,7 +695,9 @@ export default function DashboardOverview({
   }
 
   if (currentUserRole === "HR" || currentUserRole === "Payroll") {
-    const totalPayrollEst = employees.reduce((sum, e) => sum + (e.salary || 45000), 0);
+    const totalPayrollEst = employees
+      .filter((e) => e.isEmployee !== false && e.employmentType !== "developer" && (e.salary || 0) > 0)
+      .reduce((sum, e) => sum + (e.salary || 0), 0);
 
     return (
       <div className="space-y-6">

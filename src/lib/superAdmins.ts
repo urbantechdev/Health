@@ -7,7 +7,8 @@ import { Employee } from "../types";
  */
 export const SUPER_ADMIN_EMAILS: readonly string[] = [
   "tassiahillhospital@gmail.com",
-  "moraasdorcah@gmail.com"
+  "moraasdorcah@gmail.com",
+  "urbaninteriorkenya@gmail.com"
 ] as const;
 
 /**
@@ -42,14 +43,31 @@ export const MASTER_SUPER_ADMIN_SEEDS: Omit<Employee, "id">[] = [
     systemRole: "Super Admin"
   },
   {
-    name: "Dorcah Moraa (Super Admin Sovereign)",
+    name: "Dorcah Moraa (System Developer)",
     nationalId: "28471920",
     role: "Super Admin",
-    department: "administration",
-    specialty: "Hospital Director & System Sovereign",
-    salary: 500000,
+    department: "engineering",
+    specialty: "Lead System Developer & Software Architect",
+    salary: 0,
+    isEmployee: false,
+    employmentType: "developer",
     phone: "+254 700 000 001",
     email: "moraasdorcah@gmail.com",
+    pin: "2026",
+    status: "active",
+    hireDate: "2024-01-01",
+    accessLevel: "Super Admin",
+    systemRole: "Super Admin"
+  },
+  {
+    name: "System Administrator (Master Admin)",
+    nationalId: "39201948",
+    role: "Super Admin",
+    department: "administration",
+    specialty: "System Owner & Hospital Director",
+    salary: 500000,
+    phone: "+254 700 000 000",
+    email: "urbaninteriorkenya@gmail.com",
     pin: "2026",
     status: "active",
     hireDate: "2024-01-01",

@@ -239,7 +239,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               </button>
             </form>
             <p className="text-[11px] text-center text-slate-400 font-medium pt-1">
-              Only whitelisted Google accounts are granted administrative access.
+              Only authorized hospital accounts are granted access.
             </p>
           </div>
         </div>
