@@ -40,6 +40,7 @@ import {
   Zap,
   FilePlus,
   Pill,
+  Plus,
   Trash2
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
@@ -484,7 +485,7 @@ export default function DoctorsDesk({
     }
   };
 
-  const handlePrescribeAdd = async () => {
+  const handlePrescribeAdd = () => {
     if (!selectedDrug) return;
 
     if (selectedDrug.quantity <= 0) {
@@ -503,8 +504,8 @@ export default function DoctorsDesk({
       formulation: selectedDrug.formulation,
       strength: selectedDrug.strength,
       quantity: prescribeQty,
-      dosage: prescribeDosage,
-      instructions: prescribeInstructions,
+      dosage: prescribeDosage || "1 tab twice daily",
+      instructions: prescribeInstructions || "Take as directed",
       unitPrice: finalUnitPrice,
       price: finalUnitPrice,
       totalPrice: calculatedTotal,
@@ -515,103 +516,158 @@ export default function DoctorsDesk({
     const updatedPrescriptions = [...draftPrescriptions, newItem];
     setDraftPrescriptions(updatedPrescriptions);
 
-    // Auto queue patient to Pharmacy in real-time
-    if (selectedPatient) {
-      try {
-        const doctorName = currentDoctorName;
-        const isResultsReview = !!(selectedPatient?.visits && selectedPatient.visits.length > 0);
-
-        // 1. Sync consultation & prescriptions to Patient Live Cart
-        await syncDoctorConsultationToCart({
-          patientId: selectedPatient.id,
-          patientName: selectedPatient.patientName,
-          nationalId: selectedPatient.nationalId,
-          phone: selectedPatient.phone,
-          ticketNo: selectedPatient.activeTicketNo,
-          doctorName,
-          isResultsReview,
-          prescriptions: updatedPrescriptions.map((p) => ({
-            drugName: p.drugName,
-            quantity: p.quantity,
-            dosage: p.dosage,
-            instructions: p.instructions,
-            unitPrice: p.unitPrice !== undefined ? p.unitPrice : (p.price || medications.find((m) => m.name.toLowerCase().includes(p.drugName.toLowerCase()))?.price || 150),
-            formulation: p.formulation,
-            strength: p.strength,
-            pricedBy: p.pricedBy || "doctor",
-          })),
-          referrals: draftReferrals.map((r) => ({
-            testName: r.testName,
-            department: r.department,
-          })),
-        });
-
-        // 2. Look for existing queue ticket for this patient
-        const qSnap = await getDocs(
-          query(
-            collection(db, "queue"),
-            where("patientName", "==", selectedPatient.patientName),
-            where("status", "in", ["pending", "serving"])
-          )
-        );
-
-        let ticketId: string | null = null;
-        let baseNum = Math.floor(Math.random() * 900 + 100);
-
-        if (!qSnap.empty) {
-          const ticketDoc = qSnap.docs[0];
-          ticketId = ticketDoc.id;
-          const ticketData = ticketDoc.data();
-          baseNum = ticketData.ticketNo?.split("-")[1] || baseNum;
-        }
-
-        const assignedTicketNo = `PHA-${baseNum}`;
-        const instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Pharmacy`;
-
-        const pharmaPayload: any = {
-          currentDepartment: "pharmacy",
-          ticketNo: assignedTicketNo,
-          status: "pending",
-          service: "Pharmacy Dispensing",
-          notes: `Prescribed (${updatedPrescriptions.length} items): ${updatedPrescriptions.map((p) => `${p.drugName} (x${p.quantity})`).join(", ")}${diagnosis ? ` | Dx: ${diagnosis}` : ""}`,
-          prescriptions: updatedPrescriptions,
-          timestamp: new Date().toISOString(),
-          originDoctorName: doctorName,
-        };
-
-        if (ticketId) {
-          await updateDoc(doc(db, "queue", ticketId), pharmaPayload);
-        } else {
-          await addDoc(collection(db, "queue"), {
-            ...pharmaPayload,
-            patientName: selectedPatient.patientName,
-            patientId: selectedPatient.id,
-            nationalId: selectedPatient.nationalId,
-            phone: selectedPatient.phone || "",
-            age: selectedPatient.age || 0,
-            gender: selectedPatient.gender || "Unknown",
-            biometricStatus: "verified",
-          });
-        }
-
-        // 3. Audio & Voice Broadcast
-        playAudioTone(880, 0.25);
-        setTimeout(() => playAudioTone(1174, 0.35), 260);
-        speakStationAnnouncement(`${instructionPhrase}. ${selectedPatient.patientName}, please proceed to the Pharmacy Dispensing Counter.`);
-
-        toast.success(
-          `Prescribed ${selectedDrug.name}! Patient ${selectedPatient.patientName} (${assignedTicketNo}) is automatically queued to Pharmacy.`,
-          "Queued to Pharmacy"
-        );
-      } catch (e) {
-        console.error("Auto-queue to pharmacy error:", e);
-      }
-    } else {
-      toast.success(`Added ${selectedDrug.name} to draft prescriptions.`, "Prescription Added");
-    }
+    toast.success(
+      `Added ${selectedDrug.name} (x${prescribeQty}) to prescription list (${updatedPrescriptions.length} item${updatedPrescriptions.length > 1 ? "s" : ""}).`,
+      "Drug Added to List"
+    );
 
     setSelectedDrug(null);
     setSearchDrugQuery("");
+    setPrescribeInstructions("");
+    setPrescribeDosage("1 tab twice daily");
+    setPrescribeQty(1);
+  };
+
+  const handlePrescribeToPharmacy = async () => {
+    if (!selectedPatientId || !selectedPatient) {
+      toast.warning("Please select a patient from the queue or directory first.", "No Patient Selected");
+      return;
+    }
+
+    if (draftPrescriptions.length === 0) {
+      toast.warning("Please add at least one drug to the prescription list before prescribing to pharmacy.", "Prescription List Empty");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const doctorName = currentDoctorName;
+      const isResultsReview = !!(selectedPatient?.visits && selectedPatient.visits.length > 0);
+
+      // 1. Sync consultation & prescriptions to Patient Live Cart
+      await syncDoctorConsultationToCart({
+        patientId: selectedPatient.id,
+        patientName: selectedPatient.patientName,
+        nationalId: selectedPatient.nationalId,
+        phone: selectedPatient.phone,
+        ticketNo: selectedPatient.activeTicketNo,
+        doctorName,
+        isResultsReview,
+        prescriptions: draftPrescriptions.map((p) => ({
+          drugName: p.drugName,
+          quantity: p.quantity,
+          dosage: p.dosage,
+          instructions: p.instructions,
+          unitPrice: p.unitPrice !== undefined ? p.unitPrice : (p.price || medications.find((m) => m.name.toLowerCase().includes(p.drugName.toLowerCase()))?.price || 150),
+          formulation: p.formulation,
+          strength: p.strength,
+          pricedBy: p.pricedBy || "doctor",
+        })),
+        referrals: draftReferrals.map((r) => ({
+          testName: r.testName,
+          department: r.department,
+        })),
+      });
+
+      // 2. Also save to Unified Patient Record
+      await upsertUnifiedPatientRecord({
+        id: selectedPatient.id,
+        patientName: selectedPatient.patientName,
+        nationalId: selectedPatient.nationalId,
+        phone: selectedPatient.phone,
+        age: selectedPatient.age,
+        gender: selectedPatient.gender,
+        bloodType: selectedPatient.bloodType,
+        vitals: { temp, bp, pulse, weight },
+        symptoms,
+        diagnosis,
+        prescriptions: draftPrescriptions,
+        referrals: draftReferrals.map((r, idx) => ({
+          id: `ref-${Date.now()}-${idx}`,
+          department: r.department,
+          testName: r.testName,
+          notes: r.notes,
+          status: "pending" as const,
+        })),
+        sourceStation: "Doctor's Desk"
+      });
+
+      // 3. Look for existing queue ticket for this patient
+      const qSnap = await getDocs(
+        query(
+          collection(db, "queue"),
+          where("patientName", "==", selectedPatient.patientName),
+          where("status", "in", ["pending", "serving"])
+        )
+      );
+
+      let ticketId: string | null = null;
+      let baseNum = Math.floor(Math.random() * 900 + 100);
+
+      if (!qSnap.empty) {
+        const ticketDoc = qSnap.docs[0];
+        ticketId = ticketDoc.id;
+        const ticketData = ticketDoc.data();
+        baseNum = ticketData.ticketNo?.split("-")[1] || baseNum;
+      }
+
+      const assignedTicketNo = `PHA-${baseNum}`;
+      const instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Pharmacy`;
+
+      const pharmaPayload: any = {
+        currentDepartment: "pharmacy",
+        ticketNo: assignedTicketNo,
+        status: "pending",
+        service: "Pharmacy Dispensing",
+        notes: `Prescriptions ready (${draftPrescriptions.length} items): ${draftPrescriptions.map((p) => `${p.drugName} (x${p.quantity})`).join(", ")}${diagnosis ? ` | Dx: ${diagnosis}` : ""}`,
+        prescriptions: draftPrescriptions,
+        timestamp: new Date().toISOString(),
+        originDoctorName: doctorName,
+      };
+
+      if (ticketId) {
+        await updateDoc(doc(db, "queue", ticketId), pharmaPayload);
+      } else {
+        await addDoc(collection(db, "queue"), {
+          ...pharmaPayload,
+          patientName: selectedPatient.patientName,
+          patientId: selectedPatient.id,
+          nationalId: selectedPatient.nationalId,
+          phone: selectedPatient.phone || "",
+          age: selectedPatient.age || 0,
+          gender: selectedPatient.gender || "Unknown",
+          biometricStatus: "verified",
+        });
+      }
+
+      // 4. Audio & Voice Broadcast
+      playAudioTone(880, 0.25);
+      setTimeout(() => playAudioTone(1174, 0.35), 260);
+      speakStationAnnouncement(`${instructionPhrase}. ${selectedPatient.patientName}, please proceed to the Pharmacy Dispensing Counter.`);
+
+      setRoutingCue({
+        ticketNo: assignedTicketNo,
+        stationName: "Hospital Pharmacy & Dispensing Counter",
+        stationDepartment: "pharmacy",
+        instructionText: `Ticket No. ${assignedTicketNo}: Go to Pharmacy`,
+        patientName: selectedPatient.patientName,
+        nationalId: selectedPatient.nationalId,
+        diagnosis: diagnosis || `Prescriptions: ${draftPrescriptions.length} items`,
+        details: `Prescription dispatched with ${draftPrescriptions.length} medications: ${draftPrescriptions.map((p) => p.drugName).join(", ")}`,
+      });
+
+      toast.success(
+        `Prescription dispatched! ${draftPrescriptions.length} medication(s) queued to Pharmacy as a ready cart for ${selectedPatient.patientName} (${assignedTicketNo}).`,
+        "Prescribed to Pharmacy"
+      );
+
+      onRefreshQueue();
+    } catch (e) {
+      console.error("Prescribe to pharmacy error:", e);
+      toast.error("Failed to prescribe to pharmacy. Please try again.", "Prescription Error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleRemoveDraftPrescription = async (indexToRemove: number) => {
@@ -649,7 +705,7 @@ export default function DoctorsDesk({
           })),
         });
 
-        // Update queue ticket if active
+        // Update queue ticket if active in pharmacy
         const qSnap = await getDocs(
           query(
             collection(db, "queue"),
@@ -665,10 +721,12 @@ export default function DoctorsDesk({
           });
         }
 
-        toast.info(`Removed ${itemToRemove?.drugName || "medication"} from prescription and pharmacy cart.`, "Prescription Removed");
+        toast.info(`Removed ${itemToRemove?.drugName || "medication"} from prescription list.`, "Prescription Updated");
       } catch (e) {
         console.error("Remove prescription error:", e);
       }
+    } else {
+      toast.info(`Removed ${itemToRemove?.drugName || "medication"} from prescription list.`, "Prescription Updated");
     }
   };
 
@@ -1907,22 +1965,49 @@ export default function DoctorsDesk({
                     type="button"
                     onClick={handlePrescribeAdd}
                     disabled={!selectedDrug}
-                    className="px-4 py-1.5 bg-gray-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0"
+                    title="Add selected medication to prescription draft list"
                   >
-                    Prescribe Medication
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Drug to List</span>
                   </button>
                 </div>
 
-                {/* Render Draft prescriptions */}
+                {/* Render Draft prescriptions list */}
                 {draftPrescriptions.length > 0 && (
-                  <div className="space-y-2 border-t border-gray-100 pt-3">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Draft Prescriptions (Dispatched on Save)</p>
+                  <div className="space-y-3 border-t border-gray-100 pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-6 h-6 bg-emerald-700 text-white rounded-full flex items-center justify-center font-black text-xs">
+                          {draftPrescriptions.length}
+                        </span>
+                        <div>
+                          <p className="text-xs font-black text-emerald-950">Prescription List ({draftPrescriptions.length} Drug{draftPrescriptions.length > 1 ? "s" : ""})</p>
+                          <p className="text-[10px] text-emerald-700 font-medium">
+                            Total Rx Estimate: <strong className="font-bold font-mono text-emerald-950">KES {draftPrescriptions.reduce((acc, curr) => acc + (curr.totalPrice || ((curr.unitPrice || 0) * curr.quantity)), 0).toLocaleString()}</strong>
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        id="btn-prescribe-to-pharmacy"
+                        type="button"
+                        onClick={handlePrescribeToPharmacy}
+                        disabled={submitting || !selectedPatientId}
+                        className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                        title="Transmit this prescription list directly to Pharmacy queue as a ready cart"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Prescribe to Pharmacy ({draftPrescriptions.length} item{draftPrescriptions.length > 1 ? "s" : ""})</span>
+                      </button>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {draftPrescriptions.map((p, idx) => {
                         const unitPrice = p.unitPrice !== undefined ? p.unitPrice : (p.price || 0);
                         const total = p.totalPrice !== undefined ? p.totalPrice : (unitPrice * p.quantity);
                         return (
-                          <div key={idx} className="p-2.5 border border-emerald-100 bg-emerald-50/20 rounded-lg text-xs flex justify-between items-start group shadow-2xs">
+                          <div key={idx} className="p-2.5 border border-emerald-100 bg-white rounded-lg text-xs flex justify-between items-start group shadow-2xs hover:border-emerald-300 transition-all">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <p className="font-bold text-gray-900">{p.drugName} (x{p.quantity})</p>
@@ -1949,15 +2034,12 @@ export default function DoctorsDesk({
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                              <span className="text-[9px] text-emerald-600 font-bold hidden sm:inline">
-                                Queue Ready
-                              </span>
                               <button
                                 id={`btn-remove-rx-${idx}`}
                                 type="button"
                                 onClick={() => handleRemoveDraftPrescription(idx)}
                                 className="p-1 hover:bg-rose-100 text-rose-500 hover:text-rose-700 rounded transition-colors cursor-pointer"
-                                title="Remove from prescription and pharmacy cart"
+                                title="Remove from prescription draft list"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>

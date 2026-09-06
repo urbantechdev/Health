@@ -14,7 +14,7 @@ export interface SplashScreenLoaderProps {
 
 export default function SplashScreenLoader({
   isVisible = true,
-  minDurationMs = 1800,
+  minDurationMs = 2500,
   onComplete,
   logoUrl: propLogoUrl,
   hospitalName = "The Tassia Hill Hospital",

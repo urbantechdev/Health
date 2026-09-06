@@ -1,13 +1,4 @@
-// Clean up tsx global definitions that conflict with ESM Vite plugins
-if (typeof (globalThis as any).__dirname !== "undefined") {
-  delete (globalThis as any).__dirname;
-}
-if (typeof (globalThis as any).__filename !== "undefined") {
-  delete (globalThis as any).__filename;
-}
-
 import express from "express";
-import http from "http";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -19,7 +10,6 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
-app.use(express.static(path.join(process.cwd(), "public")));
 
 // Lazy-initialized Gemini API client
 let aiClient: GoogleGenAI | null = null;
@@ -453,29 +443,6 @@ app.post("/api/integrations/sha/submit-claim", (req, res) => {
   });
 });
 
-// SHA Claim Modal Direct Verification & Submission
-app.post("/api/integrations/sha/claim", (req, res) => {
-  const { shaId, amount, diagnosis } = req.body;
-  const claimId = `CLM-SHA-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`;
-  const totalAmount = Number(amount || 2500);
-  const approvedAmount = Math.min(totalAmount, 45000);
-
-  res.json({
-    success: true,
-    claimId,
-    preAuthCode: `AUTH-KDHA-${Math.floor(Math.random() * 90000 + 10000)}`,
-    status: "Approved",
-    shaId: shaId || "SHA-KE-009943",
-    claimedAmountKes: totalAmount,
-    approvedAmountKes: approvedAmount,
-    copayRequiredKes: Math.max(0, totalAmount - approvedAmount),
-    diagnosis: diagnosis || "General Consultation",
-    adjudicationTimestamp: new Date().toISOString(),
-    adjudicatedBy: "KDHA-AI-AUTOSCRUBBER-V3",
-    message: "e-Claim verified, auto-scrubbed and approved."
-  });
-});
-
 // Shared Health Record (SHR) - FHIR R4 Bundle Push & Ingest Endpoint
 app.post("/api/integrations/fhir/push-shr", (req, res) => {
   const bundle = req.body;
@@ -560,29 +527,6 @@ app.post("/api/integrations/etims/invoice", (req, res) => {
     totalAmount: parseFloat(amount),
     qrCodeData,
     message: "eTIMS compliance invoice successfully signed and logged.",
-  });
-});
-
-// Alias for Pharmacy POS eTIMS signing endpoint
-app.post("/api/etims/sign-invoice", (req, res) => {
-  const { invoiceId, amount, clientPin } = req.body;
-  const numAmount = Number(amount) || 0;
-  const cuInvoiceNo = `KRAETIMS-${Date.now().toString().slice(-8)}`;
-  const qrCodeData = `https://itax.kra.go.ke/KRAActive/etims-verify?inv=${cuInvoiceNo}&amt=${numAmount}`;
-  const taxAmount = Math.round(numAmount * 0.16);
-
-  res.json({
-    success: true,
-    kraInvoiceNo: cuInvoiceNo,
-    kraReceiptNumber: cuInvoiceNo,
-    deviceSerialNo: "ETIMS-MW-0099432",
-    dateTime: new Date().toISOString(),
-    taxableAmount: numAmount - taxAmount,
-    taxRate: "16%",
-    taxAmount,
-    totalAmount: numAmount,
-    qrCodeData,
-    message: "eTIMS invoice successfully signed and logged.",
   });
 });
 
@@ -769,15 +713,17 @@ app.post("/api/integrations/slade/preauth", (req, res) => {
   });
 });
 
-// --- VITE MIDDLEWARE SETUP ---
-async function startServer() {
+// --- VITE DEV OR PRODUCTION STATIC SERVING ---
+async function setupViteOrStatic() {
   try {
-    const server = http.createServer(app);
-
     if (process.env.NODE_ENV !== "production") {
       console.log("[Server] Mounting Vite dev middleware...");
       const vite = await createViteServer({
-        server: { middlewareMode: true },
+        root: process.cwd(),
+        server: {
+          middlewareMode: true,
+          hmr: process.env.DISABLE_HMR === "true" ? false : undefined,
+        },
         appType: "spa",
       });
       app.use(vite.middlewares);
@@ -790,24 +736,24 @@ async function startServer() {
       });
     }
 
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log(`[HMIS Server] running on http://0.0.0.0:${PORT}`);
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[NextGen HMS Server] running on http://0.0.0.0:${PORT}`);
     });
 
     server.on("error", (err: any) => {
-      console.error("[HMIS Server] Listener error:", err);
+      console.error("[NextGen HMS Server] Listener error:", err);
     });
   } catch (error) {
-    console.error("[Server] Error initializing Vite middleware:", error);
-    const fallbackServer = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`[HMIS Server] Fallback listener running on http://0.0.0.0:${PORT}`);
+    console.error("[Server] Error initializing Vite middleware or Express listener:", error);
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[NextGen HMS Server] Fallback listener running on http://0.0.0.0:${PORT}`);
     });
-    fallbackServer.on("error", (err: any) => {
-      console.error("[HMIS Server] Fallback listener error:", err);
+    server.on("error", (err: any) => {
+      console.error("[NextGen HMS Server] Fallback listener error:", err);
     });
   }
 }
 
-startServer().catch((err) => {
+setupViteOrStatic().catch((err) => {
   console.error("[Server] Unhandled startup rejection:", err);
 });

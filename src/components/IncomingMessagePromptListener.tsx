@@ -20,15 +20,7 @@ import {
 import { shouldShowPopupNotification, UserIdentity } from "../lib/messageTargeting";
 
 interface IncomingMessagePromptListenerProps {
-  currentUser: {
-    name: string;
-    email: string;
-    role: SystemRole | string;
-    id?: string;
-    department?: string;
-    specialty?: string;
-    specialistTitle?: string;
-  };
+  currentUser: UserIdentity;
   onOpenChat: (initialRole?: string, initialPatient?: any) => void;
 }
 

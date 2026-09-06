@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { db, cleanFirestoreData } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
-import { Medication, QueueTicket, PrescriptionItem, Invoice, MedicalRecord } from "../types";
+import { Medication, QueueTicket, PrescriptionItem, Invoice, MedicalRecord, PatientCart } from "../types";
 import { findUnifiedPatient } from "../lib/patientSyncService";
+import { subscribeAllActiveCarts } from "../lib/patientCartService";
 import { 
   ShoppingCart, 
   PackageOpen, 
@@ -41,6 +42,7 @@ interface SmartPharmacyProps {
 export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole = "Pharmacy" }: SmartPharmacyProps) {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [activePrescriptions, setActivePrescriptions] = useState<any[]>([]);
+  const [activePatientCarts, setActivePatientCarts] = useState<PatientCart[]>([]);
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
   const [cart, setCart] = useState<{ med: Medication; qty: number; pricedBy?: "doctor" | "pharmacist" }[]>([]);
   
@@ -103,10 +105,16 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
       setActivePrescriptions(rxList);
     });
 
+    // Listen to active live patient carts for ready billing synchronization
+    const unsubCarts = subscribeAllActiveCarts((carts) => {
+      setActivePatientCarts(carts);
+    });
+
     return () => {
       unsubPatients();
       unsubMeds();
       unsubQueue();
+      unsubCarts();
     };
   }, []);
 
@@ -119,21 +127,61 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
     }
   }, [activePrescriptions, selectedPrescriptionId]);
 
+  // Selected ticket and patient context
+  const selectedTicket = activePrescriptions.find((p) => p.id === selectedPrescriptionId);
+  const matchedPatient = selectedTicket
+    ? findUnifiedPatient(selectedTicket.patientId || selectedTicket.nationalId || selectedTicket.patientName, patients)
+    : null;
+
+  const activeCartItemsForPatient = useMemo(() => {
+    if (!selectedTicket && !matchedPatient) return [];
+    const patientId = selectedTicket?.patientId || matchedPatient?.id;
+    const patientName = selectedTicket?.patientName || matchedPatient?.patientName;
+    const natId = selectedTicket?.nationalId || matchedPatient?.nationalId;
+
+    const matchedCart = activePatientCarts.find(
+      (c) =>
+        (patientId && c.patientId === patientId) ||
+        (natId && c.nationalId === natId) ||
+        (patientName && c.patientName?.toLowerCase() === patientName.toLowerCase())
+    );
+    if (!matchedCart || !matchedCart.items) return [];
+    return matchedCart.items.filter((item) => item.category === "pharmacy" || item.department === "Pharmacy");
+  }, [selectedTicket, matchedPatient, activePatientCarts]);
+
+  const latestVisit = useMemo(() => {
+    if (!matchedPatient || !matchedPatient.visits || matchedPatient.visits.length === 0) return null;
+    for (let i = matchedPatient.visits.length - 1; i >= 0; i--) {
+      if (matchedPatient.visits[i].prescriptions && matchedPatient.visits[i].prescriptions.length > 0) {
+        return matchedPatient.visits[i];
+      }
+    }
+    return matchedPatient.visits[matchedPatient.visits.length - 1];
+  }, [matchedPatient]);
+
   // Auto-fill cart when prescription is selected or handed over from doctor
   useEffect(() => {
     if (selectedPrescriptionId && medications.length > 0) {
       const ticket = activePrescriptions.find((p) => p.id === selectedPrescriptionId);
-      const rxSignature = `${selectedPrescriptionId}-${JSON.stringify(ticket?.prescriptions || [])}`;
+      const rxSignature = `${selectedPrescriptionId}-${JSON.stringify(ticket?.prescriptions || [])}-${activeCartItemsForPatient.length}`;
       
       if (lastLoadedRef.current !== rxSignature) {
         lastLoadedRef.current = rxSignature;
         if (ticket) {
           const pat = findUnifiedPatient(ticket.patientId || ticket.nationalId || ticket.patientName, patients);
           
-          // 1. Extract prescription items from ticket payload, or patient EHR visits
+          // 1. Extract prescription items from ticket payload, active live cart, or patient EHR visits
           let rxItems: any[] = [];
           if (ticket.prescriptions && Array.isArray(ticket.prescriptions) && ticket.prescriptions.length > 0) {
             rxItems = ticket.prescriptions;
+          } else if (activeCartItemsForPatient.length > 0) {
+            rxItems = activeCartItemsForPatient.map((it) => ({
+              drugName: it.name,
+              quantity: it.quantity,
+              unitPrice: it.unitPrice,
+              dosage: it.notes || "As directed",
+              instructions: it.notes || ""
+            }));
           } else if (pat && pat.visits && pat.visits.length > 0) {
             for (let i = pat.visits.length - 1; i >= 0; i--) {
               if (pat.visits[i].prescriptions && pat.visits[i].prescriptions.length > 0) {
@@ -182,21 +230,21 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
 
             const total = newCart.reduce((sum, item) => sum + item.med.price * item.qty, 0);
             toast.success(
-              `Prescription bill (KES ${total.toLocaleString()}) automatically added to cart for ${ticket.patientName}`,
-              "Doctor Prescription Loaded"
+              `Ready cart opened for ${ticket.patientName}: ${newCart.length} medication(s) loaded (Total: KES ${total.toLocaleString()}). Ready to bill!`,
+              "Ready Cart Loaded"
             );
           } else {
             setCart([]);
           }
         }
       }
-    } else {
+    } else if (!selectedPrescriptionId) {
       if (lastLoadedRef.current !== null) {
         lastLoadedRef.current = null;
         setCart([]);
       }
     }
-  }, [selectedPrescriptionId, activePrescriptions, patients, medications]);
+  }, [selectedPrescriptionId, activePrescriptions, activeCartItemsForPatient, patients, medications]);
 
   // Pharmacist Cart Price Adjustment
   const handleUpdateCartItemPrice = (idx: number, newPrice: number) => {
@@ -622,10 +670,10 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
       });
     }
 
-    // Auto-clear notification after 6 seconds
+    // Auto-clear notification after 2.5 seconds
     setTimeout(() => {
       setScanStatus(null);
-    }, 6000);
+    }, 2500);
   };
 
   const handleKeyboardGunScanSubmit = (e: React.FormEvent) => {
@@ -674,31 +722,93 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
     return { status: "SAFE", color: "text-emerald-700 bg-emerald-50 border-emerald-200" };
   };
 
-  const selectedTicket = activePrescriptions.find((p) => p.id === selectedPrescriptionId);
-  const matchedPatient = selectedTicket
-    ? findUnifiedPatient(selectedTicket.patientId || selectedTicket.nationalId || selectedTicket.patientName, patients)
-    : null;
-  const latestVisit = useMemo(() => {
-    if (!matchedPatient || !matchedPatient.visits || matchedPatient.visits.length === 0) return null;
-    for (let i = matchedPatient.visits.length - 1; i >= 0; i--) {
-      if (matchedPatient.visits[i].prescriptions && matchedPatient.visits[i].prescriptions.length > 0) {
-        return matchedPatient.visits[i];
-      }
-    }
-    return matchedPatient.visits[matchedPatient.visits.length - 1];
-  }, [matchedPatient]);
+
 
   const activeRxItems: PrescriptionItem[] = useMemo(() => {
     if (selectedTicket?.prescriptions && Array.isArray(selectedTicket.prescriptions) && selectedTicket.prescriptions.length > 0) {
       return selectedTicket.prescriptions;
     }
+    if (activeCartItemsForPatient.length > 0) {
+      return activeCartItemsForPatient.map((item) => ({
+        drugName: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        price: item.unitPrice,
+        totalPrice: item.totalPrice,
+        dosage: item.notes || "As prescribed",
+        instructions: item.notes || "",
+        formulation: item.name,
+        strength: "",
+        pricedBy: (item.addedByRole === "Doctor" ? "doctor" : "pharmacist") as any,
+        status: "pending" as const
+      }));
+    }
     if (latestVisit?.prescriptions && Array.isArray(latestVisit.prescriptions) && latestVisit.prescriptions.length > 0) {
       return latestVisit.prescriptions;
     }
     return [];
-  }, [selectedTicket, latestVisit]);
+  }, [selectedTicket, activeCartItemsForPatient, latestVisit]);
 
   const totalCartValue = cart.reduce((acc, curr) => acc + curr.med.price * curr.qty, 0);
+
+  const unifiedReadyPatients = useMemo(() => {
+    const list: {
+      id: string;
+      ticketNo: string;
+      patientName: string;
+      nationalId?: string;
+      prescriptionsCount: number;
+      estimatedTotal: number;
+      doctorName?: string;
+      isTicket: boolean;
+      ticketId?: string;
+    }[] = [];
+
+    // From active queue tickets
+    activePrescriptions.forEach((tick) => {
+      const rxCount = tick.prescriptions?.length || 0;
+      const estTotal = (tick.prescriptions || []).reduce(
+        (acc: number, p: any) => acc + (p.totalPrice || ((p.unitPrice || p.price || 150) * (p.quantity || 1))),
+        0
+      );
+      list.push({
+        id: tick.id,
+        ticketNo: tick.ticketNo || "PHA-RX",
+        patientName: tick.patientName || "Patient",
+        nationalId: tick.nationalId,
+        prescriptionsCount: rxCount,
+        estimatedTotal: estTotal,
+        doctorName: tick.originDoctorName,
+        isTicket: true,
+        ticketId: tick.id
+      });
+    });
+
+    // Also check active patient carts with pharmacy items not already in queue list
+    activePatientCarts.forEach((c) => {
+      const pharmaItems = (c.items || []).filter((it) => it.category === "pharmacy" || it.department === "Pharmacy");
+      if (pharmaItems.length > 0) {
+        const alreadyInList = list.some(
+          (item) => item.patientName.toLowerCase() === c.patientName?.toLowerCase() || (c.nationalId && item.nationalId === c.nationalId)
+        );
+        if (!alreadyInList) {
+          const estTotal = pharmaItems.reduce((acc, it) => acc + (it.totalPrice || (it.unitPrice * it.quantity)), 0);
+          list.push({
+            id: c.id,
+            ticketNo: c.activeTicketNo || "CART-RX",
+            patientName: c.patientName || "Patient",
+            nationalId: c.nationalId,
+            prescriptionsCount: pharmaItems.length,
+            estimatedTotal: estTotal,
+            doctorName: pharmaItems[0]?.addedBy || "Doctor Desk",
+            isTicket: false
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [activePrescriptions, activePatientCarts]);
 
   return (
     <div id="smart-pharmacy" className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
@@ -784,6 +894,93 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
             </button>
           )}
         </div>
+      </div>
+
+      {/* Ready Carts & Active Prescriptions Queue */}
+      <div id="pharmacy-ready-carts-section" className="mb-6 p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-emerald-700 text-white rounded-lg flex items-center justify-center font-bold">
+              <ShoppingCart className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-emerald-950 flex items-center gap-2">
+                <span>Prescription Ready Carts Queue</span>
+                <span className="px-2 py-0.5 bg-emerald-200/80 text-emerald-900 rounded-full text-[11px] font-mono font-bold">
+                  {unifiedReadyPatients.length} Waiting
+                </span>
+              </h3>
+              <p className="text-[11px] text-emerald-700">
+                Click any patient below to immediately open their prescription as a ready cart to bill.
+              </p>
+            </div>
+          </div>
+          {selectedPrescriptionId && (
+            <span className="text-[11px] font-bold text-emerald-800 bg-white/90 px-3 py-1 rounded-full border border-emerald-200 shadow-2xs flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Active Cart: {selectedTicket?.patientName || matchedPatient?.patientName || "Selected"}</span>
+            </span>
+          )}
+        </div>
+
+        {unifiedReadyPatients.length === 0 ? (
+          <div className="p-4 bg-white/80 rounded-xl border border-dashed border-emerald-200 text-center text-xs text-emerald-800/70 flex items-center justify-center gap-2">
+            <PackageOpen className="w-4 h-4 opacity-50" />
+            <span>No pending prescriptions in queue. Prescriptions sent from Doctor's Desk will appear here as ready carts.</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {unifiedReadyPatients.map((item) => {
+              const isSelected = item.id === selectedPrescriptionId || item.ticketId === selectedPrescriptionId;
+              return (
+                <button
+                  key={item.id}
+                  id={`btn-ready-cart-${item.id}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPrescriptionId(item.ticketId || item.id);
+                  }}
+                  className={`p-3 rounded-xl text-left transition-all border cursor-pointer relative ${
+                    isSelected
+                      ? "bg-white border-emerald-500 shadow-sm ring-2 ring-emerald-500/30"
+                      : "bg-white/90 hover:bg-white border-emerald-200/60 hover:border-emerald-300 shadow-3xs"
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-1.5">
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded font-mono font-bold text-[10px]">
+                      {item.ticketNo}
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                      isSelected
+                        ? "bg-emerald-600 text-white"
+                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    }`}>
+                      <ShoppingCart className="w-3 h-3" />
+                      <span>{isSelected ? "Cart Open" : "Ready to Bill"}</span>
+                    </span>
+                  </div>
+
+                  <p className="font-extrabold text-xs text-gray-900 truncate">{item.patientName}</p>
+                  
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 text-[11px]">
+                    <span className="text-gray-500 font-medium">
+                      💊 {item.prescriptionsCount} Drug{item.prescriptionsCount !== 1 ? "s" : ""}
+                    </span>
+                    <span className="font-mono font-bold text-emerald-800">
+                      {item.estimatedTotal > 0 ? `KES ${item.estimatedTotal.toLocaleString()}` : "Ready"}
+                    </span>
+                  </div>
+
+                  {item.doctorName && (
+                    <p className="text-[10px] text-gray-400 mt-1 truncate">
+                      Dr: {item.doctorName}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

@@ -11,8 +11,7 @@ service cloud.firestore {
     function isSuperAdmin() {
       return isAuthenticated() && (
         request.auth.token.email == "tassiahillhospital@gmail.com" ||
-        request.auth.token.email == "moraasdorcah@gmail.com" ||
-        request.auth.token.email == "urbaninteriorkenya@gmail.com"
+        request.auth.token.email == "moraasdorcah@gmail.com"
       );
     }
 

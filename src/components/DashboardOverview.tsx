@@ -567,17 +567,22 @@ export default function DashboardOverview({
 
           <motion.div 
             whileHover={{ y: -3 }}
-            onClick={() => onNavigateToTab("reception")}
-            className="bg-white border border-cyan-100 rounded-2xl p-5 shadow-sm hover:shadow-md cursor-pointer transition-all"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open_biometric_window", { detail: { patientName: "Outpatient Queue", fullscreen: true } }));
+            }}
+            className="bg-white border border-cyan-100 rounded-2xl p-5 shadow-sm hover:shadow-md cursor-pointer transition-all group"
+            title="Tap to open Biometric Scanner (Full Screen / Top Popup)"
           >
             <div className="flex items-center justify-between mb-3">
-              <div className="p-2.5 bg-cyan-50 text-cyan-700 rounded-xl">
+              <div className="p-2.5 bg-cyan-50 text-cyan-700 rounded-xl group-hover:bg-cyan-600 group-hover:text-white transition-colors">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <span className="text-xs font-bold text-cyan-700 uppercase">Biometric Verified</span>
             </div>
             <span className="text-4xl font-black text-slate-900 font-mono">{verifiedBiometric}</span>
-            <p className="text-xs text-slate-500 mt-2">Verified via SHA / Fingerprint portal</p>
+            <p className="text-xs text-cyan-700 font-medium mt-2 flex items-center gap-1">
+              <span>👆 Tap to open full screen scanner</span>
+            </p>
           </motion.div>
 
           <motion.div 

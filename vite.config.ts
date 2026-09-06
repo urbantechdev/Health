@@ -1,16 +1,8 @@
-// Ensure ESM plugins like vite-plugin-pwa resolve their own package.json instead of tsx global '.'
-if (typeof (globalThis as any).__dirname !== 'undefined') {
-  delete (globalThis as any).__dirname;
-}
-
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { defineConfig } from 'vite';
+import {defineConfig} from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
   return {
@@ -52,7 +44,6 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           runtimeCaching: [
             {
@@ -97,8 +88,11 @@ export default defineConfig(() => {
       },
     },
     server: {
-      port: 3000,
-      host: '0.0.0.0',
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      hmr: process.env.DISABLE_HMR !== 'true',
+      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
+      watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
 });

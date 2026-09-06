@@ -26,6 +26,10 @@ export interface QueueTicket {
   biometricStatus: "verified" | "not_verified";
   service: string; // e.g., "General Doctor", "Laboratory", "Pharmacy", "Radiology"
   currentDepartment: "reception" | "queue" | "doctor" | "laboratory" | "radiology" | "pharmacy" | "billing" | "labour_room" | "gyna" | "inpatient_ward" | string;
+  department?: string;
+  assignedDoctorId?: string;
+  consultationDoctorId?: string;
+  assignedDoctor?: string;
   status: "pending" | "serving" | "completed" | "skipped";
   notes?: string;
   timestamp: string;
@@ -86,10 +90,15 @@ export interface Medication {
   category: string;
   quantity: number;
   minThreshold: number;
+  stock?: number;
+  dosage?: string;
+  barcode?: string;
   batchNo: string;
+  batchNumber?: string;
   expiryDate: string; // YYYY-MM-DD
   price: number;
   imageUrl?: string;
+  updatedAt?: any;
 }
 
 export interface PrescriptionItem {
@@ -111,9 +120,13 @@ export interface PrescriptionItem {
 
 export interface MedicalRecord {
   id: string;
+  patientId?: string;
   patientName: string;
   name?: string; // Compatibility alias
   patientNumber?: string;
+  patientNo?: string;
+  nextOfKin?: any;
+  nextOfKinPhone?: string;
   insuranceScheme?: string;
   nationalId: string;
   phone: string;
@@ -123,6 +136,7 @@ export interface MedicalRecord {
   shaEligible: "eligible" | "not_eligible" | "unchecked";
   shaId?: string;
   visits: ClinicalVisit[];
+  vitals?: any;
   latestVitals?: {
     temp?: string;
     bp?: string;
@@ -145,6 +159,17 @@ export interface MedicalRecord {
   activeEncounterId?: string;
   chronicConditions?: string;
   allergies?: any;
+  ticketNo?: string;
+  symptoms?: string;
+  residence?: string;
+  doctorName?: string;
+  diagnosis?: string;
+  paymentScheme?: string;
+  insurancePolicyNo?: string;
+  isResultsReview?: boolean;
+  prescriptions?: any;
+  referrals?: any;
+  sourceStation?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -289,10 +314,17 @@ export interface Encounter {
   bloodType?: string;
   status: EncounterStatus;
   admissionType: AdmissionType;
+  admissionDate?: string;
+  initialSymptoms?: string;
+  initialDiagnosis?: string;
+  initialVitals?: any;
+  recordedBy?: string;
   assignedWard?: string;
+  assignedWardName?: string;
   assignedWardId?: string;
   assignedBed?: string;
   assignedBedId?: string;
+  assignedBedNumber?: string;
   admittedAt?: string;
   dischargedAt?: string | null;
   dischargedBy?: string;
@@ -302,6 +334,25 @@ export interface Encounter {
   doctorDischargeApprovedBy?: string;
   doctorDischargeApprovedAt?: string;
   doctorClearance?: DoctorDischargeClearance;
+  clinicalDischargeSigned?: boolean;
+  clinicalDischargeNotes?: string;
+  clinicalDischargedBy?: string;
+  clinicalDischargedAt?: string;
+  dischargeCondition?: string;
+  dischargeMedications?: any;
+  followUpDate?: string;
+  followUpInstructions?: string;
+  doctorSignature?: string;
+  deceasedNotes?: string;
+  deceasedDate?: string;
+  timeOfDeath?: string;
+  certifiedByDoctor?: string;
+  causeOfDeathImmediate?: string;
+  causeOfDeathUnderlying?: string;
+  mohDeathNoticeNo?: string;
+  morgueUnitName?: string;
+  cabinetOrBayNumber?: string;
+  lastBedTransfer?: any;
   bedTransfers?: BedTransferRecord[];
   morgueAdmission?: MorgueAdmissionRecord;
   morgueTransferredAt?: string;
@@ -330,6 +381,7 @@ export interface EncounterVital {
   notes?: string;
   recordedBy: string;
   recordedAt: string;
+  timestamp?: string;
 }
 
 export interface EncounterPrescription {
@@ -371,6 +423,7 @@ export interface EncounterBillItem {
   quantity: number;
   total: number;
   isPaid: boolean;
+  status?: string;
   paidAt?: string;
   paymentMethod?: string;
   invoiceId?: string;
@@ -440,6 +493,7 @@ export interface Invoice {
   mpesaReceiptNumber?: string;
   transactionRef?: string;
   kraCompliantInvoiceNo?: string;
+  etimsControlUnitNumber?: string;
   shaClaimId?: string;
   timestamp: string;
   encounterId?: string;
@@ -657,15 +711,23 @@ export interface ChatTicketItem {
 }
 
 export interface ChatTicketAttachment {
-  ticketId: string;
-  ticketNo: string; // e.g. "INV-4821", "QUO-9201", "TRF-3810", "ORD-1029"
-  type: "invoice" | "pre_quote" | "patient_transfer" | "service_order" | "clinical_handover";
+  id?: string;
+  ticketId?: string;
+  ticketNo?: string; // e.g. "INV-4821", "QUO-9201", "TRF-3810", "ORD-1029"
+  ticketNumber?: string;
+  type?: "invoice" | "pre_quote" | "patient_transfer" | "service_order" | "clinical_handover" | string;
   title: string;
+  description?: string;
+  category?: string;
+  priority?: string;
+  raisedBy?: string;
   patientName?: string;
+  patientTicketNo?: string;
   patientId?: string;
   nationalId?: string;
   patientAge?: number | string;
   patientGender?: string;
+  targetRole?: string;
   fromDepartment?: string;
   fromRole?: string;
   fromUserName?: string;
@@ -696,7 +758,7 @@ export interface ChatTicketAttachment {
     weight?: string;
   };
   urgency?: "Routine" | "Urgent" | "STAT Emergency";
-  status: "pending" | "accepted" | "invoiced" | "paid" | "completed" | "declined" | "on_hold";
+  status: "pending" | "accepted" | "invoiced" | "paid" | "completed" | "declined" | "on_hold" | string;
   statusUpdatedBy?: string;
   statusUpdatedAt?: string;
   actionNotes?: string;

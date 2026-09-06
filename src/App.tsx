@@ -36,6 +36,7 @@ import KenyanHospitalFormsModal, { KenyanFormType } from "./components/KenyanHos
 import PatientHistoryLookupModal from "./components/PatientHistoryLookupModal";
 import ReceiptsClearanceModal from "./components/ReceiptsClearanceModal";
 import RolePortalLogin from "./components/RolePortalLogin";
+import BiometricScannerModal from "./components/BiometricScannerModal";
 import SystemPolicyTermsModal from "./components/SystemPolicyTermsModal";
 import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
@@ -428,6 +429,13 @@ export default function App() {
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [showPolicyTermsModal, setShowPolicyTermsModal] = useState<boolean>(false);
   const [showOfflineManagerModal, setShowOfflineManagerModal] = useState<boolean>(false);
+  const [showBiometricModal, setShowBiometricModal] = useState<boolean>(false);
+  const [biometricModalData, setBiometricModalData] = useState<{
+    patientName?: string;
+    nationalId?: string;
+    defaultFullscreen?: boolean;
+    onCaptured?: (res: any) => void;
+  }>({});
   const [policyTermsDefaultTab, setPolicyTermsDefaultTab] = useState<"terms" | "privacy" | "infosec" | "governance" | "signoff">("privacy");
   const [profileOverride, setProfileOverride] = useState<{
     displayName?: string;
@@ -510,15 +518,25 @@ export default function App() {
       }
     }
 
-    // 3. Favicon Application
-    if (brandFaviconUrl) {
+    // 3. Favicon & Window Logo Application
+    const activeWindowLogo = brandFaviconUrl || brandLogoUrl || "/favicon.ico";
+    if (activeWindowLogo) {
       let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
       if (!link) {
         link = document.createElement("link");
         link.rel = "icon";
         document.head.appendChild(link);
       }
-      link.href = brandFaviconUrl;
+      link.href = activeWindowLogo;
+
+      // Synchronize touch icon with active window logo for mobile PWA bookmarks
+      let touchLink: HTMLLinkElement | null = document.querySelector("link[rel='apple-touch-icon']");
+      if (!touchLink) {
+        touchLink = document.createElement("link");
+        touchLink.rel = "apple-touch-icon";
+        document.head.appendChild(touchLink);
+      }
+      touchLink.href = brandLogoUrl || activeWindowLogo;
     }
 
     // 4. Tab Title Application
@@ -527,7 +545,7 @@ export default function App() {
     } else {
       document.title = "HMIS";
     }
-  }, [brandFontId, brandThemeColor, brandFaviconUrl, brandCustomName, brandBlockEdgeColor, tenant.type]);
+  }, [brandFontId, brandThemeColor, brandFaviconUrl, brandLogoUrl, brandCustomName, brandBlockEdgeColor, tenant.type]);
 
   // Synchronize font size changes and branding edits from AdminPanel
   useEffect(() => {
@@ -538,7 +556,7 @@ export default function App() {
       }
     };
     const handleBrandingSync = () => {
-      setBrandLogoUrl(localStorage.getItem("platform_logo_url") || "");
+      setBrandLogoUrl(localStorage.getItem("platform_logo_url") || DEFAULT_BRAND_LOGO);
       setBrandFaviconUrl(localStorage.getItem("platform_favicon_url") || "");
       setBrandCustomName(localStorage.getItem("platform_custom_brand_name") || "");
       setBrandFontId(localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
@@ -1322,7 +1340,7 @@ export default function App() {
         {/* Splash Screen Loader with Animated Logo and Clinical Branding */}
         <SplashScreenLoader
           isVisible={isInitialLoading}
-          minDurationMs={1800}
+          minDurationMs={2500}
           onComplete={() => setIsInitialLoading(false)}
           logoUrl={brandLogoUrl}
           hospitalName={brandCustomName || "The Tassia Hill Hospital"}
@@ -1664,6 +1682,24 @@ export default function App() {
                 )}
               </button>
             )}
+
+            {/* Dedicated Full Screen Biometric Scanner Hub Button */}
+            <button
+              id="btn-header-biometric-scanner"
+              onClick={() => {
+                setBiometricModalData({
+                  patientName: "Hospital Intake",
+                  nationalId: "",
+                  defaultFullscreen: true
+                });
+                setShowBiometricModal(true);
+              }}
+              title="Tap to open Biometric Scanner & Phone Fingerprint Window (Full Screen / Top Popup)"
+              className="relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+            >
+              <Fingerprint className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+            </button>
 
             {/* Instant Patient ID Lookup & Full EHR Treatment History Modal Button */}
             <button
@@ -3013,13 +3049,28 @@ export default function App() {
       onRefreshNetwork={handleRefreshNetwork}
     />
 
+    {/* Full Screen Biometric Scanner & Phone Fingerprint Modal on Top of Everything */}
+    <BiometricScannerModal
+      isOpen={showBiometricModal}
+      onClose={() => setShowBiometricModal(false)}
+      patientName={biometricModalData.patientName || "Patient"}
+      nationalId={biometricModalData.nationalId || ""}
+      defaultFullscreen={biometricModalData.defaultFullscreen}
+      onBiometricCaptured={(res) => {
+        if (biometricModalData.onCaptured) {
+          biometricModalData.onCaptured(res);
+        }
+        setShowBiometricModal(false);
+      }}
+    />
+
     {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}
     <ModernPromptHost />
 
     {/* Splash Screen Loader with Animated Logo and Clinical Branding */}
     <SplashScreenLoader
       isVisible={isInitialLoading}
-      minDurationMs={1800}
+      minDurationMs={2500}
       onComplete={() => setIsInitialLoading(false)}
       logoUrl={brandLogoUrl}
       hospitalName={brandCustomName || "The Tassia Hill Hospital"}

@@ -22,7 +22,9 @@ import {
   Radio,
   ExternalLink,
   Copy,
-  Check
+  Check,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import QRCode from "qrcode";
 import {
@@ -48,6 +50,7 @@ interface BiometricScannerModalProps {
   onBiometricCaptured: (result: BiometricScanResult) => void;
   patientName?: string;
   nationalId?: string;
+  defaultFullscreen?: boolean;
 }
 
 type BiometricTab = "phone_direct" | "phone_remote_qr" | "usb_hardware" | "camera_optical";
@@ -57,9 +60,11 @@ export default function BiometricScannerModal({
   onClose,
   onBiometricCaptured,
   patientName = "Patient",
-  nationalId = ""
+  nationalId = "",
+  defaultFullscreen = false
 }: BiometricScannerModalProps) {
   const [platform, setPlatform] = useState<ClientPlatformInfo>(() => detectClientPlatform());
+  const [isFullscreen, setIsFullscreen] = useState(defaultFullscreen);
   const [activeTab, setActiveTab] = useState<BiometricTab>("phone_direct");
   const [devices, setDevices] = useState<BiometricDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<BiometricDevice | null>(null);
@@ -364,10 +369,25 @@ export default function BiometricScannerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-white w-full max-w-2xl rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div
+      id="biometric-modal-overlay"
+      className={`fixed inset-0 z-[100000] flex items-center justify-center ${
+        isFullscreen ? "p-0" : "p-2 sm:p-4"
+      } bg-slate-950/85 backdrop-blur-md animate-fade-in select-none`}
+    >
+      <div
+        id="biometric-modal-container"
+        className={`bg-white w-full transition-all duration-200 border border-slate-200 shadow-2xl overflow-hidden flex flex-col ${
+          isFullscreen
+            ? "fixed inset-0 w-screen h-screen max-w-none max-h-none rounded-none border-0"
+            : "max-w-2xl rounded-3xl max-h-[92vh]"
+        }`}
+      >
         {/* Header */}
-        <div className="p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white flex items-center justify-between border-b border-slate-800">
+        <div
+          onDoubleClick={() => setIsFullscreen(!isFullscreen)}
+          className="p-4 sm:p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white flex items-center justify-between border-b border-slate-800 shrink-0"
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-inner">
               <Fingerprint className="w-6 h-6 animate-pulse" />
@@ -386,16 +406,55 @@ export default function BiometricScannerModal({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Full Screen Toggle Button */}
+            <button
+              id="btn-toggle-biometric-fullscreen"
+              type="button"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer border border-slate-700"
+              title={isFullscreen ? "Exit Full Screen" : "Tap for Full Screen"}
+            >
+              {isFullscreen ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline text-[11px]">Exit Full Screen</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline text-[11px]">Full Screen</span>
+                </>
+              )}
+            </button>
+
+            {/* Close Button */}
+            <button
+              id="btn-close-biometric-window"
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              title="Close Biometric Window"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
+        {/* Quick Tap for Full Screen Banner (when not fullscreen) */}
+        {!isFullscreen && (
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(true)}
+            className="w-full bg-indigo-50/80 hover:bg-indigo-100/80 text-indigo-900 border-b border-indigo-100 text-[11px] font-bold py-1 px-3 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Maximize2 className="w-3 h-3 text-indigo-600" />
+            <span>Tap here or button above to make Biometric Window Full Screen</span>
+          </button>
+        )}
+
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 bg-slate-50/80 p-1 gap-1 overflow-x-auto text-xs font-bold text-slate-600">
+        <div className="flex border-b border-slate-200 bg-slate-50/80 p-1 gap-1 overflow-x-auto text-xs font-bold text-slate-600 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab("phone_direct")}
