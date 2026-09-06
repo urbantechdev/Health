@@ -232,6 +232,6 @@ npm start
 **TASSIAHILL HOSPITAL Enterprise HMS** is designed, developed, and maintained by **Urban Technology Developer (urbantechdev)**.
 
 - **Website**: [https://urbantechdev.com](https://urbantechdev.com)
-- **Technical Support**: `urbaninteriorkenya@gmail.com` / `moraasdorcah@gmail.com`
+- **Technical Support**: `confidential"
 - **Location**: Nairobi, Kenya
 - **Copyright**: © 2026 Urban Technology Developer. All rights reserved.
