@@ -366,6 +366,11 @@ export interface Encounter {
   attendingDoctorName?: string;
   attendingDoctorId?: string;
   activeQueueTicketId?: string;
+  notes?: string;
+  paymentScheme?: string;
+  insuranceScheme?: string;
+  insuranceNumber?: string;
+  activeTicketNo?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -392,7 +397,10 @@ export interface EncounterPrescription {
   instructions: string;
   unitPrice: number;
   totalPrice: number;
-  status: "pending" | "dispensed" | "cancelled";
+  status: "pending" | "dispensed" | "cancelled" | "BILLED";
+  isBilled?: boolean;
+  isPaid?: boolean;
+  billedInvoiceId?: string;
   prescribedBy: string;
   dispensedBy?: string;
   dispensedAt?: string;
@@ -406,7 +414,10 @@ export interface EncounterLabRequest {
   sampleType?: string;
   notes?: string;
   unitPrice: number;
-  status: "pending" | "sample_collected" | "processing" | "completed" | "cancelled";
+  status: "pending" | "sample_collected" | "processing" | "completed" | "cancelled" | "BILLED";
+  isBilled?: boolean;
+  isPaid?: boolean;
+  billedInvoiceId?: string;
   results?: string;
   abnormalFlags?: string;
   orderedBy: string;
