@@ -279,7 +279,17 @@ export async function checkoutPatientCart(
   }
 
   if (snap.exists()) {
+    const updatedItems = (cartData?.items || []).map((i) => ({
+      ...i,
+      status: "checked_out" as const,
+      finalInvoiceId: invoiceId,
+      checkedOutAt: new Date().toISOString()
+    }));
+
     await updateDoc(cartRef, {
+      items: updatedItems,
+      totalAmount: 0,
+      itemCount: 0,
       status: "checked_out",
       finalInvoiceId: invoiceId,
       checkedOutBy: options.cashierName || checkoutInfo?.checkedOutBy || "Cashier",
