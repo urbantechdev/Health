@@ -4,7 +4,7 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from "firebase/firestore";
 import { SystemTicket } from "../types";
 import { closeAutoTicketById, deleteTicketById, deleteMultipleTicketsById } from "../lib/ticketService";
-import { upsertUnifiedPatientRecord } from "../lib/patientSyncService";
+import { upsertUnifiedPatientRecord, createTriageQueueTicket } from "../lib/patientSyncService";
 import { toast, modernConfirm } from "../lib/promptService";
 import { 
   AnimatedSuccessTick, 
@@ -305,31 +305,48 @@ export default function TicketSystem() {
       await addDoc(collection(db, "system_tickets"), newTicketData);
 
       // 3. Auto-sync to Queue Board so the department instantly sees the patient
-      let prefix = "GEN";
-      if (department === "laboratory") prefix = "LAB";
-      else if (department === "radiology") prefix = "RAD";
-      else if (department === "pharmacy") prefix = "PHA";
-      else if (department === "billing") prefix = "BIL";
-      else if (department === "emergency") prefix = "EMG";
-      else if (department === "labour_room") prefix = "LBR";
-      else if (department === "gyna") prefix = "GYN";
+      if (department === "triage" || department === "reception") {
+        if (!syncResult.createdTriageQueue) {
+          // Returning patient requested triage ticket - ensure triage queue entry
+          await createTriageQueueTicket({
+            patientId: syncResult.patientId,
+            patientName: cleanName,
+            nationalId: trimmedId,
+            phone: cleanPhone,
+            priority,
+            ticketNo: tckNo,
+            notes: visitReason.trim() || "Consultation requested"
+          });
+        }
+      } else {
+        // Direct non-triage department (e.g. Lab, Radiology, Pharmacy)
+        let prefix = "GEN";
+        if (department === "laboratory") prefix = "LAB";
+        else if (department === "radiology") prefix = "RAD";
+        else if (department === "pharmacy") prefix = "PHA";
+        else if (department === "billing") prefix = "BIL";
+        else if (department === "emergency") prefix = "EMG";
+        else if (department === "labour_room") prefix = "LBR";
+        else if (department === "gyna") prefix = "GYN";
 
-      const queueTicketNo = `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
+        const queueTicketNo = `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
 
-      await addDoc(collection(db, "queue"), {
-        ticketNo: queueTicketNo,
-        patientName: cleanName,
-        nationalId: trimmedId,
-        biometricStatus: "not_verified",
-        service: visitReason.trim() || "General Consultation",
-        currentDepartment: department,
-        status: "pending",
-        patientId: syncResult.patientId,
-        timestamp: new Date().toISOString(),
-        phone: cleanPhone || "N/A",
-        age: 30,
-        issue: visitReason.trim() || "Consultation requested",
-      });
+        await addDoc(collection(db, "queue"), {
+          ticketNo: queueTicketNo,
+          patientName: cleanName,
+          nationalId: trimmedId,
+          biometricStatus: "not_verified",
+          service: visitReason.trim() || "General Consultation",
+          currentDepartment: department,
+          department: department.charAt(0).toUpperCase() + department.slice(1),
+          status: "pending",
+          patientId: syncResult.patientId,
+          timestamp: new Date().toISOString(),
+          phone: cleanPhone || "N/A",
+          age: 30,
+          issue: visitReason.trim() || "Consultation requested",
+        });
+      }
 
       // Immediately hide the create modal window as requested
       setShowModal(false);

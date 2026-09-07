@@ -564,52 +564,79 @@ export function subscribeEncounterSubcollections(
     nursingNotes: EncounterNursingNote[];
     doctorNotes: EncounterDoctorNote[];
     billingItems: EncounterBillItem[];
+    billItems: EncounterBillItem[];
   }) => void
 ): () => void {
-  const unsubVitals = onSnapshot(collection(db, "encounters", encounterId, "vitals"), (s) => {
-    const vitals = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterVital));
-    callbackData.vitals = vitals;
-    callback({ ...callbackData });
-  });
-
-  const unsubRx = onSnapshot(collection(db, "encounters", encounterId, "prescriptions"), (s) => {
-    const prescriptions = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterPrescription));
-    callbackData.prescriptions = prescriptions;
-    callback({ ...callbackData });
-  });
-
-  const unsubLab = onSnapshot(collection(db, "encounters", encounterId, "lab_requests"), (s) => {
-    const labRequests = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterLabRequest));
-    callbackData.labRequests = labRequests;
-    callback({ ...callbackData });
-  });
-
-  const unsubNurse = onSnapshot(collection(db, "encounters", encounterId, "nursing_notes"), (s) => {
-    const nursingNotes = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterNursingNote));
-    callbackData.nursingNotes = nursingNotes;
-    callback({ ...callbackData });
-  });
-
-  const unsubDoc = onSnapshot(collection(db, "encounters", encounterId, "doctor_notes"), (s) => {
-    const doctorNotes = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterDoctorNote));
-    callbackData.doctorNotes = doctorNotes;
-    callback({ ...callbackData });
-  });
-
-  const unsubBill = onSnapshot(collection(db, "encounters", encounterId, "billing_items"), (s) => {
-    const billingItems = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterBillItem));
-    callbackData.billingItems = billingItems;
-    callback({ ...callbackData });
-  });
-
   const callbackData = {
     vitals: [] as EncounterVital[],
     prescriptions: [] as EncounterPrescription[],
     labRequests: [] as EncounterLabRequest[],
     nursingNotes: [] as EncounterNursingNote[],
     doctorNotes: [] as EncounterDoctorNote[],
-    billingItems: [] as EncounterBillItem[]
+    billingItems: [] as EncounterBillItem[],
+    billItems: [] as EncounterBillItem[]
   };
+
+  const unsubVitals = onSnapshot(
+    collection(db, "encounters", encounterId, "vitals"),
+    (s) => {
+      const vitals = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterVital));
+      callbackData.vitals = vitals;
+      callback({ ...callbackData });
+    },
+    (err) => console.warn("[encounterService] vitals error:", err)
+  );
+
+  const unsubRx = onSnapshot(
+    collection(db, "encounters", encounterId, "prescriptions"),
+    (s) => {
+      const prescriptions = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterPrescription));
+      callbackData.prescriptions = prescriptions;
+      callback({ ...callbackData });
+    },
+    (err) => console.warn("[encounterService] prescriptions error:", err)
+  );
+
+  const unsubLab = onSnapshot(
+    collection(db, "encounters", encounterId, "lab_requests"),
+    (s) => {
+      const labRequests = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterLabRequest));
+      callbackData.labRequests = labRequests;
+      callback({ ...callbackData });
+    },
+    (err) => console.warn("[encounterService] lab_requests error:", err)
+  );
+
+  const unsubNurse = onSnapshot(
+    collection(db, "encounters", encounterId, "nursing_notes"),
+    (s) => {
+      const nursingNotes = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterNursingNote));
+      callbackData.nursingNotes = nursingNotes;
+      callback({ ...callbackData });
+    },
+    (err) => console.warn("[encounterService] nursing_notes error:", err)
+  );
+
+  const unsubDoc = onSnapshot(
+    collection(db, "encounters", encounterId, "doctor_notes"),
+    (s) => {
+      const doctorNotes = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterDoctorNote));
+      callbackData.doctorNotes = doctorNotes;
+      callback({ ...callbackData });
+    },
+    (err) => console.warn("[encounterService] doctor_notes error:", err)
+  );
+
+  const unsubBill = onSnapshot(
+    collection(db, "encounters", encounterId, "billing_items"),
+    (s) => {
+      const billingItems = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterBillItem));
+      callbackData.billingItems = billingItems;
+      callbackData.billItems = billingItems;
+      callback({ ...callbackData });
+    },
+    (err) => console.warn("[encounterService] billing_items error:", err)
+  );
 
   return () => {
     unsubVitals();

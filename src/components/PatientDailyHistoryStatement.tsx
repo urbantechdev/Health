@@ -209,23 +209,51 @@ export default function PatientDailyHistoryStatement({
   const unifiedDailyVisits = useMemo(() => {
     const visitsMap = new Map<string, UnifiedDailyPatientVisit>();
 
+    const toIsoString = (val: any): string => {
+      if (!val) return "";
+      if (typeof val === "string") return val;
+      if (typeof val === "object") {
+        if (typeof val.toDate === "function") {
+          try {
+            return val.toDate().toISOString();
+          } catch (e) {
+            return "";
+          }
+        }
+        if (typeof val.seconds === "number") {
+          return new Date(val.seconds * 1000).toISOString();
+        }
+      }
+      if (typeof val === "number") {
+        return new Date(val).toISOString();
+      }
+      return String(val);
+    };
+
     const isInDateRange = (dateStr?: string) => {
       if (!dateStr) return false;
       // Extract YYYY-MM-DD from ISO or standard format
-      const cleanDate = dateStr.slice(0, 10);
+      const cleanDate = toIsoString(dateStr).slice(0, 10);
       return cleanDate >= activeDateRange.start && cleanDate <= activeDateRange.end;
     };
 
     // 1. Process Queue Tickets for the date
-    tickets.forEach((t) => {
-      const ticketDate = t.timestamp ? t.timestamp.slice(0, 10) : getTodayStr();
+    (tickets || []).forEach((t) => {
+      if (!t) return;
+      const rawTime = toIsoString(t.timestamp);
+      const ticketDate = rawTime ? rawTime.slice(0, 10) : getTodayStr();
       if (!isInDateRange(ticketDate)) return;
 
-      const patientKey = t.nationalId ? `nat_${t.nationalId.trim()}` : `name_${normalizeString(t.patientName)}_${ticketDate}`;
+      const patientKey = t.nationalId ? `nat_${String(t.nationalId).trim()}` : `name_${normalizeString(t.patientName)}_${ticketDate}`;
       
-      const timeStr = t.timestamp && t.timestamp.includes("T") 
-        ? new Date(t.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        : t.timestamp ? t.timestamp.slice(11, 16) || "Day Visit" : "Day Visit";
+      let timeStr = "Day Visit";
+      if (rawTime) {
+        try {
+          timeStr = new Date(rawTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        } catch (e) {
+          timeStr = rawTime.slice(11, 16) || "Day Visit";
+        }
+      }
 
       // Detect procedures from ticket notes, issue, or procedures field
       const proceduresList: UnifiedDailyPatientVisit["procedures"] = [];
@@ -336,40 +364,53 @@ export default function PatientDailyHistoryStatement({
     });
 
     // 2. Link or Add Invoices for the date
-    invoices.forEach((inv) => {
-      const invDate = inv.timestamp ? inv.timestamp.slice(0, 10) : getTodayStr();
+    (invoices || []).forEach((inv) => {
+      if (!inv) return;
+      const rawTime = toIsoString(inv.timestamp || (inv as any).createdAt);
+      const invDate = rawTime ? rawTime.slice(0, 10) : getTodayStr();
       if (!isInDateRange(invDate)) return;
 
-      const patientKey = inv.nationalId ? `nat_${inv.nationalId.trim()}` : `name_${normalizeString(inv.patientName)}_${invDate}`;
+      const patientKey = inv.nationalId ? `nat_${String(inv.nationalId).trim()}` : `name_${normalizeString(inv.patientName)}_${invDate}`;
       let visit = visitsMap.get(patientKey);
 
       const itemsList = (inv.items || []).map((item) => ({
-        description: item.description,
+        description: item.description || "Service Item",
         department: item.department,
-        amount: item.amount || 0
+        amount: Number(item.amount) || 0
       }));
 
-      const totalBilled = inv.total || 0;
-      const totalPaid = inv.paymentStatus === "paid" ? totalBilled : (inv.paidAmount || 0);
+      const totalBilled = Number(inv.total) || 0;
+      const totalPaid = inv.paymentStatus === "paid" ? totalBilled : (Number(inv.paidAmount) || 0);
       const balance = Math.max(0, totalBilled - totalPaid);
 
       // Check if invoice has procedure line items
       const procedureItems = itemsList.filter((item) => 
         (item.department && item.department.toLowerCase().includes("procedure")) ||
-        item.description.toLowerCase().includes("sutur") ||
-        item.description.toLowerCase().includes("dress") ||
-        item.description.toLowerCase().includes("inject") ||
-        item.description.toLowerCase().includes("minor surg") ||
-        item.description.toLowerCase().includes("catheter") ||
-        item.description.toLowerCase().includes("nebuliz") ||
-        item.description.toLowerCase().includes("plaster") ||
-        item.description.toLowerCase().includes("pop") ||
-        item.description.toLowerCase().includes("ecg") ||
-        item.description.toLowerCase().includes("ultrasound") ||
-        item.description.toLowerCase().includes("x-ray") ||
-        item.description.toLowerCase().includes("wash") ||
-        item.description.toLowerCase().includes("cannul")
+        (item.description && (
+          item.description.toLowerCase().includes("sutur") ||
+          item.description.toLowerCase().includes("dress") ||
+          item.description.toLowerCase().includes("inject") ||
+          item.description.toLowerCase().includes("minor surg") ||
+          item.description.toLowerCase().includes("catheter") ||
+          item.description.toLowerCase().includes("nebuliz") ||
+          item.description.toLowerCase().includes("plaster") ||
+          item.description.toLowerCase().includes("pop") ||
+          item.description.toLowerCase().includes("ecg") ||
+          item.description.toLowerCase().includes("ultrasound") ||
+          item.description.toLowerCase().includes("x-ray") ||
+          item.description.toLowerCase().includes("wash") ||
+          item.description.toLowerCase().includes("cannul")
+        ))
       );
+
+      let formattedVisitTime = "Day Visit";
+      if (rawTime) {
+        try {
+          formattedVisitTime = new Date(rawTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        } catch (e) {
+          formattedVisitTime = rawTime.slice(11, 16) || "Day Visit";
+        }
+      }
 
       if (!visit) {
         // Create visit from invoice
@@ -385,16 +426,16 @@ export default function PatientDailyHistoryStatement({
           patientName: inv.patientName || "Patient",
           nationalId: inv.nationalId || "N/A",
           visitDate: invDate,
-          visitTime: inv.timestamp ? new Date(inv.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Day Visit",
-          rawTimestamp: inv.timestamp,
+          visitTime: formattedVisitTime,
+          rawTimestamp: rawTime,
           status: inv.paymentStatus === "paid" ? "completed" : "pending",
           department: "Billing",
           service: "Outpatient Care & Billing",
           diagnosis: "Clinical Consultation & Services",
           symptoms: "Services Rendered",
           procedures: procList,
-          labTests: itemsList.filter(i => i.department?.toLowerCase() === "laboratory" || i.description.toLowerCase().includes("test") || i.description.toLowerCase().includes("lab")).map(i => ({ name: i.description, status: "Billed", cost: i.amount })),
-          prescriptions: itemsList.filter(i => i.department?.toLowerCase() === "pharmacy" || i.description.toLowerCase().includes("tab") || i.description.toLowerCase().includes("syrup") || i.description.toLowerCase().includes("cap")).map(i => ({ drugName: i.description, status: "Billed", cost: i.amount })),
+          labTests: itemsList.filter(i => (i.department && i.department.toLowerCase() === "laboratory") || (i.description && (i.description.toLowerCase().includes("test") || i.description.toLowerCase().includes("lab")))).map(i => ({ name: i.description, status: "Billed", cost: i.amount })),
+          prescriptions: itemsList.filter(i => (i.department && i.department.toLowerCase() === "pharmacy") || (i.description && (i.description.toLowerCase().includes("tab") || i.description.toLowerCase().includes("syrup") || i.description.toLowerCase().includes("cap")))).map(i => ({ drugName: i.description, status: "Billed", cost: i.amount })),
           statement: {
             invoiceNumber: inv.id,
             kraInvoiceNo: inv.kraCompliantInvoiceNo,
@@ -441,15 +482,16 @@ export default function PatientDailyHistoryStatement({
     });
 
     // 3. Link Patient Master Records (Visits, Clinical Notes, Prescriptions)
-    patients.forEach((pRecord) => {
+    (patients || []).forEach((pRecord) => {
       if (!pRecord || !pRecord.visits || !Array.isArray(pRecord.visits) || pRecord.visits.length === 0) return;
 
       pRecord.visits.forEach((v) => {
         if (!v) return;
-        const vDate = v.date ? v.date.slice(0, 10) : "";
+        const rawTime = toIsoString(v.date);
+        const vDate = rawTime ? rawTime.slice(0, 10) : "";
         if (!isInDateRange(vDate)) return;
 
-        const patientKey = pRecord.nationalId ? `nat_${pRecord.nationalId.trim()}` : `name_${normalizeString(pRecord.patientName)}_${vDate}`;
+        const patientKey = pRecord.nationalId ? `nat_${String(pRecord.nationalId).trim()}` : `name_${normalizeString(pRecord.patientName)}_${vDate}`;
         let visit = visitsMap.get(patientKey);
 
         if (visit) {
@@ -508,7 +550,7 @@ export default function PatientDailyHistoryStatement({
             gender: pRecord.gender,
             visitDate: vDate,
             visitTime: "Consultation",
-            rawTimestamp: v.date,
+            rawTimestamp: rawTime,
             status: "completed",
             department: "Doctor Desk",
             service: "Clinical Consultation",
@@ -540,7 +582,9 @@ export default function PatientDailyHistoryStatement({
 
     // Return sorted by timestamp descending
     return Array.from(visitsMap.values()).sort((a, b) => {
-      return (b.rawTimestamp || "").localeCompare(a.rawTimestamp || "");
+      const timeA = toIsoString(a.rawTimestamp);
+      const timeB = toIsoString(b.rawTimestamp);
+      return timeB.localeCompare(timeA);
     });
   }, [tickets, invoices, patients, activeDateRange]);
 

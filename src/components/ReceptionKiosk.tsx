@@ -16,14 +16,15 @@ import {
   Receipt,
   Stethoscope
 } from "lucide-react";
-import { collection, addDoc, doc, setDoc, query, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, doc, setDoc, query, where, getDocs, updateDoc } from "firebase/firestore";
 import { db, cleanFirestoreData } from "../lib/firebase";
 import { toast } from "../lib/promptService";
 import { printElement } from "../lib/printUtils";
-import { upsertUnifiedPatientRecord } from "../lib/patientSyncService";
+import { upsertUnifiedPatientRecord, createTriageQueueTicket } from "../lib/patientSyncService";
 import { createHospitalEncounter } from "../lib/encounterService";
 import { addChargeToCart } from "../lib/patientCartService";
 import { checkDuplicatePatientRegistration } from "../lib/deduplicationService";
+import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 import BiometricScannerModal from "./BiometricScannerModal";
 
 interface ReceptionKioskProps {
@@ -69,7 +70,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
       if (!snap1.empty) {
         const foundData = snap1.docs[0].data() as any;
         setExistingPatientMatch({ ...foundData, id: snap1.docs[0].id });
-        if (!fullName) setFullName(foundData.name || foundData.fullName || "");
+        if (!fullName) setFullName(foundData.patientName || foundData.name || foundData.fullName || "");
         if (!phone) setPhone(foundData.phone || "");
         if (!age && foundData.age) setAge(foundData.age);
         if (foundData.gender) setGender(foundData.gender);
@@ -78,7 +79,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
         if (foundData.kinPhone || foundData.emergencyContact) setKinPhone(foundData.kinPhone || foundData.emergencyContact || "");
         if (foundData.paymentScheme) setPaymentScheme(foundData.paymentScheme);
         if (foundData.insurancePolicyNo || foundData.insuranceNumber) setInsurancePolicyNo(foundData.insurancePolicyNo || foundData.insuranceNumber || "");
-        toast.info(`Found registered patient record for ${foundData.name || "Patient"}. Profile auto-loaded.`, "Patient Profile Matched");
+        toast.info(`Found registered patient record for ${foundData.patientName || foundData.name || "Patient"}. Profile auto-loaded.`, "Patient Profile Matched");
       } else {
         setExistingPatientMatch(null);
       }
@@ -119,7 +120,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
         console.warn("Duplicate check notice:", dupErr);
       }
 
-      // 2. Upsert Patient in Medical Records
+      // 2. Upsert Patient in Medical Records (automatically creates Triage queue if new patient)
       const syncResult = await upsertUnifiedPatientRecord({
         id: targetPatientId,
         patientName: fullName.trim(),
@@ -133,7 +134,11 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
         paymentScheme,
         insurancePolicyNo: insurancePolicyNo.trim(),
         activeTicketNo: ticketNo,
-        currentDepartment: serviceStation === "Triage Station" ? "triage" : serviceStation === "Direct Doctor Review" ? "doctor" : serviceStation === "Billing" ? "billing" : "reception"
+        currentDepartment: "triage",
+        priority,
+        biometricStatus: biometricStatus === "verified" ? "verified" : "not_verified",
+        sourceStation: "Reception Desk",
+        autoQueueTriage: true
       });
 
       const finalPatientId = syncResult?.patientId || targetPatientId;
@@ -152,7 +157,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
           admissionDate: new Date().toISOString(),
           assignedWard: "Outpatient / OPD",
           notes: `Reception Intake: ${serviceStation} [${paymentScheme}]`,
-          activeTicketNo: ticketNo,
+          activeTicketNo: syncResult?.ticketNo || ticketNo,
           paymentScheme,
           insuranceScheme: paymentScheme === "Social Health Authority (SHA)" 
             ? "Social Health Authority (SHA)" 
@@ -173,7 +178,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
           patientName: fullName.trim(),
           nationalId: nationalId.trim(),
           phone: phone.trim(),
-          ticketNo,
+          ticketNo: syncResult?.ticketNo || ticketNo,
           encounterId,
           stage: "Reception & Intake",
           department: "Reception / OPD",
@@ -197,9 +202,43 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
         console.warn("Notice: Cart sync notice:", cartErr);
       }
 
-      // 5. Add to Live Hospital Queue
-      const queueDoc = {
-        ticketNo,
+      // 5. Ensure patient is queued in Live Hospital Queue at Triage
+      let activeQueueTicketNo = syncResult?.ticketNo || ticketNo;
+      let activeQueueId = syncResult?.queueId;
+
+      if (activeQueueId) {
+        // Triage queue was already automatically created by patientSyncService! Attach encounterId if available
+        if (encounterId) {
+          try {
+            await updateDoc(doc(db, "queue", activeQueueId), { encounterId });
+          } catch (e) {
+            console.warn("Notice: could not link encounter to auto-created triage queue:", e);
+          }
+        }
+      } else {
+        // Returning patient or encounter without pre-existing queue: ensure queued at Nurse Triage
+        const triageQueueResult = await createTriageQueueTicket({
+          patientId: finalPatientId,
+          patientName: fullName.trim(),
+          nationalId: nationalId.trim(),
+          phone: phone.trim(),
+          age: Number(age) || 30,
+          gender,
+          priority,
+          paymentScheme,
+          insurancePolicyNo: insurancePolicyNo.trim(),
+          biometricStatus: biometricStatus === "verified" ? "verified" : "not_verified",
+          ticketNo,
+          notes: `Reception Registration: Queued for Nurse Triage [${serviceStation}]`,
+          encounterId: encounterId || null
+        });
+        activeQueueTicketNo = triageQueueResult.ticketNo;
+        activeQueueId = triageQueueResult.queueId;
+      }
+
+      const queueTicketRecord = {
+        id: activeQueueId || "triage-ticket",
+        ticketNo: activeQueueTicketNo,
         patientId: finalPatientId,
         encounterId: encounterId || null,
         patientName: fullName.trim(),
@@ -207,24 +246,44 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
         phone: phone.trim(),
         age: Number(age) || 30,
         gender,
-        department: serviceStation === "Triage Station" ? "Triage" : serviceStation === "Direct Doctor Review" ? "Doctor" : serviceStation === "Billing" ? "Billing" : serviceStation,
-        status: "waiting",
+        department: "Triage",
+        currentDepartment: "triage",
+        service: "Nurse Triage & Vitals",
+        status: "pending",
         priority: priority === "STAT Emergency" ? "stat_emergency" : priority === "Urgent / Child" ? "urgent" : "normal",
         paymentScheme,
         insurancePolicyNo: insurancePolicyNo.trim(),
         biometricStatus: biometricStatus === "verified" ? "verified" : "not_verified",
         createdAt: new Date().toISOString(),
-        triageStage: "unassigned"
+        timestamp: new Date().toISOString(),
+        triageStage: "unassigned",
+        date: new Date().toLocaleString("en-KE")
       };
 
-      await addDoc(collection(db, "queue"), cleanFirestoreData(queueDoc));
+      setLastCreatedTicket(queueTicketRecord as any);
 
-      setLastCreatedTicket({
-        ...queueDoc,
-        date: new Date().toLocaleString("en-KE")
-      });
+      // Automated Voice Broadcast for Patient Turn / Arrival Announcement
+      try {
+        await voiceAnnouncer.announceTicketLogged({
+          ticketNo: activeQueueTicketNo,
+          patientName: fullName.trim(),
+          department: "triage",
+          service: "Nurse Triage & Vitals",
+          status: "pending",
+          roomOrDesk: "Nurse Triage Desk"
+        });
+      } catch (annErr) {
+        console.warn("Voice announcement notice:", annErr);
+      }
 
-      toast.success(`Queue Ticket ${ticketNo} issued! Patient record & billing folio active.`, "Registration Complete");
+      if (onTicketCreated) {
+        onTicketCreated();
+      }
+
+      toast.success(
+        `Patient ${fullName} registered! Automatically queued at Nurse Triage (Ticket #${activeQueueTicketNo}).`,
+        "Patient Registered & Queued"
+      );
 
       // Reset form
       setFullName("");

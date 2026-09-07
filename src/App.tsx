@@ -21,6 +21,7 @@ import TicketSystem from "./components/TicketSystem";
 import SecurityDesk from "./components/SecurityDesk";
 import PatientJourneyTracker from "./components/PatientJourneyTracker";
 import DashboardOverview from "./components/DashboardOverview";
+import ErrorBoundary from "./components/ErrorBoundary";
 import DesktopBottomNav from "./components/DesktopBottomNav";
 import MpesaPaymentModal from "./components/MpesaPaymentModal";
 import ShaIntegrationHubModal from "./components/ShaIntegrationHubModal";
@@ -40,6 +41,7 @@ import BiometricScannerModal from "./components/BiometricScannerModal";
 import SystemPolicyTermsModal from "./components/SystemPolicyTermsModal";
 import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
+import { VoiceAnnouncementHUD } from "./components/VoiceAnnouncementHUD";
 import SplashScreenLoader from "./components/SplashScreenLoader";
 import UserGuide from "./components/UserGuide";
 import { OfflineManagerModal } from "./components/OfflineManagerModal";
@@ -49,6 +51,7 @@ import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "./lib/superAdmins";
 import { toast } from "./lib/promptService";
 import { downloadReadmeFile } from "./lib/downloadReadme";
 import { normalizeKeyboardEvent, dispatchHotkeyAction, onHotkeyAction, SYSTEM_HOTKEYS } from "./lib/hotkeyService";
+import { subscribePwaSettings, savePwaSettingsToCloud } from "./lib/pwaSettingsSyncService";
 
 import {
   Building2,
@@ -573,6 +576,31 @@ export default function App() {
       window.removeEventListener("platform_font_size_changed", handleSync);
       window.removeEventListener("platform_branding_changed", handleBrandingSync);
     };
+  }, []);
+
+  // Real-time Cloud Firestore synchronization for PWA & Hospital Branding
+  useEffect(() => {
+    const unsubPwa = subscribePwaSettings((settings) => {
+      if (settings.appName) {
+        setBrandCustomName(settings.appName);
+      }
+      if (settings.logoUrl) {
+        setBrandLogoUrl(settings.logoUrl);
+      }
+      if (settings.faviconUrl) {
+        setBrandFaviconUrl(settings.faviconUrl);
+      }
+      if (settings.themeColor) {
+        const matchedKey = Object.keys(THEME_PALETTES).find((key) => {
+          const p = THEME_PALETTES[key];
+          return p.hex.toLowerCase() === settings.themeColor.toLowerCase() || key === settings.themeColor;
+        });
+        if (matchedKey) {
+          setBrandThemeColor(matchedKey);
+        }
+      }
+    });
+    return () => unsubPwa();
   }, []);
 
   // Auto-fit screen resolution detection: ensures original platform design auto-fits any monitor/laptop screen (unless mobile/tablet)
@@ -2549,14 +2577,16 @@ export default function App() {
                 ) : (
                   <>
                     {activeTab === "dashboard" && (
-                      <DashboardOverview
-                        tenant={tenant}
-                        toggles={toggles}
-                        onNavigateToTab={(tabId) => setActiveTab(tabId)}
-                        currentUserRole={currentSystemRole}
-                        currentUserEmail={activeUser?.email || ""}
-                        currentEmployee={loggedInEmployee}
-                      />
+                      <ErrorBoundary fallbackTitle="Operations Dashboard">
+                        <DashboardOverview
+                          tenant={tenant}
+                          toggles={toggles}
+                          onNavigateToTab={(tabId) => setActiveTab(tabId)}
+                          currentUserRole={currentSystemRole}
+                          currentUserEmail={activeUser?.email || ""}
+                          currentEmployee={loggedInEmployee}
+                        />
+                      </ErrorBoundary>
                     )}
 
                     {activeTab === "admin" && (
@@ -2611,10 +2641,12 @@ export default function App() {
                     )}
 
                     {activeTab === "admissions" && (
-                      <AdmissionDischargeManager
-                        onNavigateToBilling={() => setActiveTab("billing")}
-                        onNavigateToDoctor={() => setActiveTab("doctor")}
-                      />
+                      <ErrorBoundary fallbackTitle="Inpatient Admissions & Discharge Manager">
+                        <AdmissionDischargeManager
+                          onNavigateToBilling={() => setActiveTab("billing")}
+                          onNavigateToDoctor={() => setActiveTab("doctor")}
+                        />
+                      </ErrorBoundary>
                     )}
 
                     {activeTab === "tickets" && (
@@ -2771,7 +2803,7 @@ export default function App() {
 
     {/* Floating Specialist Notification Drawer */}
     {notifications.length > 0 && (
-      <div id="specialist-notifications-tray" className="fixed bottom-6 right-6 z-50 flex flex-col gap-4 max-w-sm w-full pointer-events-none">
+      <div id="specialist-notifications-tray" className="fixed bottom-24 lg:bottom-28 right-6 z-50 flex flex-col gap-4 max-w-sm w-full pointer-events-none">
         {notifications.map((notif) => (
           <div
             key={notif.id}
@@ -2982,12 +3014,14 @@ export default function App() {
       onSaveLogo={(url) => {
         setBrandLogoUrl(url);
         localStorage.setItem("platform_logo_url", url);
+        savePwaSettingsToCloud({ logoUrl: url }, user?.email || simulatedUser?.email || "Admin").catch(() => {});
         window.dispatchEvent(new Event("platform_branding_changed"));
       }}
       currentFavicon={brandFaviconUrl}
       onSaveFavicon={(url) => {
         setBrandFaviconUrl(url);
         localStorage.setItem("platform_favicon_url", url);
+        savePwaSettingsToCloud({ faviconUrl: url }, user?.email || simulatedUser?.email || "Admin").catch(() => {});
         window.dispatchEvent(new Event("platform_branding_changed"));
       }}
       hospitalName={brandCustomName || tenant.name || "The Tassia Hill Hospital"}
@@ -3076,6 +3110,9 @@ export default function App() {
         setShowBiometricModal(false);
       }}
     />
+
+    {/* Global Hospital Voice PA Live Broadcast Banner */}
+    <VoiceAnnouncementHUD />
 
     {/* Modernized Prompts, Question Confirmations & Interactive Alerts */}
     <ModernPromptHost />

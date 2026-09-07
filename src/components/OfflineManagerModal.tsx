@@ -16,6 +16,13 @@ import {
   Info
 } from "lucide-react";
 import { usePWAInstall } from "../hooks/usePWAInstall";
+import { 
+  PWASettings, 
+  getLocalPwaSettings, 
+  subscribePwaSettings, 
+  forceSyncPwaSettingsFromCloud 
+} from "../lib/pwaSettingsSyncService";
+import { toast } from "../lib/promptService";
 
 interface OfflineManagerModalProps {
   isOpen: boolean;
@@ -37,6 +44,16 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString());
   const [swRegistered, setSwRegistered] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [pwaSettings, setPwaSettings] = useState<PWASettings>(getLocalPwaSettings);
+  const [isPwaSyncing, setIsPwaSyncing] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const unsub = subscribePwaSettings((settings) => {
+      setPwaSettings(settings);
+    });
+    return () => unsub();
+  }, [isOpen]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
@@ -205,6 +222,71 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
                 <span>Installed as Standalone App</span>
               </div>
             )}
+          </div>
+
+          {/* PWA Manifest & Cloud Synchronization Diagnostic */}
+          <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-emerald-700" />
+                <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                  PWA Manifest & Cloud Settings Sync
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-200 text-emerald-900 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                Firestore: system_settings/pwa_config
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-9 h-9 rounded-xl overflow-hidden border border-emerald-300 p-0.5 flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: pwaSettings.backgroundColor || "#0B1528" }}
+                >
+                  <img
+                    src={pwaSettings.logoUrl}
+                    alt="PWA App Icon"
+                    className="w-full h-full object-contain rounded-lg"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { (e.currentTarget as HTMLElement).style.display = "none"; }}
+                  />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-800">{pwaSettings.appName}</div>
+                  <div className="text-[11px] text-slate-600 flex items-center gap-2">
+                    <span>Short Name: <span className="font-mono font-bold text-emerald-800">{pwaSettings.shortName}</span></span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      Theme: 
+                      <span className="inline-block w-2.5 h-2.5 rounded-full border border-black/20" style={{ backgroundColor: pwaSettings.themeColor }} />
+                      <span className="font-mono">{pwaSettings.themeColor}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isPwaSyncing}
+                onClick={async () => {
+                  setIsPwaSyncing(true);
+                  try {
+                    await forceSyncPwaSettingsFromCloud();
+                    toast.success("PWA settings and Web App Manifest successfully synced with Cloud Firestore!", "PWA Synced");
+                  } catch {
+                    toast.error("Failed to sync PWA settings from Cloud.", "Sync Error");
+                  } finally {
+                    setTimeout(() => setIsPwaSyncing(false), 500);
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl transition shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isPwaSyncing ? "animate-spin" : ""}`} />
+                <span>{isPwaSyncing ? "Syncing..." : "Sync PWA Settings"}</span>
+              </button>
+            </div>
           </div>
 
           {/* Practical Guidelines for Healthcare Staff */}

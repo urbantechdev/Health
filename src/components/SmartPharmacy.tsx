@@ -31,6 +31,7 @@ import PharmacyInventoryModal from "./PharmacyInventoryModal";
 import PharmacyPOSCheckoutModal from "./PharmacyPOSCheckoutModal";
 import { toast, modernAlert } from "../lib/promptService";
 import { onHotkeyAction } from "../lib/hotkeyService";
+import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 
 interface SmartPharmacyProps {
   toggles: any;
@@ -287,16 +288,10 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
     }
   };
 
-  const speakAnnouncement = (text: string) => {
+  const speakAnnouncement = (text: string, ticketNo?: string, room?: string) => {
     try {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
-        utterance.pitch = 1.0;
-        utterance.lang = "en-KE";
-        window.speechSynthesis.speak(utterance);
-      }
+      voiceAnnouncer.resumeAudioContext();
+      voiceAnnouncer.announceCustom(text, ticketNo, room);
     } catch (e) {
       console.log("Speech synthesis note:", e);
     }
@@ -377,7 +372,11 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
       // Audio & Speech Announcement
       playAudioTone(880, 0.25);
       setTimeout(() => playAudioTone(1174, 0.35), 260);
-      speakAnnouncement(`${instructionPhrase}. ${patientName}, please proceed to the Billing and Accounts Clearance desk.`);
+      speakAnnouncement(
+        `${instructionPhrase}. ${patientName}, please proceed to the Billing and Accounts Clearance desk.`,
+        assignedTicketNo,
+        "Billing & Accounts Clearance"
+      );
 
       toast.success(
         `Patient ${patientName} (${assignedTicketNo}) successfully routed to Central Billing Desk!`,

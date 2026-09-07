@@ -1,3 +1,5 @@
+import { promptSound } from "./promptSound";
+
 export type PromptType = "success" | "error" | "warning" | "info" | "question" | "ticket";
 
 export interface ToastNotification {
@@ -92,6 +94,12 @@ class PromptService {
     this.toasts.unshift(toastItem);
     this.notifyToasts();
 
+    try {
+      promptSound.play(toastItem.type === "ticket" ? "success" : toastItem.type);
+    } catch {
+      // Audio playback fails gracefully
+    }
+
     if (toastItem.duration && toastItem.duration > 0) {
       setTimeout(() => {
         this.dismissToast(id);
@@ -124,6 +132,12 @@ class PromptService {
         }
       };
       this.notifyModal();
+      try {
+        const soundType = config.type === "ticket" ? "success" : config.destructive ? "error" : config.type;
+        promptSound.play(soundType || "question");
+      } catch {
+        // Audio playback fails gracefully
+      }
     });
   }
 

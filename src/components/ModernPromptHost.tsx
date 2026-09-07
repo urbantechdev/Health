@@ -385,168 +385,154 @@ export const ModernPromptHost: React.FC = () => {
   return (
     <>
       {/* ========================================================================= */}
-      {/* 1. DEAD-CENTER FLOATING NOTIFICATION POPUP WINDOW                         */}
+      {/* 1. FLOATING STREAMLINED NOTIFICATION TOAST TRAY (NON-BLOCKING)            */}
       {/* ========================================================================= */}
-      <AnimatePresence>
-        {toasts.length > 0 && !activeModal && (
-          <div
-            id="modern-center-toast-overlay"
-            className="fixed inset-0 z-[99998] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs select-none pointer-events-auto"
-          >
-            {(() => {
-              // Show the most recent toast in full center focus
-              const t = toasts[0];
-              const isTicket = isTicketPrompt(t.title, t.message);
-              const theme = getTheming(t.type, false, isTicket);
-              const isExpanded = expandedDetailsId === t.id;
+      <div
+        id="modern-floating-toast-container"
+        className="fixed top-5 right-5 z-[99998] flex flex-col gap-3 max-w-md w-full pointer-events-none select-none"
+      >
+        <AnimatePresence>
+          {toasts.slice(0, 3).map((t) => {
+            const isTicket = isTicketPrompt(t.title, t.message);
+            const theme = getTheming(t.type, false, isTicket);
+            const isExpanded = expandedDetailsId === t.id;
 
-              return (
-                <motion.div
-                  key={t.id}
-                  initial={{ opacity: 0, scale: 0.82, y: 30, filter: "blur(8px)" }}
-                  animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-                  exit={{ opacity: 0, scale: 0.88, y: -20, filter: "blur(6px)" }}
-                  transition={{ type: "spring", stiffness: 460, damping: 26 }}
-                  className={`relative w-full max-w-md bg-slate-950/95 text-white border ${theme.borderColor} rounded-3xl p-6 sm:p-7 shadow-2xl overflow-hidden flex flex-col gap-4.5`}
-                  style={{
-                    boxShadow: `0 30px 80px -15px rgba(0,0,0,0.85), 0 0 50px -5px ${theme.glowColor}`,
-                  }}
+            return (
+              <motion.div
+                key={t.id}
+                layout
+                initial={{ opacity: 0, x: 60, scale: 0.92 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 40, scale: 0.9, transition: { duration: 0.2 } }}
+                transition={{ type: "spring", stiffness: 480, damping: 28 }}
+                className={`pointer-events-auto relative w-full bg-slate-950/95 text-white border ${theme.borderColor} rounded-2xl p-4 sm:p-5 shadow-2xl overflow-hidden flex flex-col gap-3 backdrop-blur-md`}
+                style={{
+                  boxShadow: `0 20px 40px -10px rgba(0,0,0,0.75), 0 0 35px -5px ${theme.glowColor}`,
+                }}
+              >
+                {/* Glowing Top Ambient Ribbon */}
+                <div className={`absolute top-0 left-0 right-0 h-1 ${theme.accentBar}`} />
+
+                {/* Multiple Queue Pill Counter (if more than 3 toasts queued) */}
+                {toasts.length > 3 && (
+                  <div className="absolute top-3 right-10 px-2 py-0.5 rounded-full bg-slate-800/90 border border-slate-700 text-[9px] font-mono text-slate-300">
+                    +{toasts.length - 3} more
+                  </div>
+                )}
+
+                {/* Close / Dismiss Button */}
+                <button
+                  type="button"
+                  onClick={() => promptService.dismissToast(t.id)}
+                  className="absolute top-2.5 right-2.5 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-colors cursor-pointer"
+                  title="Dismiss Notification"
                 >
-                  {/* Glowing Top Ambient Ribbon */}
-                  <div className={`absolute top-0 left-0 right-0 h-1.5 ${theme.accentBar}`} />
+                  <X className="w-4 h-4" />
+                </button>
 
-                  {/* Multiple Queue Pill Counter (if more than 1 toast queued) */}
-                  {toasts.length > 1 && (
-                    <div className="absolute top-3.5 right-12 px-2.5 py-0.5 rounded-full bg-slate-800/90 border border-slate-700 text-[10px] font-mono text-slate-300">
-                      +{toasts.length - 1} more
-                    </div>
-                  )}
+                {/* Toast Header: Icon, Badge, Title & Message */}
+                <div className="flex items-start gap-3 pr-6">
+                  {renderAnimatedIcon(t.type, "sm")}
 
-                  {/* Close / Dismiss Button */}
-                  <button
-                    type="button"
-                    onClick={() => promptService.dismissToast(t.id)}
-                    className="absolute top-3.5 right-3.5 p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-2xl transition-colors cursor-pointer"
-                    title="Dismiss Notification"
-                  >
-                    <X className="w-4.5 h-4.5" />
-                  </button>
-
-                  {/* Center Header: Animated SVG Tick / Cross Icon & Status Badge */}
-                  <div className="flex flex-col items-center text-center gap-3 pt-2">
-                    {/* Animated SVG Icon */}
-                    {renderAnimatedIcon(t.type, "lg")}
-
-                    <div className="space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
                       <span
-                        className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full border ${theme.badgeBg}`}
+                        className={`inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${theme.badgeBg}`}
                       >
-                        <Sparkles className="w-3 h-3" />
+                        <Sparkles className="w-2.5 h-2.5" />
                         {t.badge || theme.pillLabel}
                       </span>
-
-                      <h3 className="text-base sm:text-lg font-bold text-white tracking-tight leading-snug">
-                        {t.title || (t.type === "success" ? "Success!" : t.type === "error" ? "Error Submitting" : "Notification")}
-                      </h3>
                     </div>
-                  </div>
 
-                  {/* Message Body */}
-                  <div className="text-center px-1">
-                    <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
+                    <h4 className="text-sm font-bold text-white tracking-tight leading-snug">
+                      {t.title || (t.type === "success" ? "Success!" : t.type === "error" ? "Error" : "Notification")}
+                    </h4>
+
+                    <p className="text-xs text-slate-200 leading-relaxed font-medium">
                       {t.message}
                     </p>
-
-                    {/* Diagnostic / Technical Details (Collapsible) */}
-                    {t.details && (
-                      <div className="mt-3 text-left">
-                        <div className="flex items-center justify-between">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedDetailsId(isExpanded ? null : t.id)}
-                            className="text-[11px] font-semibold text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            <span>{isExpanded ? "Hide Technical Details" : "View Technical Diagnostics"}</span>
-                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(t.details || "", t.id)}
-                            className="text-[11px] font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            {copiedId === t.id ? (
-                              <>
-                                <Check className="w-3 h-3 text-emerald-400" />
-                                <span className="text-emerald-400">Copied</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3 h-3" />
-                                <span>Copy Details</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="mt-2 p-3 bg-slate-900/95 border border-slate-800 rounded-2xl text-[11px] font-mono text-slate-300 whitespace-pre-wrap max-h-32 overflow-y-auto leading-relaxed"
-                          >
-                            {t.details}
-                          </motion.div>
-                        )}
-                      </div>
-                    )}
                   </div>
+                </div>
 
-                  {/* Footer Action Buttons */}
-                  <div className="pt-2 flex items-center justify-center gap-2.5 border-t border-slate-800/80">
-                    {t.action && (
+                {/* Diagnostic / Technical Details (Collapsible) */}
+                {t.details && (
+                  <div className="pt-1 text-left border-t border-slate-800/80">
+                    <div className="flex items-center justify-between">
                       <button
                         type="button"
-                        onClick={() => {
-                          t.action?.onClick();
-                          promptService.dismissToast(t.id);
-                        }}
-                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl text-xs font-bold border border-slate-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        onClick={() => setExpandedDetailsId(isExpanded ? null : t.id)}
+                        className="text-[10px] font-semibold text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
                       >
-                        <span>{t.action.label}</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        <span>{isExpanded ? "Hide Details" : "View Diagnostics"}</span>
+                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                       </button>
-                    )}
 
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(t.details || "", t.id)}
+                        className="text-[10px] font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        {copiedId === t.id ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span className="text-emerald-400">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-2 p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-[10px] font-mono text-slate-300 whitespace-pre-wrap max-h-28 overflow-y-auto leading-relaxed"
+                      >
+                        {t.details}
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+
+                {/* Footer Action Button if provided */}
+                {t.action && (
+                  <div className="flex items-center justify-end gap-2 pt-1">
                     <button
                       type="button"
-                      onClick={() => promptService.dismissToast(t.id)}
-                      className={`w-full px-5 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${theme.btnPrimaryBg}`}
+                      onClick={() => {
+                        t.action?.onClick();
+                        promptService.dismissToast(t.id);
+                      }}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
                     >
-                      {t.type === "success" ? <Check className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-                      <span>Dismiss & Continue</span>
+                      <span>{t.action.label}</span>
+                      <ArrowRight className="w-3 h-3" />
                     </button>
                   </div>
+                )}
 
-                  {/* Animated Auto-Dismiss Countdown Bar */}
-                  {t.duration && t.duration > 0 && (
-                    <motion.div
-                      className={`absolute bottom-0 left-0 h-1 ${theme.accentBar} opacity-80`}
-                      initial={{ width: "100%" }}
-                      animate={{ width: "0%" }}
-                      transition={{
-                        duration: t.duration / 1000,
-                        ease: "linear",
-                      }}
-                    />
-                  )}
-                </motion.div>
-              );
-            })()}
-          </div>
-        )}
-      </AnimatePresence>
+                {/* Animated Auto-Dismiss Countdown Bar */}
+                {t.duration && t.duration > 0 && (
+                  <motion.div
+                    className={`absolute bottom-0 left-0 h-0.5 ${theme.accentBar} opacity-80`}
+                    initial={{ width: "100%" }}
+                    animate={{ width: "0%" }}
+                    transition={{
+                      duration: t.duration / 1000,
+                      ease: "linear",
+                    }}
+                  />
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
 
       {/* ========================================================================= */}
       {/* 2. DEAD-CENTER INTERACTIVE MODAL DIALOG PROMPT WINDOW                     */}

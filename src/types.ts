@@ -78,6 +78,15 @@ export interface QueueTicket {
   requestedTests?: string[];
   labTestsOrdered?: string[];
   labPriority?: "routine" | "urgent" | "stat";
+  priority?: "normal" | "urgent" | "stat_emergency" | string;
+  bloodType?: string;
+  symptoms?: string;
+  triageNotes?: string;
+  provisionalDiagnosis?: string;
+  paymentScheme?: string;
+  insurancePolicyNo?: string;
+  createdAt?: string;
+  triageStage?: string;
 }
 
 export interface Medication {

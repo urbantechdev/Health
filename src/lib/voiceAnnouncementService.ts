@@ -60,6 +60,20 @@ class VoiceAnnouncementService {
     this.config = this.loadConfig();
     this.initAudioContext();
     this.initVoiceListener();
+    this.initAutoplayUnlock();
+  }
+
+  private initAutoplayUnlock() {
+    if (typeof window === "undefined") return;
+    const unlock = () => {
+      this.resumeAudioContext();
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("click", unlock, { once: true, passive: true });
+    window.addEventListener("touchstart", unlock, { once: true, passive: true });
+    window.addEventListener("keydown", unlock, { once: true, passive: true });
   }
 
   private initVoiceListener() {
@@ -235,12 +249,19 @@ class VoiceAnnouncementService {
     if (cleaned.includes("-")) {
       const parts = cleaned.split("-");
       const prefix = parts[0].split("").join(" ");
-      const num = parts.slice(1).join("").split("").join(" ");
+      const num = parts.slice(1).join("").split("").join(", ");
       return `${prefix}, ${num}`;
     }
 
-    // Split alphanumeric chunks with clean spacing
-    return cleaned.split("").join(" ");
+    const match = cleaned.match(/^([A-Z]+)(\d+)$/);
+    if (match) {
+      const prefix = match[1].split("").join(" ");
+      const num = match[2].split("").join(", ");
+      return `${prefix}, ${num}`;
+    }
+
+    // Split alphanumeric chunks with clean natural cadence
+    return cleaned.split("").join(", ");
   }
 
   /**
@@ -569,23 +590,39 @@ class VoiceAnnouncementService {
       }
 
       let timeoutHandle: any = null;
+      let keepAliveInterval: any = null;
+
+      const cleanup = () => {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        if (keepAliveInterval) clearInterval(keepAliveInterval);
+      };
 
       utterance.onend = () => {
-        if (timeoutHandle) clearTimeout(timeoutHandle);
+        cleanup();
         resolve();
       };
 
       utterance.onerror = (e) => {
         console.warn("Utterance error:", e);
-        if (timeoutHandle) clearTimeout(timeoutHandle);
+        cleanup();
         resolve();
       };
 
       // Safety timeout: in case speech synthesis hangs on mobile or browser background
       timeoutHandle = setTimeout(() => {
+        cleanup();
         window.speechSynthesis.cancel();
         resolve();
       }, 14000);
+
+      // Periodically un-pause speech synthesis to counteract Chromium idle stall bug
+      keepAliveInterval = setInterval(() => {
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        }
+      }, 2500);
 
       // Ensure speech synthesis is not stalled or paused on idle monitor screens
       if (window.speechSynthesis.paused) {

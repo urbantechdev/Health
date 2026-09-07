@@ -79,7 +79,13 @@ import {
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 
-export default function AdmissionDischargeManager() {
+export default function AdmissionDischargeManager({
+  onNavigateToBilling,
+  onNavigateToDoctor
+}: {
+  onNavigateToBilling?: () => void;
+  onNavigateToDoctor?: () => void;
+} = {}) {
   const [encounters, setEncounters] = useState<Encounter[]>([]);
   const [beds, setBeds] = useState<WardBed[]>([]);
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
@@ -222,23 +228,28 @@ export default function AdmissionDischargeManager() {
 
     // 1. Subscribe to Encounters
     const unsubEncounters = subscribeEncounters((list) => {
-      setEncounters(list);
-      if (list.length > 0 && !selectedEncounterId) {
-        setSelectedEncounterId(list[0].id);
+      const safeList = Array.isArray(list) ? list : [];
+      setEncounters(safeList);
+      if (safeList.length > 0) {
+        setSelectedEncounterId((prev) => (prev && safeList.some(e => e.id === prev) ? prev : safeList[0].id));
       }
     });
 
     // 2. Subscribe to Beds
     const unsubBeds = subscribeHospitalBeds((list) => {
-      setBeds(list);
+      setBeds(Array.isArray(list) ? list : []);
     });
 
     // 3. Subscribe to Patients
-    const unsubPatients = onSnapshot(collection(db, "patients"), (snap) => {
-      const pList: MedicalRecord[] = [];
-      snap.forEach((d) => pList.push({ id: d.id, ...d.data() } as MedicalRecord));
-      setPatients(pList);
-    });
+    const unsubPatients = onSnapshot(
+      collection(db, "patients"),
+      (snap) => {
+        const pList: MedicalRecord[] = [];
+        snap.forEach((d) => pList.push({ id: d.id, ...d.data() } as MedicalRecord));
+        setPatients(pList);
+      },
+      (err) => console.warn("[AdmissionDischargeManager] patients err:", err)
+    );
 
     return () => {
       unsubEncounters();
@@ -249,23 +260,50 @@ export default function AdmissionDischargeManager() {
 
   // Listen to subcollections when selected encounter changes
   useEffect(() => {
-    if (!selectedEncounterId) return;
+    if (!selectedEncounterId) {
+      setSubcollections({
+        vitals: [],
+        prescriptions: [],
+        labRequests: [],
+        billItems: [],
+        nursingNotes: [],
+        doctorNotes: []
+      });
+      return;
+    }
     const unsubSub = subscribeEncounterSubcollections(selectedEncounterId, (data) => {
-      setSubcollections(data);
+      if (!data) return;
+      const billing = (data as any).billItems || (data as any).billingItems || [];
+      setSubcollections({
+        vitals: Array.isArray(data.vitals) ? data.vitals : [],
+        prescriptions: Array.isArray(data.prescriptions) ? data.prescriptions : [],
+        labRequests: Array.isArray(data.labRequests) ? data.labRequests : [],
+        billItems: Array.isArray(billing) ? billing : [],
+        nursingNotes: Array.isArray(data.nursingNotes) ? data.nursingNotes : [],
+        doctorNotes: Array.isArray(data.doctorNotes) ? data.doctorNotes : []
+      });
     });
     return () => unsubSub();
   }, [selectedEncounterId]);
 
-  const selectedEncounter = encounters.find((e) => e.id === selectedEncounterId);
+  const selectedEncounter = (encounters || []).find((e) => e && e.id === selectedEncounterId);
   const balanceDue = selectedEncounter ? Math.max(0, (selectedEncounter.totalBilled || 0) - (selectedEncounter.totalPaid || 0)) : 0;
 
   // Filtered Encounters
-  const filteredEncounters = encounters.filter((enc) => {
+  const filteredEncounters = (encounters || []).filter((enc) => {
+    if (!enc) return false;
+    const name = String(enc.patientName || "").toLowerCase();
+    const natId = String(enc.nationalId || "").toLowerCase();
+    const encId = String(enc.id || "").toLowerCase();
+    const ward = String(enc.assignedWard || "").toLowerCase();
+    const query = searchQuery.toLowerCase().trim();
+
     const matchesSearch =
-      enc.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      enc.nationalId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      enc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (enc.assignedWard && enc.assignedWard.toLowerCase().includes(searchQuery.toLowerCase()));
+      !query ||
+      name.includes(query) ||
+      natId.includes(query) ||
+      encId.includes(query) ||
+      ward.includes(query);
 
     if (!matchesSearch) return false;
 
@@ -280,12 +318,12 @@ export default function AdmissionDischargeManager() {
   });
 
   // Calculate metrics
-  const totalActive = encounters.filter((e) => e.status !== "DISCHARGED" && e.status !== "MORGUE" && e.status !== "DECEASED").length;
-  const totalInpatients = encounters.filter((e) => e.status === "ADMITTED").length;
-  const totalDischarging = encounters.filter((e) => e.status === "DISCHARGING").length;
-  const totalMorgue = encounters.filter((e) => e.status === "MORGUE" || e.status === "DECEASED").length;
-  const availableBedsCount = beds.filter((b) => b.status === "AVAILABLE").length;
-  const occupiedBedsCount = beds.filter((b) => b.status === "OCCUPIED").length;
+  const totalActive = (encounters || []).filter((e) => e && e.status !== "DISCHARGED" && e.status !== "MORGUE" && e.status !== "DECEASED").length;
+  const totalInpatients = (encounters || []).filter((e) => e && e.status === "ADMITTED").length;
+  const totalDischarging = (encounters || []).filter((e) => e && e.status === "DISCHARGING").length;
+  const totalMorgue = (encounters || []).filter((e) => e && (e.status === "MORGUE" || e.status === "DECEASED")).length;
+  const availableBedsCount = (beds || []).filter((b) => b && b.status === "AVAILABLE").length;
+  const occupiedBedsCount = (beds || []).filter((b) => b && b.status === "OCCUPIED").length;
 
   // Handle New Admission Submission
   const handleCreateAdmission = async (e: React.FormEvent) => {
@@ -886,13 +924,13 @@ export default function AdmissionDischargeManager() {
               <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 overflow-x-auto text-xs font-bold">
                 {[
                   { id: "discharge", label: "Discharge Clearance", icon: ShieldCheck },
-                  { id: "transfers", label: `Bed & Ward Transfers (${selectedEncounter.bedTransfers?.length || (selectedEncounter.assignedBed ? 1 : 0)})`, icon: Bed },
-                  { id: "doctor_notes", label: `Doctor's Notes (${subcollections.doctorNotes?.length || 0})`, icon: Stethoscope },
-                  { id: "nursing", label: `Nursing Notes (${subcollections.nursingNotes.length})`, icon: FileText },
-                  { id: "vitals", label: `Vitals (${subcollections.vitals.length})`, icon: Heart },
-                  { id: "prescriptions", label: `Prescriptions (${subcollections.prescriptions.length})`, icon: ShoppingBag },
-                  { id: "labs", label: `Lab Orders (${subcollections.labRequests.length})`, icon: FlaskRound },
-                  { id: "billing", label: `Charge Sheet (${subcollections.billItems.length})`, icon: CreditCard }
+                  { id: "transfers", label: `Bed & Ward Transfers (${selectedEncounter?.bedTransfers?.length || (selectedEncounter?.assignedBed ? 1 : 0)})`, icon: Bed },
+                  { id: "doctor_notes", label: `Doctor's Notes (${(subcollections?.doctorNotes || []).length})`, icon: Stethoscope },
+                  { id: "nursing", label: `Nursing Notes (${(subcollections?.nursingNotes || []).length})`, icon: FileText },
+                  { id: "vitals", label: `Vitals (${(subcollections?.vitals || []).length})`, icon: Heart },
+                  { id: "prescriptions", label: `Prescriptions (${(subcollections?.prescriptions || []).length})`, icon: ShoppingBag },
+                  { id: "labs", label: `Lab Orders (${(subcollections?.labRequests || []).length})`, icon: FlaskRound },
+                  { id: "billing", label: `Charge Sheet (${(subcollections?.billItems || (subcollections as any)?.billingItems || []).length})`, icon: CreditCard }
                 ].map((t) => {
                   const Icon = t.icon;
                   const isActive = activeTab === t.id;
@@ -1310,10 +1348,10 @@ export default function AdmissionDischargeManager() {
                   </div>
 
                   <div className="space-y-2.5">
-                    {subcollections.vitals.length === 0 ? (
+                    {(subcollections?.vitals || []).length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-8">No vitals recorded yet.</p>
                     ) : (
-                      subcollections.vitals.map((v) => (
+                      (subcollections?.vitals || []).map((v) => (
                         <div key={v.id} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-4">
                           <div className="grid grid-cols-5 gap-3 text-center min-w-0 flex-1">
                             <div className="p-2 bg-white rounded-xl border border-slate-200/60">
@@ -1428,10 +1466,10 @@ export default function AdmissionDischargeManager() {
                   </div>
 
                   <div className="space-y-2.5">
-                    {subcollections.labRequests.length === 0 ? (
+                    {(subcollections?.labRequests || []).length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-8">No laboratory orders recorded.</p>
                     ) : (
-                      subcollections.labRequests.map((lab) => (
+                      (subcollections?.labRequests || []).map((lab) => (
                         <div key={lab.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
                           <div className="flex items-start justify-between gap-4">
                             <div>
@@ -1523,22 +1561,26 @@ export default function AdmissionDischargeManager() {
                   </div>
 
                   <div className="space-y-2">
-                    {subcollections.billItems.map((b) => (
-                      <div key={b.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs">
-                        <div>
-                          <p className="font-bold text-slate-900">{b.description}</p>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            Category: {b.category} • {new Date(b.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                    {(subcollections?.billItems || (subcollections as any)?.billingItems || []).length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-8">No billing charges recorded.</p>
+                    ) : (
+                      (subcollections?.billItems || (subcollections as any)?.billingItems || []).map((b: EncounterBillItem) => (
+                        <div key={b.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs">
+                          <div>
+                            <p className="font-bold text-slate-900">{b.description}</p>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Category: {b.category} • {b.timestamp ? new Date(b.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Item"}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-black text-slate-900">KES {(b.total || 0).toLocaleString()}</span>
+                            <span className={`block text-[9px] font-bold uppercase ${b.isPaid ? "text-emerald-600" : "text-rose-600"}`}>
+                              {b.isPaid ? "✓ Paid" : "Unpaid"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="font-black text-slate-900">KES {b.total.toLocaleString()}</span>
-                          <span className={`block text-[9px] font-bold uppercase ${b.isPaid ? "text-emerald-600" : "text-rose-600"}`}>
-                            {b.isPaid ? "✓ Paid" : "Unpaid"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               )}
@@ -1820,15 +1862,19 @@ export default function AdmissionDischargeManager() {
                   </form>
 
                   <div className="space-y-2.5">
-                    {subcollections.nursingNotes.map((n) => (
-                      <div key={n.id} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
-                        <div className="flex items-center justify-between text-[10px] text-slate-400">
-                          <span className="font-bold text-emerald-700">{n.shift} Shift • {n.nurseName}</span>
-                          <span className="font-mono">{new Date(n.timestamp).toLocaleString()}</span>
+                    {(subcollections?.nursingNotes || []).length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-8">No nursing notes recorded.</p>
+                    ) : (
+                      (subcollections?.nursingNotes || []).map((n) => (
+                        <div key={n.id} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span className="font-bold text-emerald-700">{n.shift} Shift • {n.nurseName}</span>
+                            <span className="font-mono">{n.timestamp ? new Date(n.timestamp).toLocaleString() : ""}</span>
+                          </div>
+                          <p className="text-slate-700">{n.note}</p>
                         </div>
-                        <p className="text-slate-700">{n.note}</p>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               )}
@@ -2444,7 +2490,7 @@ export default function AdmissionDischargeManager() {
                     .filter((b) => b.status === "AVAILABLE" || b.id === selectedEncounter.assignedBedId)
                     .map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.wardName} — {b.bedNumber} (KES {b.dailyRate.toLocaleString()} / day) [{b.wardType}]
+                        {b.wardName} — {b.bedNumber} (KES {b.dailyRate.toLocaleString()} / day) [{(b as any).wardType || "General"}]
                       </option>
                     ))}
                 </select>

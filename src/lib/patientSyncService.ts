@@ -126,11 +126,136 @@ export interface UnifiedPatientInput {
   currentDepartment?: string;
   activeTicketNo?: string;
   sourceStation?: string;
+  priority?: "Normal" | "Urgent / Child" | "STAT Emergency" | string;
+  biometricStatus?: "verified" | "not_verified";
+  autoQueueTriage?: boolean;
+}
+
+export interface UpsertPatientResult {
+  success: boolean;
+  patientId: string;
+  isNew: boolean;
+  ticketNo?: string;
+  queueId?: string;
+  createdTriageQueue?: boolean;
+}
+
+/**
+ * Automatically creates or ensures an active triage queue ticket in the live queue collection.
+ */
+export async function createTriageQueueTicket(params: {
+  patientId: string;
+  patientName: string;
+  nationalId?: string;
+  phone?: string;
+  age?: number | string;
+  gender?: string;
+  priority?: string;
+  paymentScheme?: string;
+  insurancePolicyNo?: string;
+  biometricStatus?: "verified" | "not_verified";
+  ticketNo?: string;
+  notes?: string;
+  encounterId?: string;
+}): Promise<{ success: boolean; queueId?: string; ticketNo: string; alreadyExisted?: boolean }> {
+  try {
+    const cleanId = (params.nationalId || "").trim();
+    const nowIso = new Date().toISOString();
+
+    // 1. Check if an active triage ticket already exists for this patient
+    const qQueue = query(
+      collection(db, "queue"),
+      where("patientId", "==", params.patientId)
+    );
+    const snap = await getDocs(qQueue);
+    const activeDoc = snap.docs.find((d) => {
+      const data = d.data();
+      const dept = (data?.currentDepartment || data?.department || "").toLowerCase();
+      const isTriage = dept === "triage" || dept === "reception" || dept === "nurse";
+      const isPending = data?.status === "pending" || data?.status === "serving" || data?.status === "waiting";
+      return isTriage && isPending;
+    });
+
+    if (activeDoc) {
+      const existingData = activeDoc.data();
+      // If encounterId was provided, attach it to the existing ticket
+      if (params.encounterId && !existingData.encounterId) {
+        try {
+          await updateDoc(doc(db, "queue", activeDoc.id), { encounterId: params.encounterId });
+        } catch {}
+      }
+      return {
+        success: true,
+        queueId: activeDoc.id,
+        ticketNo: existingData.ticketNo,
+        alreadyExisted: true
+      };
+    }
+
+    // 2. Generate new triage ticket number (prefix TRG)
+    const ticketNo = params.ticketNo && params.ticketNo.startsWith("TRG")
+      ? params.ticketNo
+      : `TRG-${Math.floor(100 + Math.random() * 900)}`;
+
+    const numericAge = typeof params.age === "string" ? parseInt(params.age) || 30 : params.age || 30;
+
+    const triageQueueDoc: Omit<QueueTicket, "id"> = {
+      ticketNo,
+      patientId: params.patientId,
+      patientName: params.patientName.trim(),
+      nationalId: cleanId,
+      phone: (params.phone || "").trim() || "N/A",
+      age: numericAge,
+      gender: params.gender || "Male",
+      department: "Triage",
+      currentDepartment: "triage",
+      service: "Nurse Triage & Vitals",
+      status: "pending",
+      priority: (params.priority === "STAT Emergency"
+        ? "stat_emergency"
+        : params.priority === "Urgent / Child"
+          ? "urgent"
+          : "normal") as any,
+      paymentScheme: params.paymentScheme || "Cash / M-Pesa",
+      insurancePolicyNo: params.insurancePolicyNo || "",
+      biometricStatus: params.biometricStatus === "verified" ? "verified" : "not_verified",
+      createdAt: nowIso,
+      timestamp: nowIso,
+      triageStage: "unassigned",
+      notes: params.notes || "Auto-routed to Nurse Triage upon registration for vital signs & triage acuity rating.",
+      encounterId: params.encounterId || null
+    } as any;
+
+    const addedDoc = await addDoc(collection(db, "queue"), cleanFirestoreData(triageQueueDoc));
+
+    // Update patient master record with active ticket and department
+    try {
+      await updateDoc(doc(db, "patients", params.patientId), {
+        activeTicketNo: ticketNo,
+        currentDepartment: "triage",
+        updatedAt: nowIso
+      });
+    } catch {}
+
+    console.log(`[Auto-Triage] Created triage queue ticket [${ticketNo}] for patient [${params.patientName}]`);
+    return {
+      success: true,
+      queueId: addedDoc.id,
+      ticketNo,
+      alreadyExisted: false
+    };
+  } catch (err) {
+    console.error("[Auto-Triage] Failed to create triage queue ticket:", err);
+    return {
+      success: false,
+      ticketNo: params.ticketNo || "TRG-000"
+    };
+  }
 }
 
 export const upsertUnifiedPatientRecord = async (
   input: UnifiedPatientInput
-): Promise<{ success: boolean; patientId: string; isNew: boolean }> => {
+): Promise<UpsertPatientResult> => {
   try {
     const cleanName = (input.patientName || "").trim();
     const cleanNationalId = (input.nationalId || "").trim();
@@ -316,7 +441,7 @@ export const upsertUnifiedPatientRecord = async (
         },
         latestDiagnosis: input.diagnosis || "Registration intake",
         latestSymptoms: input.symptoms || "Walk-in registration",
-        currentDepartment: input.currentDepartment || "reception",
+        currentDepartment: input.currentDepartment || "triage",
         activeTicketNo: input.activeTicketNo || "",
         sourceStation: input.sourceStation || "Reception",
         createdAt: nowIso,
@@ -326,7 +451,41 @@ export const upsertUnifiedPatientRecord = async (
       const docRef = doc(db, "patients", targetDocId);
       await setDoc(docRef, cleanFirestoreData(newPatientDoc), { merge: true });
       console.log(`[Auto-Sync] Created unified patient EHR [${targetDocId}] from ${input.sourceStation || "Workstation"}`);
-      return { success: true, patientId: targetDocId, isNew: true };
+
+      // Automatically create a queue ticket at Triage whenever a new patient is created
+      let assignedTicketNo = input.activeTicketNo;
+      let createdQueueId: string | undefined = undefined;
+      let createdTriageQueue = false;
+
+      if (input.autoQueueTriage !== false) {
+        const triageQueueResult = await createTriageQueueTicket({
+          patientId: targetDocId,
+          patientName: cleanName,
+          nationalId: cleanNationalId,
+          phone: cleanPhone,
+          age: numericAge,
+          gender: input.gender,
+          priority: input.priority,
+          paymentScheme: resolvedPaymentScheme,
+          insurancePolicyNo: resolvedPolicyNo,
+          biometricStatus: input.biometricStatus,
+          ticketNo: input.activeTicketNo,
+          notes: input.symptoms ? `Auto-triage queue on patient creation. Intake: ${input.symptoms}` : undefined
+        });
+
+        assignedTicketNo = triageQueueResult.ticketNo;
+        createdQueueId = triageQueueResult.queueId;
+        createdTriageQueue = true;
+      }
+
+      return {
+        success: true,
+        patientId: targetDocId,
+        isNew: true,
+        ticketNo: assignedTicketNo,
+        queueId: createdQueueId,
+        createdTriageQueue
+      };
     }
   } catch (error) {
     console.error("[Auto-Sync] Error in upsertUnifiedPatientRecord:", error);

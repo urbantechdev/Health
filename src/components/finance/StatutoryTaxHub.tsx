@@ -67,12 +67,13 @@ export default function StatutoryTaxHub({ invoices }: StatutoryTaxHubProps) {
     // Use payroll records if available, otherwise compute from active employees
     if (payrollRecords.length > 0) {
       payrollRecords.forEach((r) => {
-        totalGrossPay += r.grossSalary || 0;
-        totalPAYE += r.paye || 0;
-        totalSHIF += r.shif || 0;
-        totalNSSF += r.nssf || 0;
-        totalHousingLevy += r.housingLevy || 0;
-        totalNetPay += r.netSalary || 0;
+        const gross = (r as any).grossSalary ?? ((r.baseSalary || 0) + (r.allowances || 0));
+        totalGrossPay += gross;
+        totalPAYE += (r as any).paye ?? (r.deductions?.paye || 0);
+        totalSHIF += (r as any).shif ?? (r.deductions?.shif || 0);
+        totalNSSF += (r as any).nssf ?? (r.deductions?.nssf || 0);
+        totalHousingLevy += (r as any).housingLevy ?? (r.deductions?.housingLevy || 0);
+        totalNetPay += (r as any).netSalary ?? (r.netPay || 0);
       });
     } else {
       employees.forEach((emp) => {

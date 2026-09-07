@@ -207,7 +207,8 @@ export default function SecurityDesk() {
             phone: cleanNationalId,
             currentDepartment: "reception",
             sourceStation: `Security Gate Entry (${checkpoint})`,
-            symptoms: `Security Gate Entry logged at ${checkpoint} • Officer: ${officerName} • Note: ${customNotes || "Awaiting Reception Intake"}`
+            symptoms: `Security Gate Entry logged at ${checkpoint} • Officer: ${officerName} • Note: ${customNotes || "Awaiting Reception Intake"}`,
+            autoQueueTriage: false
           });
         } catch (syncErr) {
           console.warn("Unified patient sync note from security desk:", syncErr);

@@ -595,9 +595,6 @@ export default function RolePortalLogin({
                     onClick={onGoogleLogin}
                     className="relative px-4 py-2.5 bg-[#0F1C34]/90 hover:bg-[#162544] text-white font-bold border border-white/20 hover:border-white/40 rounded-xl text-xs sm:text-sm flex items-center gap-2.5 transition-all cursor-pointer shadow-md"
                   >
-                    <span className="font-black text-amber-300 uppercase tracking-wider text-[11px] px-2 py-0.5 bg-amber-400/20 rounded-md border border-amber-300/30">
-                      Admin
-                    </span>
                     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                       <path
                         fill="#4285F4"

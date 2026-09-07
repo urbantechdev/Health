@@ -890,30 +890,39 @@ export default function PatientHistoryLookupModal({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {patientInvoices.map((inv) => (
-                            <tr key={inv.id} className="hover:bg-slate-50/80">
-                              <td className="p-3 font-mono font-bold text-indigo-700">{inv.invoiceNumber}</td>
-                              <td className="p-3 font-mono text-slate-600">{inv.date}</td>
-                              <td className="p-3 font-bold text-slate-900">KES {inv.totalAmount?.toLocaleString()}</td>
-                              <td className="p-3 text-emerald-700 font-semibold">
-                                {inv.splitBilling?.sha ? `KES ${inv.splitBilling.sha.toLocaleString()}` : "KES 0"}
-                              </td>
-                              <td className="p-3 text-slate-700">
-                                {inv.splitBilling?.outOfPocket ? `KES ${inv.splitBilling.outOfPocket.toLocaleString()}` : `KES ${inv.totalAmount?.toLocaleString()}`}
-                              </td>
-                              <td className="p-3">
-                                <span
-                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                                    inv.status === "paid"
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : "bg-amber-100 text-amber-800"
-                                  }`}
-                                >
-                                  {inv.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
+                          {patientInvoices.map((inv: any) => {
+                            const invNum = inv.invoiceNumber || inv.kraCompliantInvoiceNo || inv.id;
+                            const invDate = inv.date || (inv.timestamp ? new Date(inv.timestamp).toLocaleDateString() : "-");
+                            const totalVal = inv.totalAmount ?? inv.total ?? 0;
+                            const shaCovered = inv.splitBilling?.sha ?? inv.split?.sha ?? 0;
+                            const outOfPocket = inv.splitBilling?.outOfPocket ?? inv.split?.outOfPocket ?? totalVal;
+                            const statusVal = inv.status || inv.paymentStatus || "unpaid";
+
+                            return (
+                              <tr key={inv.id} className="hover:bg-slate-50/80">
+                                <td className="p-3 font-mono font-bold text-indigo-700">{invNum}</td>
+                                <td className="p-3 font-mono text-slate-600">{invDate}</td>
+                                <td className="p-3 font-bold text-slate-900">KES {Number(totalVal).toLocaleString()}</td>
+                                <td className="p-3 text-emerald-700 font-semibold">
+                                  KES {Number(shaCovered).toLocaleString()}
+                                </td>
+                                <td className="p-3 text-slate-700">
+                                  KES {Number(outOfPocket).toLocaleString()}
+                                </td>
+                                <td className="p-3">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                                      statusVal === "paid"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-amber-100 text-amber-800"
+                                    }`}
+                                  >
+                                    {statusVal}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

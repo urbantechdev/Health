@@ -146,14 +146,18 @@ export default function DashboardOverview({
     return () => clearInterval(timer);
   }, []);
 
-  // Format currency
-  const formatKES = (value: number) => {
+  // Format currency safely
+  const formatKES = (value: number | string | undefined | null) => {
+    const num = typeof value === "number" ? value : Number(value) || 0;
     return new Intl.NumberFormat("en-KE", {
       style: "currency",
       currency: "KES",
       maximumFractionDigits: 0
-    }).format(value);
+    }).format(num);
   };
+
+  // Facility branding fallback
+  const facilityName = tenant?.name || "The Tassia Hill Hospital";
 
   // Live Digital Time Component placed on top of Hero Right Side
   const renderHeroDigitalClock = () => (
@@ -198,16 +202,16 @@ export default function DashboardOverview({
 
   // Render role-specific tailored dashboards
   if (currentUserRole === "Doctor") {
-    const doctorWaiting = tickets.filter(t => 
-      (t.currentDepartment === "doctor" || t.service?.toLowerCase().includes("doctor")) && 
+    const doctorWaiting = (tickets || []).filter(t => 
+      t && (t.currentDepartment === "doctor" || (t.service && t.service.toLowerCase().includes("doctor"))) && 
       t.status === "pending"
     );
-    const doctorServing = tickets.filter(t => 
-      (t.currentDepartment === "doctor" || t.service?.toLowerCase().includes("doctor")) && 
+    const doctorServing = (tickets || []).filter(t => 
+      t && (t.currentDepartment === "doctor" || (t.service && t.service.toLowerCase().includes("doctor"))) && 
       t.status === "serving"
     );
-    const doctorCompletedToday = tickets.filter(t => 
-      (t.currentDepartment === "doctor" || t.service?.toLowerCase().includes("doctor")) && 
+    const doctorCompletedToday = (tickets || []).filter(t => 
+      t && (t.currentDepartment === "doctor" || (t.service && t.service.toLowerCase().includes("doctor"))) && 
       t.status === "completed"
     );
 
@@ -234,7 +238,7 @@ export default function DashboardOverview({
                   </span>
                 </div>
                 <p className="text-xs text-cyan-200/80 font-medium mt-1">
-                  Active Consultation Room • Digital Triage & Prescription Station • {tenant.name}
+                  Active Consultation Room • Digital Triage & Prescription Station • {facilityName}
                 </p>
               </div>
             </div>
@@ -365,7 +369,7 @@ export default function DashboardOverview({
           invoices={invoices}
           onOpenPatientHistory={handleOpenPatientHistory}
           onPrintPatientDocument={handlePrintPatientDocument}
-          facilityName={tenant.name}
+          facilityName={facilityName}
         />
 
         {/* Global Modals */}
@@ -387,9 +391,9 @@ export default function DashboardOverview({
   }
 
   if (currentUserRole === "Pharmacy") {
-    const criticalStockCount = meds.filter(m => m.quantity <= m.minThreshold).length;
-    const outOfStock = meds.filter(m => m.quantity === 0);
-    const pharmacyQueue = tickets.filter(t => t.currentDepartment === "pharmacy" && t.status === "pending");
+    const criticalStockCount = (meds || []).filter(m => m && (m.quantity || 0) <= (m.minThreshold || 0)).length;
+    const outOfStock = (meds || []).filter(m => m && (m.quantity || 0) === 0);
+    const pharmacyQueue = (tickets || []).filter(t => t && t.currentDepartment === "pharmacy" && t.status === "pending");
 
     return (
       <div className="space-y-6">
@@ -408,7 +412,7 @@ export default function DashboardOverview({
                   </span>
                 </div>
                 <p className="text-xs text-teal-200/80 font-medium mt-1">
-                  Prescription Dispensing & Pharmaceutical Inventory Control • {tenant.name}
+                  Prescription Dispensing & Pharmaceutical Inventory Control • {facilityName}
                 </p>
               </div>
             </div>
@@ -511,9 +515,9 @@ export default function DashboardOverview({
   }
 
   if (currentUserRole === "Reception") {
-    const receptionQueue = tickets.filter(t => t.currentDepartment === "reception" || !t.currentDepartment);
-    const registeredToday = tickets.length;
-    const verifiedBiometric = tickets.filter(t => t.biometricStatus === "verified").length;
+    const receptionQueue = (tickets || []).filter(t => t && (t.currentDepartment === "reception" || !t.currentDepartment));
+    const registeredToday = (tickets || []).length;
+    const verifiedBiometric = (tickets || []).filter(t => t && t.biometricStatus === "verified").length;
 
     return (
       <div className="space-y-6">
@@ -532,7 +536,7 @@ export default function DashboardOverview({
                   </span>
                 </div>
                 <p className="text-xs text-emerald-200/80 font-medium mt-1">
-                  Patient Intake & SHA / Biometric Verification Station • {tenant.name}
+                  Patient Intake & SHA / Biometric Verification Station • {facilityName}
                 </p>
               </div>
             </div>
@@ -596,7 +600,7 @@ export default function DashboardOverview({
               </div>
               <span className="text-xs font-bold text-blue-700 uppercase">Active Care Journey</span>
             </div>
-            <span className="text-4xl font-black text-slate-900 font-mono">{tickets.filter(t => t.status !== "completed").length}</span>
+            <span className="text-4xl font-black text-slate-900 font-mono">{(tickets || []).filter(t => t && t.status !== "completed").length}</span>
             <p className="text-xs text-slate-500 mt-2">Patients navigating hospital departments</p>
           </motion.div>
         </div>
@@ -622,7 +626,7 @@ export default function DashboardOverview({
           invoices={invoices}
           onOpenPatientHistory={handleOpenPatientHistory}
           onPrintPatientDocument={handlePrintPatientDocument}
-          facilityName={tenant.name}
+          facilityName={facilityName}
         />
 
         {/* Global Modals */}
@@ -644,8 +648,8 @@ export default function DashboardOverview({
   }
 
   if (currentUserRole === "Lab") {
-    const labQueue = tickets.filter(t => t.currentDepartment === "laboratory" && t.status === "pending");
-    const labServing = tickets.filter(t => t.currentDepartment === "laboratory" && t.status === "serving");
+    const labQueue = (tickets || []).filter(t => t && t.currentDepartment === "laboratory" && t.status === "pending");
+    const labServing = (tickets || []).filter(t => t && t.currentDepartment === "laboratory" && t.status === "serving");
 
     return (
       <div className="space-y-6">
@@ -663,7 +667,7 @@ export default function DashboardOverview({
                   </span>
                 </div>
                 <p className="text-xs text-amber-200/80 font-medium mt-1">
-                  Specimen Intake & Diagnostic Analysis • {tenant.name}
+                  Specimen Intake & Diagnostic Analysis • {facilityName}
                 </p>
               </div>
             </div>
@@ -700,9 +704,9 @@ export default function DashboardOverview({
   }
 
   if (currentUserRole === "HR" || currentUserRole === "Payroll") {
-    const totalPayrollEst = employees
-      .filter((e) => e.isEmployee !== false && e.employmentType !== "developer" && (e.salary || 0) > 0)
-      .reduce((sum, e) => sum + (e.salary || 0), 0);
+    const totalPayrollEst = (employees || [])
+      .filter((e) => e && e.isEmployee !== false && e.employmentType !== "developer" && (e.salary || 0) > 0)
+      .reduce((sum, e) => sum + (Number(e.salary) || 0), 0);
 
     return (
       <div className="space-y-6">
@@ -720,7 +724,7 @@ export default function DashboardOverview({
                   </span>
                 </div>
                 <p className="text-xs text-slate-800 font-medium mt-1">
-                  Employee Credentialing & Compensation Operations • {tenant.name}
+                  Employee Credentialing & Compensation Operations • {facilityName}
                 </p>
               </div>
             </div>
@@ -729,7 +733,7 @@ export default function DashboardOverview({
               {renderHeroDigitalClock()}
               <div className="bg-yellow-300 px-5 py-3 rounded-2xl border border-yellow-500 text-right">
                 <span className="text-[9px] text-slate-900 font-black tracking-widest uppercase block">ACTIVE STAFF</span>
-                <span className="text-3xl font-black text-slate-950 font-mono">{employees.length}</span>
+                <span className="text-3xl font-black text-slate-950 font-mono">{(employees || []).length}</span>
                 <p className="text-[10px] text-slate-800 font-semibold">Registered Workers</p>
               </div>
             </div>
@@ -743,8 +747,8 @@ export default function DashboardOverview({
             className="bg-white border border-rose-100 rounded-2xl p-5 shadow-sm hover:shadow-md cursor-pointer transition-all"
           >
             <span className="text-xs font-bold text-rose-700 uppercase">Facility Staff Strength</span>
-            <div className="text-4xl font-black text-slate-900 font-mono mt-1">{employees.length}</div>
-            <p className="text-xs text-slate-500 mt-2">{employees.filter(e => e.department === "medical").length} Clinicians on duty</p>
+            <div className="text-4xl font-black text-slate-900 font-mono mt-1">{(employees || []).length}</div>
+            <p className="text-xs text-slate-500 mt-2">{(employees || []).filter(e => e?.department === "medical").length} Clinicians on duty</p>
           </motion.div>
 
           <motion.div 
@@ -762,17 +766,17 @@ export default function DashboardOverview({
   }
 
   if (currentUserRole === "Finance" || currentUserRole === "Billing & Accounts") {
-    const totalRevenue = invoices
-      .filter(inv => inv.paymentStatus === "paid")
-      .reduce((sum, inv) => sum + (inv.total || 0), 0);
+    const totalRevenue = (invoices || [])
+      .filter(inv => inv && inv.paymentStatus === "paid")
+      .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
-    const mpesaRev = invoices
-      .filter(inv => inv.paymentStatus === "paid" && inv.paymentMethod === "M-PESA")
-      .reduce((sum, inv) => sum + (inv.total || 0), 0);
+    const mpesaRev = (invoices || [])
+      .filter(inv => inv && inv.paymentStatus === "paid" && inv.paymentMethod === "M-PESA")
+      .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
-    const shaRev = invoices
-      .filter(inv => inv.paymentStatus === "paid" && (inv.paymentMethod === "SHA/NHIF" || inv.split?.sha > 0))
-      .reduce((sum, inv) => sum + (inv.split?.sha || inv.total || 0), 0);
+    const shaRev = (invoices || [])
+      .filter(inv => inv && inv.paymentStatus === "paid" && (inv.paymentMethod === "SHA/NHIF" || (inv.split && Number(inv.split.sha) > 0)))
+      .reduce((sum, inv) => sum + (Number(inv.split?.sha) || Number(inv.total) || 0), 0);
 
     return (
       <div className="space-y-6">
@@ -790,7 +794,7 @@ export default function DashboardOverview({
                   </span>
                 </div>
                 <p className="text-xs text-emerald-200/80 font-medium mt-1">
-                  KRA eTIMS Invoicing & M-Pesa / SHA Reconciliation • {tenant.name}
+                  KRA eTIMS Invoicing & M-Pesa / SHA Reconciliation • {facilityName}
                 </p>
               </div>
             </div>
@@ -835,7 +839,7 @@ export default function DashboardOverview({
           invoices={invoices}
           onOpenPatientHistory={handleOpenPatientHistory}
           onPrintPatientDocument={handlePrintPatientDocument}
-          facilityName={tenant.name}
+          facilityName={facilityName}
         />
 
         {/* Global Modals */}
@@ -857,39 +861,39 @@ export default function DashboardOverview({
   }
 
   // Fallback for Super Admin / Admin (Master Comprehensive Operations Overview)
-  const activePatients = tickets.filter(t => t.status === "pending" || t.status === "serving");
-  const completedPatientsCount = tickets.filter(t => t.status === "completed").length;
-  const criticalStockCount = meds.filter(m => m.quantity <= m.minThreshold).length;
+  const activePatients = (tickets || []).filter(t => t && (t.status === "pending" || t.status === "serving"));
+  const completedPatientsCount = (tickets || []).filter(t => t && t.status === "completed").length;
+  const criticalStockCount = (meds || []).filter(m => m && (m.quantity ?? 0) <= (m.minThreshold ?? 0)).length;
 
-  const totalRevenue = invoices
-    .filter(inv => inv.paymentStatus === "paid")
-    .reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const totalRevenue = (invoices || [])
+    .filter(inv => inv && inv.paymentStatus === "paid")
+    .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
-  const mpesaRevenue = invoices
-    .filter(inv => inv.paymentStatus === "paid" && inv.paymentMethod === "M-PESA")
-    .reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const mpesaRevenue = (invoices || [])
+    .filter(inv => inv && inv.paymentStatus === "paid" && inv.paymentMethod === "M-PESA")
+    .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
-  const shaClaimRevenue = invoices
-    .filter(inv => inv.paymentStatus === "paid" && (inv.paymentMethod === "SHA/NHIF" || inv.split?.sha > 0))
-    .reduce((sum, inv) => sum + (inv.split?.sha || inv.total || 0), 0);
+  const shaClaimRevenue = (invoices || [])
+    .filter(inv => inv && inv.paymentStatus === "paid" && (inv.paymentMethod === "SHA/NHIF" || (inv.split && Number(inv.split.sha) > 0)))
+    .reduce((sum, inv) => sum + (Number(inv.split?.sha) || Number(inv.total) || 0), 0);
 
-  const cashRevenue = invoices
-    .filter(inv => inv.paymentStatus === "paid" && inv.paymentMethod === "Cash")
-    .reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const cashRevenue = (invoices || [])
+    .filter(inv => inv && inv.paymentStatus === "paid" && inv.paymentMethod === "Cash")
+    .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
-  const insuranceRevenue = invoices
-    .filter(inv => inv.paymentStatus === "paid" && (inv.paymentMethod === "Insurance" || inv.split?.insurance > 0))
-    .reduce((sum, inv) => sum + (inv.split?.insurance || 0), 0);
+  const insuranceRevenue = (invoices || [])
+    .filter(inv => inv && inv.paymentStatus === "paid" && (inv.paymentMethod === "Insurance" || (inv.split && Number(inv.split.insurance) > 0)))
+    .reduce((sum, inv) => sum + (Number(inv.split?.insurance) || 0), 0);
 
-  const compliantInvoices = invoices.filter(inv => inv.kraCompliantInvoiceNo).length;
+  const compliantInvoices = (invoices || []).filter(inv => inv && inv.kraCompliantInvoiceNo).length;
 
   const deptFlowData = [
-    { name: "Reception", Count: tickets.filter(t => t.currentDepartment === "reception").length },
-    { name: "Live Queue", Count: tickets.filter(t => t.currentDepartment === "queue").length },
-    { name: "Doctors", Count: tickets.filter(t => t.currentDepartment === "doctor").length },
-    { name: "Diagnostics", Count: tickets.filter(t => t.currentDepartment === "laboratory" || t.currentDepartment === "radiology").length },
-    { name: "Pharmacy", Count: tickets.filter(t => t.currentDepartment === "pharmacy").length },
-    { name: "Billing", Count: tickets.filter(t => t.currentDepartment === "billing").length }
+    { name: "Reception", Count: (tickets || []).filter(t => t?.currentDepartment === "reception").length },
+    { name: "Live Queue", Count: (tickets || []).filter(t => t?.currentDepartment === "queue").length },
+    { name: "Doctors", Count: (tickets || []).filter(t => t?.currentDepartment === "doctor").length },
+    { name: "Diagnostics", Count: (tickets || []).filter(t => t?.currentDepartment === "laboratory" || t?.currentDepartment === "radiology").length },
+    { name: "Pharmacy", Count: (tickets || []).filter(t => t?.currentDepartment === "pharmacy").length },
+    { name: "Billing", Count: (tickets || []).filter(t => t?.currentDepartment === "billing").length }
   ];
 
   const financeBreakdownData = [
@@ -899,8 +903,12 @@ export default function DashboardOverview({
     { name: "Insurance", Revenue: insuranceRevenue }
   ];
 
-  const recentTickets = [...tickets]
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+  const recentTickets = [...(tickets || [])]
+    .sort((a, b) => {
+      const timeA = typeof a?.timestamp === "string" ? a.timestamp : a?.timestamp?.toDate ? a.timestamp.toDate().toISOString() : String(a?.timestamp || "");
+      const timeB = typeof b?.timestamp === "string" ? b.timestamp : b?.timestamp?.toDate ? b.timestamp.toDate().toISOString() : String(b?.timestamp || "");
+      return timeB.localeCompare(timeA);
+    })
     .slice(0, 5);
 
   return (
@@ -914,7 +922,7 @@ export default function DashboardOverview({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold uppercase tracking-tight text-slate-950 font-comfortaa">{tenant.name}</h1>
+                <h1 className="text-2xl font-bold uppercase tracking-tight text-slate-950 font-comfortaa">{facilityName}</h1>
                 <span className="px-2.5 py-0.5 bg-yellow-300 text-slate-950 border border-yellow-500 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xs">
                   {currentUserRole}
                 </span>
@@ -1112,7 +1120,7 @@ export default function DashboardOverview({
         invoices={invoices}
         onOpenPatientHistory={handleOpenPatientHistory}
         onPrintPatientDocument={handlePrintPatientDocument}
-        facilityName={tenant.name}
+        facilityName={facilityName}
       />
 
       {/* Global Modals */}

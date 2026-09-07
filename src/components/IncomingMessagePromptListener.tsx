@@ -147,7 +147,7 @@ export default function IncomingMessagePromptListener({
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[99999] max-w-md w-full font-sans pointer-events-auto">
+    <div className="fixed bottom-24 lg:bottom-28 right-6 z-[99999] max-w-md w-full font-sans pointer-events-auto">
       <AnimatePresence>
         <motion.div
           initial={{ opacity: 0, y: 30, scale: 0.95 }}

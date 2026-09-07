@@ -171,17 +171,11 @@ export default function DoctorsDesk({
     }
   };
 
-  // Helper to speak announcement aloud
-  const speakStationAnnouncement = (text: string) => {
+  // Helper to speak announcement aloud via unified hospital PA voice engine
+  const speakStationAnnouncement = (text: string, ticketNo?: string, room?: string) => {
     try {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
-        utterance.pitch = 1.0;
-        utterance.lang = "en-KE";
-        window.speechSynthesis.speak(utterance);
-      }
+      voiceAnnouncer.resumeAudioContext();
+      voiceAnnouncer.announceCustom(text, ticketNo, room);
     } catch (e) {
       console.log("Speech synthesis error:", e);
     }
@@ -643,7 +637,7 @@ export default function DoctorsDesk({
       // 4. Audio & Voice Broadcast
       playAudioTone(880, 0.25);
       setTimeout(() => playAudioTone(1174, 0.35), 260);
-      speakStationAnnouncement(`${instructionPhrase}. ${selectedPatient.patientName}, please proceed to the Pharmacy Dispensing Counter.`);
+      speakStationAnnouncement(`${instructionPhrase}. ${selectedPatient.patientName}, please proceed to the Pharmacy Dispensing Counter.`, assignedTicketNo, "Hospital Pharmacy & Dispensing Counter");
 
       setRoutingCue({
         ticketNo: assignedTicketNo,
@@ -883,7 +877,7 @@ export default function DoctorsDesk({
       setTimeout(() => playAudioTone(1174, 0.35), 260);
 
       const speechAnnouncement = `Ticket No. ${assignedTicketNo}. ${selectedPatient.patientName}, please proceed immediately to the Laboratory Diagnostic Station for ${testsToOrder.join(" and ")}.`;
-      speakStationAnnouncement(speechAnnouncement);
+      speakStationAnnouncement(speechAnnouncement, assignedTicketNo, "Laboratory Diagnostic Station");
 
       setRoutingCue({
         ticketNo: assignedTicketNo,
@@ -1134,7 +1128,7 @@ export default function DoctorsDesk({
       setTimeout(() => playAudioTone(1174, 0.35), 260);
 
       const speechAnnouncement = `${instructionPhrase}. ${selectedPatient.patientName}, please proceed immediately to ${assignedStationName.split("(")[0].trim()}.`;
-      speakStationAnnouncement(speechAnnouncement);
+      speakStationAnnouncement(speechAnnouncement, assignedTicketNo, assignedStationName.split("(")[0].trim());
 
       setRoutingCue({
         ticketNo: assignedTicketNo,
@@ -2404,7 +2398,11 @@ export default function DoctorsDesk({
                   type="button"
                   onClick={() => {
                     playAudioTone(880, 0.25);
-                    speakStationAnnouncement(`${routingCue.instructionText}. ${routingCue.patientName}, please proceed immediately to ${routingCue.stationName.split("(")[0].trim()}.`);
+                    speakStationAnnouncement(
+                      `${routingCue.instructionText}. ${routingCue.patientName}, please proceed immediately to ${routingCue.stationName.split("(")[0].trim()}.`,
+                      routingCue.ticketNo,
+                      routingCue.stationName.split("(")[0].trim()
+                    );
                   }}
                   className="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
