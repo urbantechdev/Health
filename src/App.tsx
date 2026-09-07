@@ -380,6 +380,8 @@ export default function App() {
     return "dashboard";
   });
 
+  const [selectedBillingPatientId, setSelectedBillingPatientId] = useState<string | undefined>(undefined);
+
   // Authentication & Session States
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [simulatedUser, setSimulatedUser] = useState<{ email: string; displayName: string; isSimulated?: boolean; photoURL?: string } | null>(null);
@@ -2591,7 +2593,13 @@ export default function App() {
                     )}
 
                     {activeTab === "reception" && toggles.reception && (
-                      <ReceptionKiosk onTicketCreated={() => setActiveTab("triage")} />
+                      <ReceptionKiosk 
+                        onTicketCreated={() => setActiveTab("triage")} 
+                        onNavigateToBilling={(pId) => {
+                          if (pId) setSelectedBillingPatientId(pId);
+                          setActiveTab("billing");
+                        }}
+                      />
                     )}
 
                     {activeTab === "triage" && (
@@ -2673,7 +2681,11 @@ export default function App() {
                     )}
 
                     {activeTab === "billing" && toggles.billing && (
-                      <PaperlessBilling toggles={toggles} onPaymentReconciled={() => setActiveTab("finance")} />
+                      <PaperlessBilling 
+                        toggles={toggles} 
+                        initialPatientId={selectedBillingPatientId}
+                        onPaymentReconciled={() => setActiveTab("finance")} 
+                      />
                     )}
 
                     {activeTab === "finance" && (
