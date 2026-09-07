@@ -1,12 +1,4 @@
-// Ensure ESM plugins like vite-plugin-pwa resolve their own package.json instead of tsx global '.'
-try {
-  delete (global as any)['__dir' + 'name'];
-  delete (globalThis as any)['__dir' + 'name'];
-  delete (global as any)['__file' + 'name'];
-  delete (globalThis as any)['__file' + 'name'];
-} catch {
-  // ignore
-}
+import "./src/clean-env.ts";
 
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
@@ -82,9 +74,100 @@ function suppressViteHmrLogsPlugin(): Plugin {
   };
 }
 
+// Eliminate WebSocket connection failures and [vite] logs in container iframe
+function safeViteClientPlugin(): Plugin {
+  const mockClientCode = `
+class DummyErrorOverlay extends HTMLElement {
+  close() { this.remove(); }
+}
+if (typeof customElements !== "undefined" && !customElements.get("vite-error-overlay")) {
+  customElements.define("vite-error-overlay", DummyErrorOverlay);
+}
+
+const sheetsMap = new Map();
+if (typeof document !== "undefined") {
+  document.querySelectorAll("style[data-vite-dev-id]").forEach((el) => {
+    sheetsMap.set(el.getAttribute("data-vite-dev-id"), el);
+  });
+}
+const cspNonce = typeof document !== "undefined" ? document.querySelector("meta[property=csp-nonce]")?.nonce : undefined;
+let lastInsertedStyle;
+
+export function updateStyle(id, content) {
+  let style = sheetsMap.get(id);
+  if (!style) {
+    style = document.createElement("style");
+    style.setAttribute("type", "text/css");
+    style.setAttribute("data-vite-dev-id", id);
+    style.textContent = content;
+    if (cspNonce) {
+      style.setAttribute("nonce", cspNonce);
+    }
+    if (!lastInsertedStyle) {
+      document.head.appendChild(style);
+      setTimeout(() => {
+        lastInsertedStyle = undefined;
+      }, 0);
+    } else {
+      lastInsertedStyle.insertAdjacentElement("afterend", style);
+    }
+    lastInsertedStyle = style;
+  } else {
+    style.textContent = content;
+  }
+  sheetsMap.set(id, style);
+}
+
+export function removeStyle(id) {
+  const style = sheetsMap.get(id);
+  if (style && style.parentNode) {
+    style.parentNode.removeChild(style);
+    sheetsMap.delete(id);
+  }
+}
+
+export function createHotContext(ownerPath) {
+  return {
+    data: {},
+    accept() {},
+    acceptExports() {},
+    dispose() {},
+    prune() {},
+    invalidate() {},
+    decline() {},
+    on() {},
+    off() {},
+    send() {}
+  };
+}
+
+export function injectQuery(url, queryToInject) {
+  if (url[0] !== "." && url[0] !== "/") {
+    return url;
+  }
+  const pathname = url.replace(/[?#].*$/, "");
+  const { search, hash } = new URL(url, "http://vite.dev");
+  return \`\${pathname}?\${queryToInject}\${search ? "&" + search.slice(1) : ""}\${hash || ""}\`;
+}
+
+export { DummyErrorOverlay as ErrorOverlay };
+`;
+
+  return {
+    name: 'safe-vite-client',
+    enforce: 'pre',
+    transform(code, id) {
+      if (id.includes('@vite/client') || id.includes('vite/dist/client/client.mjs')) {
+        return mockClientCode;
+      }
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
     plugins: [
+      safeViteClientPlugin(),
       suppressViteHmrLogsPlugin(),
       react(),
       tailwindcss(),
@@ -172,10 +255,12 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(projectRootDir, '.'),
       },
+      extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
     },
     server: {
       port: 3000,
       host: '0.0.0.0',
+      hmr: process.env.DISABLE_HMR === 'true' ? false : { overlay: false },
     },
   };
 });

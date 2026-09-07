@@ -1,12 +1,4 @@
-// Ensure ESM plugins like vite-plugin-pwa resolve correctly in tsx
-try {
-  delete (global as any)['__dir' + 'name'];
-  delete (globalThis as any)['__dir' + 'name'];
-  delete (global as any)['__file' + 'name'];
-  delete (globalThis as any)['__file' + 'name'];
-} catch {
-  // ignore
-}
+import "./src/clean-env.ts";
 
 import express from "express";
 import http from "http";
@@ -781,7 +773,8 @@ async function startServer() {
       const vite = await createViteServer({
         server: {
           middlewareMode: true,
-          hmr: { server },
+          ws: false,
+          hmr: false,
         },
         appType: "spa",
       });
