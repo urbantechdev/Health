@@ -223,3 +223,31 @@ export async function modernAlert(
     badgeText: options?.badgeText
   });
 }
+
+export async function modernPrompt(
+  message: string,
+  options?: {
+    title?: string;
+    confirmText?: string;
+    cancelText?: string;
+    defaultValue?: string;
+    placeholder?: string;
+    type?: PromptType;
+    details?: string;
+    badgeText?: string;
+  }
+): Promise<string | null> {
+  const result = await promptService.showModal({
+    message,
+    title: options?.title || "Input Required",
+    type: options?.type || "question",
+    confirmText: options?.confirmText || "Submit",
+    cancelText: options?.cancelText || "Cancel",
+    inputMode: true,
+    inputValue: options?.defaultValue || "",
+    inputPlaceholder: options?.placeholder || "",
+    details: options?.details,
+    badgeText: options?.badgeText
+  });
+  return typeof result === "string" ? result : null;
+}

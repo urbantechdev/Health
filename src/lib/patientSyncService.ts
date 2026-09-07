@@ -95,6 +95,11 @@ export interface UnifiedPatientInput {
   age?: number | string;
   gender?: string;
   bloodType?: string;
+  nextOfKin?: string;
+  nextOfKinPhone?: string;
+  residence?: string;
+  paymentScheme?: string;
+  insurancePolicyNo?: string;
   shaEligible?: "eligible" | "not_eligible" | "unchecked";
   shaId?: string;
   vitals?: {

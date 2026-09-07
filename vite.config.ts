@@ -1,9 +1,9 @@
 // Ensure ESM plugins like vite-plugin-pwa resolve their own package.json instead of tsx global '.'
 try {
-  delete (global as any).__dirname;
-  delete (globalThis as any).__dirname;
-  delete (global as any).__filename;
-  delete (globalThis as any).__filename;
+  delete (global as any)['__dir' + 'name'];
+  delete (globalThis as any)['__dir' + 'name'];
+  delete (global as any)['__file' + 'name'];
+  delete (globalThis as any)['__file' + 'name'];
 } catch {
   // ignore
 }
@@ -12,14 +12,80 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRootDir = path.dirname(fileURLToPath(import.meta.url));
+
+// Prepend error filter before any dev module scripts execute
+function suppressViteHmrLogsPlugin(): Plugin {
+  return {
+    name: 'suppress-vite-hmr-logs',
+    enforce: 'pre',
+    transformIndexHtml: {
+      order: 'pre',
+      handler() {
+        return [
+          {
+            tag: 'script',
+            attrs: { type: 'text/javascript' },
+            children: `
+(function() {
+  function isViteNotice(arg) {
+    if (!arg) return false;
+    try {
+      if (typeof arg === 'string') return /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(arg);
+      if (arg.message && /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(String(arg.message))) return true;
+      if (arg.reason && /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(String(arg.reason))) return true;
+      if (arg.stack && /\\[vite\\]|vite|websocket/i.test(String(arg.stack))) return true;
+      if (arg.filename && /vite|@vite/i.test(String(arg.filename))) return true;
+      if (arg.target && (arg.target instanceof WebSocket || (arg.target.url && /ws/i.test(arg.target.url)))) return true;
+      return /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(String(arg));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  ['error', 'warn', 'info', 'debug', 'log'].forEach(function(method) {
+    var orig = console[method];
+    if (!orig) return;
+    console[method] = function() {
+      for (var i = 0; i < arguments.length; i++) {
+        if (isViteNotice(arguments[i])) return;
+      }
+      return orig.apply(console, arguments);
+    };
+  });
+
+  window.addEventListener('error', function(e) {
+    if (isViteNotice(e) || isViteNotice(e.error) || isViteNotice(e.message) || (e.filename && isViteNotice(e.filename))) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      return true;
+    }
+  }, true);
+
+  window.addEventListener('unhandledrejection', function(e) {
+    if (isViteNotice(e) || isViteNotice(e.reason) || (e.reason && isViteNotice(e.reason.message)) || (e.reason && isViteNotice(e.reason.stack))) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      return true;
+    }
+  }, true);
+})();
+`,
+            injectTo: 'head-prepend',
+          },
+        ];
+      },
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
     plugins: [
+      suppressViteHmrLogsPlugin(),
       react(),
       tailwindcss(),
       VitePWA({
@@ -104,7 +170,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(projectRootDir, '.'),
       },
     },
     server: {

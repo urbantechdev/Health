@@ -54,6 +54,7 @@ export function normalizeSpecialtyTerm(term: string): string {
     .toLowerCase()
     .replace(/clinic|suite|department|unit|specialist|specialty|consultant|doctor|dr\.|officer/g, "")
     .replace(/[^a-z0-9]/g, "")
+    .replace(/(ologist|ology|iatrist|iatry|ician|ics|ist)$/g, "")
     .trim();
 }
 

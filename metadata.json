@@ -1,6 +1,10 @@
 {
-  "name": "",
-  "description": "",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "HMIS",
+  "description": "The Tassia Hill Hospital Multi-Tenant Hospital Management Information System (HMIS) with offline resilience, installable PWA support, dynamic departmental workflows, paperless billing, smart pharmacy POS, and deep integrations with SHA/Taifa Care, KRA eTIMS, and Safaricom M-PESA.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

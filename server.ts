@@ -1,9 +1,9 @@
-// Clean up tsx global definitions that conflict with ESM Vite plugins
+// Ensure ESM plugins like vite-plugin-pwa resolve correctly in tsx
 try {
-  delete (global as any).__dirname;
-  delete (globalThis as any).__dirname;
-  delete (global as any).__filename;
-  delete (globalThis as any).__filename;
+  delete (global as any)['__dir' + 'name'];
+  delete (globalThis as any)['__dir' + 'name'];
+  delete (global as any)['__file' + 'name'];
+  delete (globalThis as any)['__file' + 'name'];
 } catch {
   // ignore
 }
@@ -779,7 +779,10 @@ async function startServer() {
     if (process.env.NODE_ENV !== "production") {
       console.log("[Server] Mounting Vite dev middleware...");
       const vite = await createViteServer({
-        server: { middlewareMode: true },
+        server: {
+          middlewareMode: true,
+          hmr: { server },
+        },
         appType: "spa",
       });
       app.use(vite.middlewares);

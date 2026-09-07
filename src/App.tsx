@@ -107,7 +107,8 @@ import {
   FileDown,
   Download,
   BookMarked,
-  Receipt
+  Receipt,
+  Fingerprint
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -404,7 +405,7 @@ export default function App() {
   const [brandFontId, setBrandFontId] = useState<string>(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
   const [brandThemeColor, setBrandThemeColor] = useState<string>(() => localStorage.getItem("platform_theme_color") || "emerald");
   const [brandBlockEdgeColor, setBrandBlockEdgeColor] = useState<string>(() => localStorage.getItem("platform_block_edge_color") || "#059669");
-  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Global M-Pesa, SHA & Logo Modal states
@@ -1340,7 +1341,7 @@ export default function App() {
         {/* Splash Screen Loader with Animated Logo and Clinical Branding */}
         <SplashScreenLoader
           isVisible={isInitialLoading}
-          minDurationMs={2500}
+          minDurationMs={0}
           onComplete={() => setIsInitialLoading(false)}
           logoUrl={brandLogoUrl}
           hospitalName={brandCustomName || "The Tassia Hill Hospital"}
@@ -3070,7 +3071,7 @@ export default function App() {
     {/* Splash Screen Loader with Animated Logo and Clinical Branding */}
     <SplashScreenLoader
       isVisible={isInitialLoading}
-      minDurationMs={2500}
+      minDurationMs={0}
       onComplete={() => setIsInitialLoading(false)}
       logoUrl={brandLogoUrl}
       hospitalName={brandCustomName || "The Tassia Hill Hospital"}
