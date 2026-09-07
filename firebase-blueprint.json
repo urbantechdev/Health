@@ -170,7 +170,14 @@
         "hospitalName": { "type": "string" },
         "headerBgStyle": { "type": "string" },
         "themeColor": { "type": "string" },
-        "fontId": { "type": "string" }
+        "fontId": { "type": "string" },
+        "appName": { "type": "string" },
+        "shortName": { "type": "string" },
+        "displayMode": { "type": "string" },
+        "backgroundColor": { "type": "string" },
+        "offlineModeEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
       }
     }
   }
