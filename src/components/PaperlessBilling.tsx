@@ -79,9 +79,10 @@ import { toast, modernConfirm } from "../lib/promptService";
 interface PaperlessBillingProps {
   toggles: any;
   onPaymentReconciled: () => void;
+  initialPatientId?: string | null;
 }
 
-export default function PaperlessBilling({ toggles, onPaymentReconciled }: PaperlessBillingProps) {
+export default function PaperlessBilling({ toggles, onPaymentReconciled, initialPatientId }: PaperlessBillingProps) {
   // Master Invoices from Firestore
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   
@@ -93,9 +94,18 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
   const [bedRates, setBedRates] = useState<WardBedRateSetting[]>([]);
 
   // Selection & Search
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(initialPatientId || null);
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
   const [patientFilterMode, setPatientFilterMode] = useState<"active_cases" | "admitted" | "all">("active_cases");
+
+  // Prevent double billing submission
+  const [isSubmittingBill, setIsSubmittingBill] = useState(false);
+
+  useEffect(() => {
+    if (initialPatientId) {
+      setSelectedPatientId(initialPatientId);
+    }
+  }, [initialPatientId]);
 
   // Patient Available / Unbilled Procedures
   const [availableItems, setAvailableItems] = useState<BillItemDraft[]>([]);
@@ -257,22 +267,93 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
   const loadPatientProcedures = async (patient: MedicalRecord, encounter?: Encounter) => {
     const unbilledList: BillItemDraft[] = [];
 
-    // 1. Check Consultation Intake Fee
-    unbilledList.push({
-      id: `avail-consult-${patient.id}`,
-      sourceId: patient.id,
-      sourceType: "consultation",
-      description: "General Outpatient Consultation & Clinical Review",
-      category: "consultation",
-      department: "Outpatient / OPD",
-      quantity: 1,
-      unitPrice: 1000,
-      amount: 1000,
-      notes: "Standard physician / medical officer intake consultation",
-      addedAt: new Date().toISOString()
-    });
+    // 1. Fetch patient's past paid invoices to prevent duplicate charging
+    const paidItemKeywords = new Set<string>();
+    let consultationAlreadyPaid = false;
+    try {
+      const invSnap = await getDocs(query(collection(db, "invoices"), where("patientId", "==", patient.id)));
+      invSnap.forEach((d) => {
+        const inv = d.data() as Invoice;
+        if (inv.paymentStatus === "paid" || inv.total === 0) {
+          (inv.items || []).forEach((it) => {
+            const desc = it.description.toLowerCase().trim();
+            paidItemKeywords.add(desc);
+            if (
+              desc.includes("consult") ||
+              desc.includes("intake") ||
+              desc.includes("registration") ||
+              it.department?.toLowerCase().includes("opd") ||
+              it.department?.toLowerCase().includes("reception")
+            ) {
+              consultationAlreadyPaid = true;
+            }
+          });
+        }
+      });
+    } catch (invErr) {
+      console.warn("Invoice history check notice:", invErr);
+    }
 
-    // 2. Check Ward Bed Stays if Admitted
+    // 2. Check Live Patient Cart from Firestore
+    let cartHasConsultation = false;
+    try {
+      const liveCart = await getPatientCart(patient.id);
+      if (liveCart && liveCart.items) {
+        const pendingCartItems = liveCart.items.filter((i) => i.status === "pending_checkout");
+        cartHasConsultation = pendingCartItems.some(
+          (i) => i.category === "consultation" || i.itemCode === "REG-INTAKE" || i.name.toLowerCase().includes("consult") || i.name.toLowerCase().includes("intake")
+        );
+
+        pendingCartItems.forEach((cItem) => {
+          const cleanName = cItem.name.toLowerCase().trim();
+          // Skip if already settled in a paid invoice
+          if (paidItemKeywords.has(cleanName)) return;
+
+          // Check if already in unbilledList by name or sourceId
+          const exists = unbilledList.some(
+            (u) => u.sourceId === cItem.id || u.description.toLowerCase().includes(cleanName) || cleanName.includes(u.description.toLowerCase())
+          );
+          if (!exists) {
+            unbilledList.push({
+              id: `cart-${cItem.id}`,
+              sourceId: cItem.id,
+              sourceType: "custom",
+              description: `[${cItem.stage}] ${cItem.name}`,
+              category: cItem.category === "supplies" ? "other" : (cItem.category as any),
+              department: cItem.department || cItem.stage,
+              quantity: cItem.quantity || 1,
+              unitPrice: cItem.unitPrice || 0,
+              amount: cItem.totalPrice || (cItem.quantity * cItem.unitPrice),
+              notes: cItem.notes || `Transmitted from ${cItem.stage} by ${cItem.addedBy}`,
+              addedAt: cItem.addedAt || new Date().toISOString()
+            });
+          }
+        });
+      }
+    } catch (cErr) {
+      console.warn("Live cart check notice:", cErr);
+    }
+
+    // 3. Check Consultation Intake Fee (ONLY if not already paid and not already added to cart)
+    if (!consultationAlreadyPaid && !cartHasConsultation) {
+      const isSha = patient.paymentScheme === "Social Health Authority (SHA)";
+      const consultPrice = isSha ? 0 : 1000;
+      unbilledList.unshift({
+        id: `avail-consult-${patient.id}`,
+        sourceId: patient.id,
+        sourceType: "consultation",
+        description: isSha ? "SHA Outpatient Consultation (Capitation Covered)" : "General Outpatient Consultation & Clinical Review",
+        category: "consultation",
+        department: "Outpatient / OPD",
+        quantity: 1,
+        unitPrice: consultPrice,
+        amount: consultPrice,
+        notes: isSha ? "Social Health Authority primary care capitation: KES 0 copay" : "Standard physician / medical officer intake consultation",
+        addedAt: new Date().toISOString()
+      });
+    }
+
+    // 4. Check Ward Bed Stays if Admitted
     if (encounter && (encounter.status === "ADMITTED" || encounter.assignedWard || encounter.assignedBed)) {
       const wardName = encounter.assignedWard || "General Ward";
       const bedRateMatch = bedRates.find(
@@ -319,107 +400,101 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
       });
     }
 
-    // 3. Check Prescriptions from Encounter Subcollections or Patient Record
+    // 5. Check Prescriptions from Encounter Subcollections
     try {
       if (encounter) {
         const rxSnap = await getDocs(collection(db, "encounters", encounter.id, "prescriptions"));
         rxSnap.forEach((docSnap) => {
           const rx = docSnap.data() as EncounterPrescription;
-          unbilledList.push({
-            id: `avail-rx-${docSnap.id}`,
-            sourceId: docSnap.id,
-            sourceType: "prescription",
-            description: `Rx: ${rx.drugName} (${rx.dosage || "Standard Dose"})`,
-            category: "pharmacy",
-            department: "Pharmacy",
-            quantity: Number(rx.quantity) || 1,
-            unitPrice: Number(rx.unitPrice) || 450,
-            amount: (Number(rx.quantity) || 1) * (Number(rx.unitPrice) || 450),
-            drugDosage: rx.dosage,
-            notes: rx.instructions || `Prescribed by ${rx.prescribedBy || "Doctor"}`,
-            addedAt: rx.createdAt || new Date().toISOString()
-          });
+          // Skip if already billed or already paid in past invoice
+          if (rx.isBilled || rx.status === "BILLED" || (rx as any).isPaid) return;
+          const rxDesc = `Rx: ${rx.drugName} (${rx.dosage || "Standard Dose"})`.toLowerCase().trim();
+          if (paidItemKeywords.has(rxDesc) || paidItemKeywords.has(rx.drugName.toLowerCase().trim())) return;
+
+          // Check if already in unbilledList from cart
+          const exists = unbilledList.some(
+            (u) => u.sourceId === docSnap.id || u.description.toLowerCase().includes(rx.drugName.toLowerCase())
+          );
+          if (!exists) {
+            unbilledList.push({
+              id: `avail-rx-${docSnap.id}`,
+              sourceId: docSnap.id,
+              sourceType: "prescription",
+              description: `Rx: ${rx.drugName} (${rx.dosage || "Standard Dose"})`,
+              category: "pharmacy",
+              department: "Pharmacy",
+              quantity: Number(rx.quantity) || 1,
+              unitPrice: Number(rx.unitPrice) || 450,
+              amount: (Number(rx.quantity) || 1) * (Number(rx.unitPrice) || 450),
+              drugDosage: rx.dosage,
+              notes: rx.instructions || `Prescribed by ${rx.prescribedBy || "Doctor"}`,
+              addedAt: rx.createdAt || new Date().toISOString()
+            });
+          }
         });
 
-        // 4. Check Lab Requests
+        // 6. Check Lab Requests
         const labSnap = await getDocs(collection(db, "encounters", encounter.id, "lab_requests"));
         labSnap.forEach((docSnap) => {
           const lab = docSnap.data() as EncounterLabRequest;
-          unbilledList.push({
-            id: `avail-lab-${docSnap.id}`,
-            sourceId: docSnap.id,
-            sourceType: "lab_order",
-            description: `Lab Test: ${lab.testName}`,
-            category: lab.department === "radiology" ? "radiology" : "laboratory",
-            department: lab.department || "Laboratory",
-            quantity: 1,
-            unitPrice: Number(lab.unitPrice) || 850,
-            amount: Number(lab.unitPrice) || 850,
-            notes: `Ordered by ${lab.orderedBy || "Clinician"} • Status: ${lab.status}`,
-            addedAt: lab.createdAt || new Date().toISOString()
-          });
+          if (lab.isBilled || (lab as any).isPaid || (lab as any).status === "BILLED") return;
+          const labDesc = `Lab Test: ${lab.testName}`.toLowerCase().trim();
+          if (paidItemKeywords.has(labDesc) || paidItemKeywords.has(lab.testName.toLowerCase().trim())) return;
+
+          const exists = unbilledList.some(
+            (u) => u.sourceId === docSnap.id || u.description.toLowerCase().includes(lab.testName.toLowerCase())
+          );
+          if (!exists) {
+            unbilledList.push({
+              id: `avail-lab-${docSnap.id}`,
+              sourceId: docSnap.id,
+              sourceType: "lab_order",
+              description: `Lab Test: ${lab.testName}`,
+              category: lab.department === "radiology" ? "radiology" : "laboratory",
+              department: lab.department || "Laboratory",
+              quantity: 1,
+              unitPrice: Number(lab.unitPrice) || 850,
+              amount: Number(lab.unitPrice) || 850,
+              notes: `Ordered by ${lab.orderedBy || "Clinician"} • Status: ${lab.status}`,
+              addedAt: lab.createdAt || new Date().toISOString()
+            });
+          }
         });
       }
 
-      // Also check patient's historical active visits if available
+      // Check patient's historical active visits if available and not already covered
       if (patient.visits && Array.isArray(patient.visits) && patient.visits.length > 0) {
         const latestVisit = patient.visits[patient.visits.length - 1];
         if (latestVisit && Array.isArray(latestVisit.prescriptions) && (!encounter || unbilledList.filter((i) => i.category === "pharmacy").length === 0)) {
           latestVisit.prescriptions.forEach((rx, idx) => {
             if (!rx) return;
-            unbilledList.push({
-              id: `avail-pat-rx-${idx}`,
-              sourceId: `pat-rx-${idx}`,
-              sourceType: "prescription",
-              description: `Rx: ${rx.drugName} (${rx.dosage})`,
-              category: "pharmacy",
-              department: "Pharmacy",
-              quantity: rx.quantity || 1,
-              unitPrice: 500,
-              amount: (rx.quantity || 1) * 500,
-              drugDosage: rx.dosage,
-              notes: rx.instructions || "Clinical prescription",
-              addedAt: new Date().toISOString()
-            });
-          });
-        }
-      }
-      // 5. Check Live Patient Cart items from Firestore
-      try {
-        const liveCart = await getPatientCart(patient.id);
-        if (liveCart && liveCart.items) {
-          const pendingCartItems = liveCart.items.filter((i) => i.status === "pending_checkout");
-          pendingCartItems.forEach((cItem) => {
-            // Check if already in unbilledList by name
-            const exists = unbilledList.some(
-              (u) => u.description.toLowerCase().includes(cItem.name.toLowerCase()) || cItem.name.toLowerCase().includes(u.description.toLowerCase())
-            );
+            const rxName = rx.drugName.toLowerCase().trim();
+            if (paidItemKeywords.has(rxName)) return;
+            const exists = unbilledList.some((u) => u.description.toLowerCase().includes(rxName));
             if (!exists) {
               unbilledList.push({
-                id: `cart-${cItem.id}`,
-                sourceId: cItem.id,
-                sourceType: "custom",
-                description: `[${cItem.stage}] ${cItem.name}`,
-                category: cItem.category === "supplies" ? "other" : cItem.category,
-                department: cItem.department || cItem.stage,
-                quantity: cItem.quantity || 1,
-                unitPrice: cItem.unitPrice || 0,
-                amount: cItem.totalPrice || (cItem.quantity * cItem.unitPrice),
-                notes: cItem.notes || `Added at ${cItem.stage} by ${cItem.addedBy}`,
-                addedAt: cItem.addedAt || new Date().toISOString()
+                id: `avail-pat-rx-${idx}`,
+                sourceId: `pat-rx-${idx}`,
+                sourceType: "prescription",
+                description: `Rx: ${rx.drugName} (${rx.dosage})`,
+                category: "pharmacy",
+                department: "Pharmacy",
+                quantity: rx.quantity || 1,
+                unitPrice: 500,
+                amount: (rx.quantity || 1) * 500,
+                drugDosage: rx.dosage,
+                notes: rx.instructions || "Clinical prescription",
+                addedAt: new Date().toISOString()
               });
             }
           });
         }
-      } catch (cErr) {
-        console.warn("Live cart check notice:", cErr);
       }
     } catch (err) {
       console.warn("Error fetching subcollections for encounter:", err);
     }
 
     setAvailableItems(unbilledList);
-    // Pre-load default initial billed item (or start empty)
     setBilledItems([]);
   };
 
@@ -455,16 +530,24 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
   };
 
   const addItemToBill = (item: BillItemDraft) => {
-    // Check if already in billed items
-    const existingIndex = billedItems.findIndex((b) => b.id === item.id || (b.sourceId && b.sourceId === item.sourceId));
+    // Anti-Duplicate & Double Charging Protection
+    const existingIndex = billedItems.findIndex(
+      (b) => b.id === item.id || (b.sourceId && b.sourceId === item.sourceId) || b.description.toLowerCase().trim() === item.description.toLowerCase().trim()
+    );
 
     if (existingIndex >= 0) {
-      // Increment quantity
+      // If it's a procedure, consultation, or lab order, do not duplicate or double charge
+      if (item.category === "consultation" || item.category === "procedure" || item.category === "laboratory" || item.category === "radiology" || item.category === "ward_bed" || item.category === "nursing") {
+        toast.warning(`"${item.description}" is already on this bill worksheet. Duplicate charge prevented.`, "Anti-Duplicate Guard");
+        return;
+      }
+
+      // For medications or consumables where quantity can legitimately increase:
       const updated = [...billedItems];
       updated[existingIndex].quantity += 1;
       updated[existingIndex].amount = updated[existingIndex].quantity * updated[existingIndex].unitPrice;
       setBilledItems(updated);
-      toast.info(`Updated quantity for "${item.description}"`, "Item Scaled");
+      toast.info(`Updated quantity for "${item.description}" to ${updated[existingIndex].quantity}`, "Quantity Updated");
     } else {
       // Add as new item
       const newItem: BillItemDraft = {
@@ -481,8 +564,25 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
   };
 
   const addAllAvailableToBill = () => {
-    if (availableItems.length === 0) return;
-    const newItems: BillItemDraft[] = availableItems.map((item) => ({
+    if (availableItems.length === 0) {
+      toast.info("No unbilled procedures or items found for this patient.", "Clean Folio");
+      return;
+    }
+
+    // Filter out items that are already on the bill to prevent double charging
+    const itemsToAdd = availableItems.filter((item) => {
+      const alreadyOnBill = billedItems.some(
+        (b) => b.id === item.id || (b.sourceId && b.sourceId === item.sourceId) || b.description.toLowerCase().trim() === item.description.toLowerCase().trim()
+      );
+      return !alreadyOnBill;
+    });
+
+    if (itemsToAdd.length === 0) {
+      toast.info("All pending patient procedures are already on this bill.", "No Duplicate Items");
+      return;
+    }
+
+    const newItems: BillItemDraft[] = itemsToAdd.map((item) => ({
       ...item,
       id: `billed-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       quantity: item.quantity || 1,
@@ -490,8 +590,9 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
       amount: (item.quantity || 1) * (item.unitPrice || 0),
       addedAt: new Date().toISOString()
     }));
+
     setBilledItems([...billedItems, ...newItems]);
-    toast.success(`Transferred ${availableItems.length} procedure(s) to active bill.`, "All Items Added");
+    toast.success(`Transferred ${itemsToAdd.length} unbilled item(s) to worksheet without duplicates.`, "Items Transferred");
   };
 
   const removeItemFromBill = (itemIndex: number) => {
@@ -724,7 +825,12 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
       toast.warning("Please add at least one procedure or pharmacy item to the bill.", "Empty Bill");
       return;
     }
+    if (isSubmittingBill) {
+      toast.warning("Billing submission already in progress. Please wait...", "Processing Bill");
+      return;
+    }
 
+    setIsSubmittingBill(true);
     try {
       const invoiceId = `INV-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
       const finalKraNo = kraStatus?.kraInvoiceNo || `KRAETIMS-${Date.now().toString().slice(-6)}`;
@@ -816,9 +922,77 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
           billingCleared: true,
           updatedAt: new Date().toISOString()
         });
+
+        // Mark associated encounter prescriptions as BILLED to prevent duplicate billing
+        try {
+          const rxSnap = await getDocs(collection(db, "encounters", activeEncounter.id, "prescriptions"));
+          for (const d of rxSnap.docs) {
+            const rxData = d.data();
+            const wasBilled = billedItems.some(
+              (b) => b.sourceId === d.id || b.description.toLowerCase().includes(rxData.drugName?.toLowerCase())
+            );
+            if (wasBilled) {
+              await updateDoc(doc(db, "encounters", activeEncounter.id, "prescriptions", d.id), {
+                isBilled: true,
+                status: "BILLED",
+                invoiceId: invoiceId
+              });
+            }
+          }
+        } catch (rxErr) {
+          console.warn("Prescription status update notice:", rxErr);
+        }
+
+        // Mark associated encounter lab requests as BILLED and paid to prevent duplicate billing
+        try {
+          const labSnap = await getDocs(collection(db, "encounters", activeEncounter.id, "lab_requests"));
+          for (const d of labSnap.docs) {
+            const labData = d.data();
+            const wasBilled = billedItems.some(
+              (b) => b.sourceId === d.id || b.description.toLowerCase().includes(labData.testName?.toLowerCase())
+            );
+            if (wasBilled) {
+              await updateDoc(doc(db, "encounters", activeEncounter.id, "lab_requests", d.id), {
+                isBilled: true,
+                isPaid: true,
+                invoiceId: invoiceId
+              });
+            }
+          }
+        } catch (labErr) {
+          console.warn("Lab status update notice:", labErr);
+        }
       }
 
-      // 3. Resolve Queue tickets if in billing queue
+      // 3. Update Patient Live Cart items to checked_out so they are not double billed
+      try {
+        const cartRef = doc(db, "patient_carts", `CART-${selectedPatient.id}`);
+        const cartSnap = await getDoc(cartRef);
+        if (cartSnap.exists()) {
+          const cartData = cartSnap.data() as PatientCart;
+          const updatedItems = (cartData.items || []).map((ci) => {
+            const wasBilled = billedItems.some(
+              (b) => b.sourceId === ci.id || b.description.toLowerCase().includes(ci.name.toLowerCase()) || ci.name.toLowerCase().includes(b.description.toLowerCase())
+            );
+            return wasBilled ? { ...ci, status: "checked_out" as const, finalInvoiceId: invoiceId, checkedOutAt: new Date().toISOString() } : ci;
+          });
+          const remainingPending = updatedItems.filter((i) => i.status === "pending_checkout");
+          await updateDoc(cartRef, {
+            items: updatedItems,
+            totalAmount: remainingPending.reduce((acc, it) => acc + (it.totalPrice || 0), 0),
+            itemCount: remainingPending.length,
+            status: remainingPending.length === 0 ? "checked_out" : "active",
+            finalInvoiceId: invoiceId,
+            checkedOutBy: "Cashier",
+            checkedOutAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+      } catch (cartErr) {
+        console.warn("Cart checkout update notice:", cartErr);
+      }
+
+      // 4. Resolve Queue tickets if in billing queue
       const patientDisplayName = getPatientName(selectedPatient);
       const queueSnap = await getDocs(
         query(
@@ -831,16 +1005,16 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
         await updateDoc(doc(db, "queue", qDoc.id), { status: "completed" });
       });
 
-      // 4. Auto-close system ticket
+      // 5. Auto-close system ticket
       await closeAutoTicket(
         patientDisplayName,
         `Invoice ${invoiceId} settled via ${method}. Itemized procedures and eTIMS tax signed.`
       );
 
-      // 5. Open Receipt Modal
+      // 6. Open Receipt Modal
       setActiveReceiptInvoice(newInvoice);
       setPrintOpen(true);
-      toast.success(`Official Receipt generated for ${patientDisplayName}.`, "Payment Complete");
+      toast.success(`Official Receipt ${invoiceId} generated for ${patientDisplayName}.`, "Payment Completed");
 
       // Reset billing worksheet
       setBilledItems([]);
@@ -848,6 +1022,11 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled }: Paper
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to generate receipt and complete billing.", "Billing Error");
+    } finally {
+      setIsSubmittingBill(false);
+      if (selectedPatient) {
+        loadPatientProcedures(selectedPatient, activeEncounter);
+      }
     }
   };
 
