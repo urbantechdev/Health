@@ -1,649 +1,405 @@
+import { db, cleanFirestoreData } from "./firebase";
 import {
   collection,
   doc,
-  addDoc,
-  updateDoc,
+  getDoc,
+  getDocs,
   setDoc,
+  updateDoc,
+  addDoc,
   onSnapshot,
-  query,
-  where,
-  orderBy
 } from "firebase/firestore";
-import { db } from "./firebase";
-import {
-  Encounter,
-  EncounterVital,
-  EncounterPrescription,
-  EncounterLabRequest,
-  EncounterBillItem,
-  EncounterNursingNote,
-  EncounterDoctorNote,
-  HospitalWard,
-  WardBed
-} from "../types";
 
-export type HospitalBed = WardBed;
-export type EncounterMedication = EncounterPrescription;
-export type EncounterNote = EncounterNursingNote;
+export interface HospitalWardConfig {
+  id: string;
+  name: string;
+  category: "General" | "Maternity" | "Paediatric" | "Surgical" | "ICU" | "HDU" | "Amenity" | "Morgue" | string;
+  totalBeds: number;
+  dailyBaseRate: number;
+  nurseInCharge?: string;
+  description?: string;
+  floor?: string;
+  [key: string]: any;
+}
 
-export const DEFAULT_HOSPITAL_WARDS: HospitalWard[] = [
+export const DEFAULT_HOSPITAL_WARDS: HospitalWardConfig[] = [
   {
-    id: "ward-male-medical",
-    name: "Male Medical Ward",
-    code: "MMW",
-    floor: "1st Floor",
+    id: "ward-general-male",
+    name: "St. Luke Male Medical Ward",
     category: "General",
     totalBeds: 24,
-    dailyBaseRate: 1800
+    dailyBaseRate: 1500,
+    description: "General adult male inpatient acute and recovery ward.",
   },
   {
-    id: "ward-female-medical",
-    name: "Female Medical Ward",
-    code: "FMW",
-    floor: "1st Floor",
+    id: "ward-general-female",
+    name: "St. Ann Female Medical Ward",
     category: "General",
     totalBeds: 24,
-    dailyBaseRate: 1800
-  },
-  {
-    id: "ward-pediatric",
-    name: "Pediatric Ward",
-    code: "PED",
-    floor: "2nd Floor",
-    category: "Pediatric",
-    totalBeds: 20,
-    dailyBaseRate: 2000
+    dailyBaseRate: 1500,
+    description: "General adult female inpatient acute and recovery ward.",
   },
   {
     id: "ward-maternity",
-    name: "Maternity & Labor Ward",
-    code: "MAT",
-    floor: "2nd Floor",
+    name: "Blessed Virgin Maternity & Labour Ward",
     category: "Maternity",
+    totalBeds: 20,
+    dailyBaseRate: 2500,
+    description: "Antenatal, delivery suite, post-natal care, and neonatal nursery.",
+  },
+  {
+    id: "ward-paediatric",
+    name: "Angels Pediatric Ward",
+    category: "Paediatric",
     totalBeds: 18,
-    dailyBaseRate: 2500
+    dailyBaseRate: 1800,
+    description: "Specialized pediatric inpatient care with playful, calm atmosphere.",
   },
   {
     id: "ward-surgical",
-    name: "Surgical Recovery Ward",
-    code: "SUR",
-    floor: "3rd Floor",
+    name: "St. Jude Surgical Post-Op Ward",
     category: "Surgical",
     totalBeds: 16,
-    dailyBaseRate: 2200
+    dailyBaseRate: 2800,
+    description: "Surgical post-operative stabilization and wound care management.",
   },
   {
     id: "ward-icu",
-    name: "Intensive Care Unit (ICU / HDU)",
-    code: "ICU",
-    floor: "3rd Floor",
+    name: "Critical Care ICU / HDU Complex",
     category: "ICU",
     totalBeds: 8,
-    dailyBaseRate: 12000
-  }
+    dailyBaseRate: 8500,
+    description: "Invasive ventilator support, multiparameter telemetry, 1:1 nursing.",
+  },
+  {
+    id: "ward-amenity",
+    name: "Executive Private Amenity Suites",
+    category: "Amenity",
+    totalBeds: 6,
+    dailyBaseRate: 6500,
+    description: "Private ensuite rooms with guest sofa bed and dedicated concierge.",
+  },
+  {
+    id: "ward-morgue",
+    name: "Hospital Cold Room & Mortuary Facility",
+    category: "Morgue",
+    totalBeds: 12,
+    dailyBaseRate: 1000,
+    description: "Refrigerated preservation unit and respectful bereavement parlour.",
+  },
 ];
 
 export async function initDefaultHospitalWardsAndBeds(): Promise<void> {
   try {
     for (const ward of DEFAULT_HOSPITAL_WARDS) {
-      await setDoc(doc(db, "hospital_wards", ward.id), ward, { merge: true });
-
-      const numBeds = Math.min(ward.totalBeds, 6);
-      for (let b = 1; b <= numBeds; b++) {
-        const bedId = `${ward.id}-bed-${b.toString().padStart(2, "0")}`;
-        const bedNumber = `${ward.code}-${b.toString().padStart(2, "0")}`;
-        await setDoc(
-          doc(db, "hospital_beds", bedId),
-          {
-            id: bedId,
-            bedNumber,
-            wardId: ward.id,
-            wardName: ward.name,
-            status: "AVAILABLE",
-            dailyRate: ward.dailyBaseRate,
-            category: ward.category
-          },
-          { merge: true }
-        );
+      const wRef = doc(db, "hospital_wards", ward.id);
+      const snap = await getDoc(wRef);
+      if (!snap.exists()) {
+        await setDoc(wRef, cleanFirestoreData(ward));
+        // Seed bed slots
+        for (let i = 1; i <= Math.min(ward.totalBeds, 10); i++) {
+          const bedId = `${ward.id}-bed-${i}`;
+          await setDoc(
+            doc(db, "hospital_beds", bedId),
+            cleanFirestoreData({
+              id: bedId,
+              bedNumber: `${ward.name.substring(0, 3).toUpperCase()}-${i < 10 ? "0" + i : i}`,
+              wardId: ward.id,
+              wardName: ward.name,
+              wardCategory: ward.category,
+              dailyRate: ward.dailyBaseRate,
+              isOccupied: false,
+              patientId: null,
+              patientName: null,
+              status: "available",
+            }),
+            { merge: true }
+          );
+        }
       }
     }
   } catch (err) {
-    console.warn("initDefaultHospitalWardsAndBeds background sync:", err);
+    console.warn("initDefaultHospitalWardsAndBeds error:", err);
   }
 }
 
-export async function createHospitalEncounter(
-  data: Partial<Encounter>
-): Promise<string> {
-  const encCol = collection(db, "encounters");
-  const docRef = await addDoc(encCol, {
-    ...data,
-    status: data.status || "ADMITTED",
-    admissionDate: data.admissionDate || new Date().toISOString(),
-    createdAt: new Date().toISOString()
+export async function createHospitalEncounter(encounterData: any): Promise<string> {
+  const encId = encounterData.id || `ENC-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+  const clean = cleanFirestoreData({
+    ...encounterData,
+    id: encId,
+    createdAt: encounterData.createdAt || new Date().toISOString(),
+    status: encounterData.status || "active",
   });
-
-  // Mark bed as occupied if bedId is provided
-  if (data.assignedBedId) {
-    try {
-      await updateDoc(doc(db, "hospital_beds", data.assignedBedId), {
-        status: "OCCUPIED",
-        currentPatientId: data.patientId || null,
-        currentPatientName: data.patientName || null,
-        currentEncounterId: docRef.id,
-        occupiedSince: new Date().toISOString()
-      });
-    } catch {
-      // Bed doc might not exist yet
-    }
-  }
-
-  return docRef.id;
+  await setDoc(doc(db, "clinical_encounters", encId), clean);
+  return encId;
 }
 
-export async function addEncounterVital(
-  encounterId: string,
-  vital: Partial<EncounterVital>
-): Promise<string> {
-  const col = collection(db, "encounters", encounterId, "vitals");
-  const docRef = await addDoc(col, {
-    ...vital,
-    timestamp: vital.timestamp || new Date().toISOString()
-  });
-  return docRef.id;
+export async function addEncounterVital(encounterId: string, vital: any): Promise<void> {
+  const vitalId = `vital-${Date.now()}`;
+  await setDoc(
+    doc(db, "clinical_encounters", encounterId, "vitals", vitalId),
+    cleanFirestoreData({ ...vital, id: vitalId, recordedAt: new Date().toISOString() })
+  );
 }
 
-export async function addEncounterPrescription(
-  encounterId: string,
-  prescription: Partial<EncounterPrescription>
-): Promise<string> {
-  const col = collection(db, "encounters", encounterId, "prescriptions");
-  const docRef = await addDoc(col, {
-    ...prescription,
-    status: prescription.status || "PENDING",
-    orderedAt: new Date().toISOString()
-  });
-  return docRef.id;
+export async function addEncounterPrescription(encounterId: string, prescription: any): Promise<void> {
+  const rxId = prescription.id || `rx-${Date.now()}`;
+  await setDoc(
+    doc(db, "clinical_encounters", encounterId, "prescriptions", rxId),
+    cleanFirestoreData({ ...prescription, id: rxId, prescribedAt: new Date().toISOString(), status: "pending" })
+  );
 }
 
-export async function addEncounterLabRequest(
-  encounterId: string,
-  labRequest: Partial<EncounterLabRequest>
-): Promise<string> {
-  const col = collection(db, "encounters", encounterId, "lab_requests");
-  const docRef = await addDoc(col, {
-    ...labRequest,
-    status: labRequest.status || "ORDERED",
-    orderedAt: new Date().toISOString()
-  });
-  return docRef.id;
+export async function addEncounterLabRequest(encounterId: string, labRequest: any): Promise<void> {
+  const labId = labRequest.id || `lab-${Date.now()}`;
+  await setDoc(
+    doc(db, "clinical_encounters", encounterId, "lab_requests", labId),
+    cleanFirestoreData({ ...labRequest, id: labId, requestedAt: new Date().toISOString(), status: "pending" })
+  );
 }
 
 export async function completeEncounterLabRequest(
   encounterId: string,
-  requestId: string,
-  results: any,
-  interpretationOrAbnormalFlags?: string,
-  completedBy?: string
-): Promise<void> {
-  const ref = doc(db, "encounters", encounterId, "lab_requests", requestId);
-  await updateDoc(ref, {
-    results,
-    status: "completed",
-    completedAt: new Date().toISOString(),
-    ...(interpretationOrAbnormalFlags ? { abnormalFlags: interpretationOrAbnormalFlags } : {}),
-    ...(completedBy ? { performedBy: completedBy } : {})
-  });
+  labRequestId: string,
+  resultDataOrResults: any,
+  impression?: string,
+  technicianName?: string
+): Promise<any> {
+  const payload =
+    typeof resultDataOrResults === "object" && resultDataOrResults !== null && !Array.isArray(resultDataOrResults)
+      ? resultDataOrResults
+      : { results: resultDataOrResults, impression, technicianName };
+  await updateDoc(
+    doc(db, "clinical_encounters", encounterId, "lab_requests", labRequestId),
+    cleanFirestoreData({
+      ...payload,
+      status: "completed",
+      completedAt: new Date().toISOString(),
+    })
+  );
+  return { success: true, message: "Lab completed successfully" };
 }
 
-export async function dispenseEncounterPrescription(
-  encounterId: string,
-  prescriptionId: string,
-  dispensedBy?: string
-): Promise<void> {
-  const ref = doc(db, "encounters", encounterId, "prescriptions", prescriptionId);
-  await updateDoc(ref, {
-    status: "DISPENSED",
-    dispensedBy: dispensedBy || "Ward Pharmacist",
-    dispensedAt: new Date().toISOString()
-  });
+export async function dispenseEncounterPrescription(encounterId: string, prescriptionId: string, dispenserInfo: any): Promise<void> {
+  await updateDoc(
+    doc(db, "clinical_encounters", encounterId, "prescriptions", prescriptionId),
+    cleanFirestoreData({
+      status: "dispensed",
+      dispensedAt: new Date().toISOString(),
+      ...(dispenserInfo || {}),
+    })
+  );
 }
 
-export async function addEncounterNursingNote(
-  encounterId: string,
-  note: Partial<EncounterNursingNote>
-): Promise<string> {
-  const col = collection(db, "encounters", encounterId, "nursing_notes");
-  const docRef = await addDoc(col, {
-    ...note,
-    timestamp: note.timestamp || new Date().toISOString()
-  });
-  return docRef.id;
+export async function addEncounterNursingNote(encounterId: string, note: any): Promise<void> {
+  const noteId = `note-nurse-${Date.now()}`;
+  await setDoc(
+    doc(db, "clinical_encounters", encounterId, "nursing_notes", noteId),
+    cleanFirestoreData({ ...note, id: noteId, timestamp: new Date().toISOString() })
+  );
 }
 
-export async function addEncounterDoctorNote(
-  encounterId: string,
-  note: Partial<EncounterDoctorNote>
-): Promise<string> {
-  const col = collection(db, "encounters", encounterId, "doctor_notes");
-  const docRef = await addDoc(col, {
-    ...note,
-    timestamp: note.timestamp || new Date().toISOString()
-  });
-  return docRef.id;
+export async function addEncounterDoctorNote(encounterId: string, note: any): Promise<void> {
+  const noteId = `note-doc-${Date.now()}`;
+  await setDoc(
+    doc(db, "clinical_encounters", encounterId, "doctor_notes", noteId),
+    cleanFirestoreData({ ...note, id: noteId, timestamp: new Date().toISOString() })
+  );
 }
 
-export async function addEncounterBillItem(
-  encounterId: string,
-  billItem: Partial<EncounterBillItem>
-): Promise<string> {
-  const col = collection(db, "encounters", encounterId, "billing_items");
-  const docRef = await addDoc(col, {
-    ...billItem,
-    status: billItem.status || "UNPAID",
-    dateAdded: new Date().toISOString()
-  });
-  return docRef.id;
+export async function addEncounterBillItem(encounterId: string, billItem: any): Promise<void> {
+  const billId = billItem.id || `bill-${Date.now()}`;
+  await setDoc(
+    doc(db, "clinical_encounters", encounterId, "bill_items", billId),
+    cleanFirestoreData({ ...billItem, id: billId, addedAt: new Date().toISOString(), paid: false })
+  );
 }
 
 export async function payEncounterBill(
   encounterId: string,
-  billItemIdOrAmount: string | number,
-  paymentDetailsOrMethod?: any,
-  remarks?: string
-): Promise<{ newTotalPaid: number; billingCleared: boolean }> {
-  if (typeof billItemIdOrAmount === "number") {
-    const amount = Number(billItemIdOrAmount);
-    const paymentItem = {
-      description: remarks || `Settled via ${paymentDetailsOrMethod || "Cash"}`,
-      category: "consultation",
-      unitPrice: amount,
-      quantity: 1,
-      total: amount,
-      isPaid: true,
-      status: "PAID",
-      paidAt: new Date().toISOString(),
-      paymentMethod: String(paymentDetailsOrMethod || "Cash"),
-      timestamp: new Date().toISOString()
+  billIdOrAmount: string | number,
+  paymentInfoOrMethod?: any,
+  notes?: string
+): Promise<{ success: boolean; newTotalPaid: number; billingCleared: boolean; message: string }> {
+  if (typeof billIdOrAmount === "number") {
+    const encRef = doc(db, "clinical_encounters", encounterId);
+    const encSnap = await getDoc(encRef);
+    const encData = encSnap.exists() ? encSnap.data() : {};
+    const previousPaid = Number(encData.totalPaid || 0);
+    const totalBilled = Number(encData.totalBilled || encData.billAmount || billIdOrAmount);
+    const newTotalPaid = previousPaid + billIdOrAmount;
+    const billingCleared = newTotalPaid >= totalBilled;
+
+    await updateDoc(
+      encRef,
+      cleanFirestoreData({
+        totalPaid: newTotalPaid,
+        billingCleared,
+        paymentMethod: typeof paymentInfoOrMethod === "string" ? paymentInfoOrMethod : paymentInfoOrMethod?.method || "Cash",
+        paymentNotes: notes,
+        lastPaymentAt: new Date().toISOString(),
+      })
+    );
+
+    return {
+      success: true,
+      newTotalPaid,
+      billingCleared,
+      message: `Payment of KES ${billIdOrAmount.toLocaleString()} recorded.`,
     };
-    await addDoc(collection(db, "encounters", encounterId, "billing_items"), paymentItem);
-    await updateDoc(doc(db, "encounters", encounterId), {
-      totalPaid: amount,
-      billingCleared: true
-    });
-    return { newTotalPaid: amount, billingCleared: true };
-  } else {
-    const ref = doc(db, "encounters", encounterId, "billing_items", billItemIdOrAmount);
-    await updateDoc(ref, {
-      status: "PAID",
-      paidAt: new Date().toISOString(),
-      ...(typeof paymentDetailsOrMethod === "object" ? paymentDetailsOrMethod : {})
-    });
-    return { newTotalPaid: 0, billingCleared: true };
   }
+
+  await updateDoc(
+    doc(db, "clinical_encounters", encounterId, "bill_items", billIdOrAmount),
+    cleanFirestoreData({
+      paid: true,
+      paidAt: new Date().toISOString(),
+      ...(typeof paymentInfoOrMethod === "object" ? paymentInfoOrMethod : { method: paymentInfoOrMethod }),
+    })
+  );
+  return { success: true, newTotalPaid: 0, billingCleared: true, message: "Bill item paid successfully" };
 }
 
 export async function signDoctorClinicalDischarge(
-  encounterIdOrOptions: string | {
-    encounterId: string;
-    doctorName?: string;
-    dischargeCondition?: string;
-    clinicalSummary?: string;
-    dischargeMedications?: any;
-    followUpDate?: string;
-    followUpInstructions?: string;
-    doctorSignature?: string;
-    [key: string]: any;
-  },
-  dischargeNotes?: string,
-  doctorName?: string
-): Promise<{ message?: string; success?: boolean } | void> {
-  if (typeof encounterIdOrOptions === "object") {
-    const opts = encounterIdOrOptions;
-    const ref = doc(db, "encounters", opts.encounterId);
-    await updateDoc(ref, {
-      clinicalDischargeSigned: true,
+  encounterIdOrData: string | any,
+  maybeClearanceData?: any
+): Promise<{ success: boolean; message: string }> {
+  const encounterId = typeof encounterIdOrData === "string" ? encounterIdOrData : encounterIdOrData.encounterId;
+  const clearanceData = typeof encounterIdOrData === "string" ? maybeClearanceData : encounterIdOrData;
+  await updateDoc(
+    doc(db, "clinical_encounters", encounterId),
+    cleanFirestoreData({
       doctorDischargeApproved: true,
-      clinicalDischargeNotes: opts.clinicalSummary || opts.dischargeCondition || "Patient clinically stable.",
-      clinicalDischargedBy: opts.doctorName || "Attending Physician",
-      clinicalDischargedAt: new Date().toISOString(),
-      dischargeCondition: opts.dischargeCondition,
-      dischargeMedications: opts.dischargeMedications,
-      followUpDate: opts.followUpDate,
-      followUpInstructions: opts.followUpInstructions,
-      doctorSignature: opts.doctorSignature
-    });
-    return { message: "Doctor clinical discharge signed.", success: true };
-  } else {
-    const encounterId = encounterIdOrOptions;
-    const ref = doc(db, "encounters", encounterId);
-    await updateDoc(ref, {
-      clinicalDischargeSigned: true,
-      doctorDischargeApproved: true,
-      clinicalDischargeNotes: dischargeNotes || "Patient clinically stable for discharge.",
-      clinicalDischargedBy: doctorName || "Attending Physician",
-      clinicalDischargedAt: new Date().toISOString()
-    });
-  }
+      dischargeClearance: {
+        ...clearanceData,
+        clearedAt: new Date().toISOString(),
+      },
+    })
+  );
+  return { success: true, message: "Doctor discharge clearance signed successfully." };
 }
 
 export async function transferEncounterBed(
-  encounterIdOrOptions: string | {
-    encounterId: string;
-    toWardId?: string;
-    toWardName?: string;
-    toBedId?: string;
-    toBedNumber?: string;
-    toDailyRate?: number;
-    transferredBy?: string;
-    reason?: string;
-    [key: string]: any;
-  },
-  currentBedId?: string,
-  targetBedId?: string,
-  targetWardName?: string
-): Promise<{ message: string }> {
-  if (typeof encounterIdOrOptions === "object") {
-    const opts = encounterIdOrOptions;
-    const encId = opts.encounterId;
-    if (opts.toBedId) {
-      try {
-        await updateDoc(doc(db, "hospital_beds", opts.toBedId), {
-          status: "OCCUPIED",
-          currentEncounterId: encId,
-          occupiedSince: new Date().toISOString()
-        });
-      } catch {}
-    }
-    await updateDoc(doc(db, "encounters", encId), {
-      assignedBedId: opts.toBedId,
-      assignedBedNumber: opts.toBedNumber,
-      assignedWard: opts.toWardName || "Inpatient Ward",
-      assignedWardName: opts.toWardName || "Inpatient Ward",
-      lastBedTransfer: {
-        date: new Date().toISOString(),
-        by: opts.transferredBy,
-        reason: opts.reason
-      }
-    });
-    return { message: `Bed transfer to ${opts.toWardName || "Ward"} - Bed ${opts.toBedNumber || opts.toBedId} successful.` };
-  } else {
-    const encounterId = encounterIdOrOptions;
-    if (currentBedId) {
-      try {
-        await updateDoc(doc(db, "hospital_beds", currentBedId), {
-          status: "AVAILABLE",
-          currentPatientId: null,
-          currentPatientName: null,
-          currentEncounterId: null,
-          occupiedSince: null
-        });
-      } catch {}
-    }
-    if (targetBedId) {
-      try {
-        await updateDoc(doc(db, "hospital_beds", targetBedId), {
-          status: "OCCUPIED",
-          currentEncounterId: encounterId,
-          occupiedSince: new Date().toISOString()
-        });
-      } catch {}
-    }
-    await updateDoc(doc(db, "encounters", encounterId), {
-      assignedBedId: targetBedId,
-      assignedWard: targetWardName || "Inpatient Ward",
-      assignedWardName: targetWardName || "Inpatient Ward"
-    });
-    return { message: "Bed transfer recorded successfully." };
+  encounterIdOrData: string | any,
+  maybeTransferData?: any
+): Promise<{ success: boolean; message: string }> {
+  const encounterId = typeof encounterIdOrData === "string" ? encounterIdOrData : encounterIdOrData.encounterId;
+  const transferData = typeof encounterIdOrData === "string" ? maybeTransferData : encounterIdOrData;
+
+  // Free old bed if provided
+  if (transferData.fromBedId) {
+    await updateDoc(doc(db, "hospital_beds", transferData.fromBedId), {
+      isOccupied: false,
+      patientId: null,
+      patientName: null,
+      status: "available",
+    }).catch(() => {});
   }
+  // Occupy new bed
+  if (transferData.toBedId) {
+    await updateDoc(doc(db, "hospital_beds", transferData.toBedId), {
+      isOccupied: true,
+      patientId: transferData.patientId || null,
+      patientName: transferData.patientName || "Patient",
+      status: "occupied",
+    }).catch(() => {});
+  }
+  // Record transfer
+  const xferId = `xfer-${Date.now()}`;
+  await setDoc(
+    doc(db, "clinical_encounters", encounterId, "bed_transfers", xferId),
+    cleanFirestoreData({ ...transferData, id: xferId, timestamp: new Date().toISOString() })
+  );
+  await updateDoc(
+    doc(db, "clinical_encounters", encounterId),
+    cleanFirestoreData({
+      currentBedId: transferData.toBedId,
+      currentWard: transferData.toWardName,
+    })
+  );
+  return { success: true, message: "Patient bed transfer successfully recorded." };
 }
 
 export async function executeAtomicDischarge(
-  encounterId: string,
-  bedIdOrOptions?: string | {
-    dischargedBy?: string;
-    dischargeReason?: string;
-    takeHomeNotes?: string;
-    bedId?: string;
-    [key: string]: any;
-  }
-): Promise<{ message: string; success: boolean }> {
-  const options = typeof bedIdOrOptions === "object" ? bedIdOrOptions : { bedId: bedIdOrOptions };
-  await updateDoc(doc(db, "encounters", encounterId), {
-    status: "DISCHARGED",
-    dischargeDate: new Date().toISOString(),
-    dischargedBy: options.dischargedBy || "Discharge Officer",
-    dischargeReason: options.dischargeReason || "Clinical Resolution",
-    dischargeNotes: options.takeHomeNotes || "Discharged in good health."
-  });
+  encounterIdOrData: string | any,
+  maybeDischargeData?: any
+): Promise<{ success: boolean; message: string }> {
+  const encounterId = typeof encounterIdOrData === "string" ? encounterIdOrData : encounterIdOrData.encounterId;
+  const dischargeData = typeof encounterIdOrData === "string" ? maybeDischargeData : encounterIdOrData;
 
-  const bedId = options.bedId;
-  if (bedId) {
-    try {
-      await updateDoc(doc(db, "hospital_beds", bedId), {
-        status: "CLEANING",
-        currentPatientId: null,
-        currentPatientName: null,
-        currentEncounterId: null,
-        occupiedSince: null
-      });
-    } catch {}
+  const encSnap = await getDoc(doc(db, "clinical_encounters", encounterId));
+  if (encSnap.exists()) {
+    const enc = encSnap.data();
+    if (enc.currentBedId) {
+      await updateDoc(doc(db, "hospital_beds", enc.currentBedId), {
+        isOccupied: false,
+        patientId: null,
+        patientName: null,
+        status: "available",
+      }).catch(() => {});
+    }
   }
-  return { message: "Discharge successfully finalized.", success: true };
+  await updateDoc(
+    doc(db, "clinical_encounters", encounterId),
+    cleanFirestoreData({
+      status: "discharged",
+      dischargedAt: new Date().toISOString(),
+      dischargeSummary: dischargeData,
+    })
+  );
+  return { success: true, message: "Patient officially discharged and bed released." };
 }
 
 export async function executeMorgueAdmission(
-  encounterIdOrOptions: string | {
-    encounterId: string;
-    bedId?: string;
-    notes?: string;
-    timeOfDeath?: string;
-    certifiedByDoctor?: string;
-    doctorLicenseNo?: string;
-    causeOfDeathImmediate?: string;
-    causeOfDeathUnderlying?: string;
-    mohDeathNoticeNo?: string;
-    morgueUnitName?: string;
-    cabinetOrBayNumber?: string;
-    [key: string]: any;
-  },
-  bedId?: string,
-  notes?: string
-): Promise<{ message: string; morgueRecord?: any }> {
-  if (typeof encounterIdOrOptions === "object") {
-    const opts = encounterIdOrOptions;
-    await updateDoc(doc(db, "encounters", opts.encounterId), {
-      status: "DECEASED",
-      deceasedNotes: opts.notes || "Patient certified deceased.",
-      deceasedDate: opts.timeOfDeath || new Date().toISOString(),
-      timeOfDeath: opts.timeOfDeath,
-      certifiedByDoctor: opts.certifiedByDoctor,
-      causeOfDeathImmediate: opts.causeOfDeathImmediate,
-      causeOfDeathUnderlying: opts.causeOfDeathUnderlying,
-      mohDeathNoticeNo: opts.mohDeathNoticeNo,
-      morgueUnitName: opts.morgueUnitName,
-      cabinetOrBayNumber: opts.cabinetOrBayNumber
-    });
+  encounterIdOrData: string | any,
+  maybeMorgueData?: any
+): Promise<{ success: boolean; message: string; morgueRecord: any }> {
+  const encounterId = typeof encounterIdOrData === "string" ? encounterIdOrData : encounterIdOrData.encounterId;
+  const morgueData = typeof encounterIdOrData === "string" ? maybeMorgueData : encounterIdOrData;
 
-    if (opts.bedId) {
-      try {
-        await updateDoc(doc(db, "hospital_beds", opts.bedId), {
-          status: "CLEANING",
-          currentPatientId: null,
-          currentPatientName: null,
-          currentEncounterId: null,
-          occupiedSince: null
-        });
-      } catch {}
-    }
-    return {
-      message: "Morgue admission and transfer record created successfully.",
-      morgueRecord: opts
-    };
-  } else {
-    const encounterId = encounterIdOrOptions;
-    await updateDoc(doc(db, "encounters", encounterId), {
-      status: "DECEASED",
-      deceasedNotes: notes || "Patient certified deceased.",
-      deceasedDate: new Date().toISOString()
-    });
-
-    if (bedId) {
-      try {
-        await updateDoc(doc(db, "hospital_beds", bedId), {
-          status: "CLEANING",
-          currentPatientId: null,
-          currentPatientName: null,
-          currentEncounterId: null,
-          occupiedSince: null
-        });
-      } catch {}
-    }
-    return { message: "Morgue admission recorded successfully." };
-  }
-}
-
-export function subscribeEncounters(
-  callback: (encounters: Encounter[]) => void
-): () => void {
-  const q = query(collection(db, "encounters"), orderBy("admissionDate", "desc"));
-  return onSnapshot(
-    q,
-    (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Encounter));
-      callback(list);
-    },
-    (err) => {
-      console.warn("[encounterService] subscribeEncounters err:", err);
-      callback([]);
-    }
+  await updateDoc(
+    doc(db, "clinical_encounters", encounterId),
+    cleanFirestoreData({
+      status: "deceased",
+      morgueAdmission: {
+        ...morgueData,
+        admittedAt: new Date().toISOString(),
+      },
+    })
   );
-}
-
-export function subscribeHospitalBeds(
-  callback: (beds: WardBed[]) => void
-): () => void {
-  return onSnapshot(
-    collection(db, "hospital_beds"),
-    (snap) => {
-      if (snap.empty) {
-        // Fallback default generated beds for all wards
-        const defaultBeds: WardBed[] = [];
-        DEFAULT_HOSPITAL_WARDS.forEach((ward) => {
-          for (let i = 1; i <= Math.min(ward.totalBeds, 6); i++) {
-            defaultBeds.push({
-              id: `${ward.id}-bed-${i}`,
-              bedNumber: `Bed ${i}`,
-              wardId: ward.id,
-              wardName: ward.name,
-              category: ward.category as any,
-              status: "AVAILABLE",
-              dailyRate: ward.dailyBaseRate
-            });
-          }
-        });
-        callback(defaultBeds);
-        return;
-      }
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as WardBed));
-      callback(list);
-    },
-    (err) => {
-      console.warn("[encounterService] subscribeHospitalBeds err:", err);
-      callback([]);
-    }
-  );
-}
-
-export function subscribeEncounterSubcollections(
-  encounterId: string,
-  callback: (data: {
-    vitals: EncounterVital[];
-    prescriptions: EncounterPrescription[];
-    labRequests: EncounterLabRequest[];
-    nursingNotes: EncounterNursingNote[];
-    doctorNotes: EncounterDoctorNote[];
-    billingItems: EncounterBillItem[];
-    billItems: EncounterBillItem[];
-  }) => void
-): () => void {
-  const callbackData = {
-    vitals: [] as EncounterVital[],
-    prescriptions: [] as EncounterPrescription[],
-    labRequests: [] as EncounterLabRequest[],
-    nursingNotes: [] as EncounterNursingNote[],
-    doctorNotes: [] as EncounterDoctorNote[],
-    billingItems: [] as EncounterBillItem[],
-    billItems: [] as EncounterBillItem[]
+  return {
+    success: true,
+    message: "Deceased patient safely transferred to morgue unit.",
+    morgueRecord: morgueData,
   };
+}
 
-  const unsubVitals = onSnapshot(
-    collection(db, "encounters", encounterId, "vitals"),
-    (s) => {
-      const vitals = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterVital));
-      callbackData.vitals = vitals;
-      callback({ ...callbackData });
-    },
-    (err) => console.warn("[encounterService] vitals error:", err)
-  );
+export function subscribeEncounters(callback: (encounters: any[]) => void): () => void {
+  const colRef = collection(db, "clinical_encounters");
+  return onSnapshot(colRef, (snap) => {
+    const list: any[] = [];
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+    callback(list);
+  });
+}
 
-  const unsubRx = onSnapshot(
-    collection(db, "encounters", encounterId, "prescriptions"),
-    (s) => {
-      const prescriptions = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterPrescription));
-      callbackData.prescriptions = prescriptions;
-      callback({ ...callbackData });
-    },
-    (err) => console.warn("[encounterService] prescriptions error:", err)
-  );
+export function subscribeHospitalBeds(callback: (beds: any[]) => void): () => void {
+  const colRef = collection(db, "hospital_beds");
+  return onSnapshot(colRef, (snap) => {
+    const list: any[] = [];
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+    callback(list);
+  });
+}
 
-  const unsubLab = onSnapshot(
-    collection(db, "encounters", encounterId, "lab_requests"),
-    (s) => {
-      const labRequests = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterLabRequest));
-      callbackData.labRequests = labRequests;
-      callback({ ...callbackData });
-    },
-    (err) => console.warn("[encounterService] lab_requests error:", err)
-  );
-
-  const unsubNurse = onSnapshot(
-    collection(db, "encounters", encounterId, "nursing_notes"),
-    (s) => {
-      const nursingNotes = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterNursingNote));
-      callbackData.nursingNotes = nursingNotes;
-      callback({ ...callbackData });
-    },
-    (err) => console.warn("[encounterService] nursing_notes error:", err)
-  );
-
-  const unsubDoc = onSnapshot(
-    collection(db, "encounters", encounterId, "doctor_notes"),
-    (s) => {
-      const doctorNotes = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterDoctorNote));
-      callbackData.doctorNotes = doctorNotes;
-      callback({ ...callbackData });
-    },
-    (err) => console.warn("[encounterService] doctor_notes error:", err)
-  );
-
-  const unsubBill = onSnapshot(
-    collection(db, "encounters", encounterId, "billing_items"),
-    (s) => {
-      const billingItems = s.docs.map((d) => ({ id: d.id, ...d.data() } as EncounterBillItem));
-      callbackData.billingItems = billingItems;
-      callbackData.billItems = billingItems;
-      callback({ ...callbackData });
-    },
-    (err) => console.warn("[encounterService] billing_items error:", err)
-  );
-
+export function subscribeEncounterSubcollections(encounterId: string, callback: (data: any) => void): () => void {
+  const encRef = doc(db, "clinical_encounters", encounterId);
+  const unsubVitals = onSnapshot(collection(encRef, "vitals"), (snap) => {
+    const vitals = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    callback({ type: "vitals", items: vitals });
+  });
   return () => {
     unsubVitals();
-    unsubRx();
-    unsubLab();
-    unsubNurse();
-    unsubDoc();
-    unsubBill();
   };
 }

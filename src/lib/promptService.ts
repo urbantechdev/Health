@@ -1,15 +1,13 @@
-import { promptSound } from "./promptSound";
-
-export type PromptType = "success" | "error" | "warning" | "info" | "question" | "ticket";
+export type PromptType = "success" | "error" | "warning" | "info" | "question";
 
 export interface ToastNotification {
   id: string;
+  type: PromptType;
   title?: string;
   message: string;
-  type: PromptType;
-  duration?: number;
   badge?: string;
   details?: string;
+  duration?: number;
   action?: {
     label: string;
     onClick: () => void;
@@ -18,19 +16,23 @@ export interface ToastNotification {
 
 export interface ModalPromptConfig {
   id: string;
-  title: string;
-  message: string;
-  type: PromptType;
+  type?: PromptType;
+  title?: string;
+  message?: string;
+  badge?: string;
   badgeText?: string;
   details?: string;
   destructive?: boolean;
-  confirmText?: string;
-  cancelText?: string;
   inputMode?: boolean;
-  inputType?: "text" | "number" | "password" | "textarea";
+  inputType?: "text" | "number" | "password" | "textarea" | string;
+  inputLabel?: string;
   inputPlaceholder?: string;
   inputValue?: string;
-  resolve: (val: any) => void;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: (val?: any) => void;
+  onCancel?: () => void;
+  [key: string]: any;
 }
 
 type ToastListener = (toasts: ToastNotification[]) => void;
@@ -39,7 +41,7 @@ type ModalListener = (modal: ModalPromptConfig | null) => void;
 class PromptService {
   private toasts: ToastNotification[] = [];
   private toastListeners: Set<ToastListener> = new Set();
-  private activeModal: ModalPromptConfig | null = null;
+  private currentModal: ModalPromptConfig | null = null;
   private modalListeners: Set<ModalListener> = new Set();
 
   public subscribeToasts(listener: ToastListener): () => void {
@@ -52,216 +54,183 @@ class PromptService {
 
   public subscribeModalPrompt(listener: ModalListener): () => void {
     this.modalListeners.add(listener);
-    listener(this.activeModal);
+    listener(this.currentModal);
     return () => {
       this.modalListeners.delete(listener);
     };
   }
 
   private notifyToasts() {
-    for (const listener of this.toastListeners) {
-      listener([...this.toasts]);
-    }
+    const copy = [...this.toasts];
+    this.toastListeners.forEach((l) => l(copy));
   }
 
   private notifyModal() {
-    for (const listener of this.modalListeners) {
-      listener(this.activeModal);
-    }
+    this.modalListeners.forEach((l) => l(this.currentModal));
   }
 
-  public showToast(config: {
-    message: string;
-    title?: string;
-    type?: PromptType;
-    duration?: number;
-    badge?: string;
-    details?: string;
-    action?: { label: string; onClick: () => void };
-  }): string {
+  public showToast(toast: Omit<ToastNotification, "id">): string {
     const id = "toast-" + Math.random().toString(36).substring(2, 9);
-    const toastItem: ToastNotification = {
-      id,
-      title: config.title,
-      message: config.message,
-      type: config.type || "info",
-      duration: config.duration ?? 2500,
-      badge: config.badge,
-      details: config.details,
-      action: config.action
-    };
-
-    this.toasts.unshift(toastItem);
+    const item: ToastNotification = { ...toast, id };
+    this.toasts.unshift(item);
     this.notifyToasts();
 
-    try {
-      promptSound.play(toastItem.type === "ticket" ? "success" : toastItem.type);
-    } catch {
-      // Audio playback fails gracefully
-    }
-
-    if (toastItem.duration && toastItem.duration > 0) {
+    const duration = toast.duration ?? 4500;
+    if (duration > 0) {
       setTimeout(() => {
         this.dismissToast(id);
-      }, toastItem.duration);
+      }, duration);
     }
-
     return id;
   }
 
   public dismissToast(id: string) {
-    const prevLen = this.toasts.length;
     this.toasts = this.toasts.filter((t) => t.id !== id);
-    if (this.toasts.length !== prevLen) {
-      this.notifyToasts();
-    }
+    this.notifyToasts();
   }
 
-  public showModal(
-    config: Omit<ModalPromptConfig, "id" | "resolve">
-  ): Promise<any> {
+  public showModal(config: Omit<ModalPromptConfig, "id">): Promise<any> {
     return new Promise((resolve) => {
       const id = "modal-" + Math.random().toString(36).substring(2, 9);
-      this.activeModal = {
+      this.currentModal = {
         ...config,
         id,
-        resolve: (val: any) => {
-          this.activeModal = null;
+        onConfirm: (val?: any) => {
+          this.currentModal = null;
           this.notifyModal();
-          resolve(val);
-        }
+          resolve(config.inputMode ? (val ?? "") : true);
+        },
+        onCancel: () => {
+          this.currentModal = null;
+          this.notifyModal();
+          resolve(config.inputMode ? null : false);
+        },
       };
       this.notifyModal();
-      try {
-        const soundType = config.type === "ticket" ? "success" : config.destructive ? "error" : config.type;
-        promptSound.play(soundType || "question");
-      } catch {
-        // Audio playback fails gracefully
-      }
     });
   }
 
-  public dismissModal(result: any) {
-    if (this.activeModal) {
-      this.activeModal.resolve(result);
+  public dismissModal(result?: any) {
+    if (!this.currentModal) return;
+    if (result !== false && result !== null && result !== undefined) {
+      this.currentModal.onConfirm?.(result);
+    } else {
+      this.currentModal.onCancel?.();
     }
   }
 }
 
 export const promptService = new PromptService();
 
-export function toast(message: string, options?: Partial<ToastNotification>) {
-  return promptService.showToast({
-    message,
-    ...options
-  });
-}
-
-toast.success = (message: string, title?: string, options?: Partial<ToastNotification>) => {
-  return promptService.showToast({
-    message,
-    title: title || "Success",
-    type: "success",
-    ...options
-  });
+export const toast = {
+  success: (message: string, title?: string, details?: string) =>
+    promptService.showToast({ type: "success", message, title: title || "Success", details }),
+  error: (message: string, title?: string, details?: string) =>
+    promptService.showToast({ type: "error", message, title: title || "Error", details }),
+  warning: (message: string, title?: string, details?: string) =>
+    promptService.showToast({ type: "warning", message, title: title || "Attention", details }),
+  info: (message: string, title?: string, details?: string) =>
+    promptService.showToast({ type: "info", message, title: title || "Notice", details }),
 };
 
-toast.error = (message: string, title?: string, options?: Partial<ToastNotification>) => {
-  return promptService.showToast({
-    message,
-    title: title || "Error",
-    type: "error",
-    ...options
-  });
-};
-
-toast.warning = (message: string, title?: string, options?: Partial<ToastNotification>) => {
-  return promptService.showToast({
-    message,
-    title: title || "Warning",
-    type: "warning",
-    ...options
-  });
-};
-
-toast.info = (message: string, title?: string, options?: Partial<ToastNotification>) => {
-  return promptService.showToast({
-    message,
-    title: title || "Information",
-    type: "info",
-    ...options
-  });
-};
-
-export async function modernConfirm(
-  message: string,
-  options?: {
+export function modernConfirm(
+  optionsOrMessage: string | {
     title?: string;
+    message: string;
     confirmText?: string;
     cancelText?: string;
-    type?: PromptType;
     destructive?: boolean;
     details?: string;
-    badgeText?: string;
-  }
+  },
+  secondArg?: any
 ): Promise<boolean> {
-  const result = await promptService.showModal({
-    message,
-    title: options?.title || "Confirm Action",
-    type: options?.type || (options?.destructive ? "warning" : "question"),
-    confirmText: options?.confirmText || "Confirm",
-    cancelText: options?.cancelText || "Cancel",
-    destructive: options?.destructive,
-    details: options?.details,
-    badgeText: options?.badgeText
-  });
-  return Boolean(result);
-}
-
-export async function modernAlert(
-  message: string,
-  options?: {
-    title?: string;
-    confirmText?: string;
-    type?: PromptType;
-    details?: string;
-    badgeText?: string;
+  if (typeof optionsOrMessage === "string") {
+    const opts = typeof secondArg === "object" ? secondArg : {};
+    return promptService.showModal({
+      type: opts.destructive ? "error" : "question",
+      title: typeof secondArg === "string" ? secondArg : opts.title || "Confirm Action",
+      message: optionsOrMessage,
+      confirmText: opts.confirmText || "Confirm",
+      cancelText: opts.cancelText || "Cancel",
+      destructive: opts.destructive,
+      details: opts.details,
+    });
   }
-): Promise<void> {
-  await promptService.showModal({
-    message,
-    title: options?.title || "Notification",
-    type: options?.type || "info",
-    confirmText: options?.confirmText || "OK",
-    details: options?.details,
-    badgeText: options?.badgeText
+  return promptService.showModal({
+    type: optionsOrMessage.destructive ? "error" : "question",
+    title: optionsOrMessage.title || "Confirm Action",
+    message: optionsOrMessage.message,
+    confirmText: optionsOrMessage.confirmText || "Confirm",
+    cancelText: optionsOrMessage.cancelText || "Cancel",
+    destructive: optionsOrMessage.destructive,
+    details: optionsOrMessage.details,
   });
 }
 
-export async function modernPrompt(
-  message: string,
-  options?: {
+export function modernAlert(
+  optionsOrMessage: string | {
     title?: string;
+    message: string;
+    type?: PromptType;
+    confirmText?: string;
+    details?: string;
+  },
+  secondArg?: any
+): Promise<void> {
+  if (typeof optionsOrMessage === "string") {
+    const opts = typeof secondArg === "object" ? secondArg : {};
+    return promptService.showModal({
+      type: opts.type || "info",
+      title: typeof secondArg === "string" ? secondArg : opts.title || "Alert",
+      message: optionsOrMessage,
+      confirmText: opts.confirmText || "OK",
+      details: opts.details,
+    }).then(() => {});
+  }
+  return promptService.showModal({
+    type: optionsOrMessage.type || "info",
+    title: optionsOrMessage.title || "Alert",
+    message: optionsOrMessage.message,
+    confirmText: optionsOrMessage.confirmText || "OK",
+    details: optionsOrMessage.details,
+  }).then(() => {});
+}
+
+export function modernPrompt(
+  optionsOrMessage: string | {
+    title?: string;
+    message: string;
+    inputLabel?: string;
+    inputPlaceholder?: string;
+    inputValue?: string;
     confirmText?: string;
     cancelText?: string;
-    defaultValue?: string;
-    placeholder?: string;
-    type?: PromptType;
-    details?: string;
-    badgeText?: string;
-  }
+  },
+  secondArg?: any
 ): Promise<string | null> {
-  const result = await promptService.showModal({
-    message,
-    title: options?.title || "Input Required",
-    type: options?.type || "question",
-    confirmText: options?.confirmText || "Submit",
-    cancelText: options?.cancelText || "Cancel",
+  if (typeof optionsOrMessage === "string") {
+    const opts = typeof secondArg === "object" ? secondArg : {};
+    return promptService.showModal({
+      type: "question",
+      title: typeof secondArg === "string" ? secondArg : opts.title || "Input Required",
+      message: optionsOrMessage,
+      inputMode: true,
+      inputLabel: opts.inputLabel,
+      inputPlaceholder: opts.inputPlaceholder,
+      inputValue: opts.inputValue,
+      confirmText: opts.confirmText || "Submit",
+      cancelText: opts.cancelText || "Cancel",
+    });
+  }
+  return promptService.showModal({
+    type: "question",
+    title: optionsOrMessage.title || "Input Required",
+    message: optionsOrMessage.message,
     inputMode: true,
-    inputValue: options?.defaultValue || "",
-    inputPlaceholder: options?.placeholder || "",
-    details: options?.details,
-    badgeText: options?.badgeText
+    inputLabel: optionsOrMessage.inputLabel,
+    inputPlaceholder: optionsOrMessage.inputPlaceholder,
+    inputValue: optionsOrMessage.inputValue,
+    confirmText: optionsOrMessage.confirmText || "Submit",
+    cancelText: optionsOrMessage.cancelText || "Cancel",
   });
-  return typeof result === "string" ? result : null;
 }

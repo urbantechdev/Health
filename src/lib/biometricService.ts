@@ -1,224 +1,218 @@
-import { db } from "./firebase";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
-
 export interface ClientPlatformInfo {
   isMobile: boolean;
+  isDesktop: boolean;
   isAndroid: boolean;
   isIOS: boolean;
-  isDesktop: boolean;
   userAgent: string;
+  deviceLabel?: string;
+  [key: string]: any;
 }
 
 export interface BiometricDevice {
   id: string;
   name: string;
-  type: "mobile_fingerprint" | "remote_mobile" | "webauthn" | "smart_app_sdk" | "usb_hid" | "webusb";
-  status: "connected" | "pairing" | "disconnected";
+  type: string;
+  status: "connected" | "disconnected";
   manufacturerName?: string;
   details?: string;
   vendorId?: string;
   productId?: string;
   isMobileNative?: boolean;
+  [key: string]: any;
 }
 
 export interface BiometricScanResult {
   scanId?: string;
-  shaTemplateHash?: string;
-  qualityScore?: number;
-  matchScore?: number;
-  isMatch?: boolean;
-  matchedPatientName?: string;
-  matchedNationalId?: string;
-  deviceName?: string;
-  deviceType?: string;
-  timestamp?: string;
+  patientName?: string;
+  nationalId?: string;
   fingerIndex?: string;
-  isPhoneSensor?: boolean;
+  deviceUsed?: string;
+  qualityScore?: number;
+  minutiaeCount?: number;
+  nfiqScore?: number;
+  templateBase64?: string;
+  capturedAt?: string;
+  verified?: boolean;
   success?: boolean;
   fingerprintHash?: string;
-  deviceUsed?: string;
-  nfiqScore?: number;
-  minutiaeCount?: number;
+  matchedNationalId?: string;
+  timestamp?: string;
+  isPhoneSensor?: boolean;
   [key: string]: any;
 }
 
 export function detectClientPlatform(): ClientPlatformInfo {
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
-  const isAndroid = /Android/i.test(ua);
-  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  if (typeof window === "undefined" || !navigator) {
+    return {
+      isMobile: false,
+      isDesktop: true,
+      isAndroid: false,
+      isIOS: false,
+      userAgent: "",
+    };
+  }
+  const ua = navigator.userAgent || "";
+  const isAndroid = /android/i.test(ua);
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const isMobile = isAndroid || isIOS || /Mobi|Tablet/i.test(ua);
-
+  const isDesktop = !isMobile;
   return {
     isMobile,
+    isDesktop,
     isAndroid,
     isIOS,
-    isDesktop: !isMobile,
-    userAgent: ua
+    userAgent: ua,
   };
 }
 
 export async function isWebAuthnAvailable(): Promise<boolean> {
-  if (typeof window === "undefined" || !window.PublicKeyCredential) {
-    return false;
+  if (typeof window !== "undefined" && window.PublicKeyCredential) {
+    try {
+      return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch {
+      return true;
+    }
   }
-  try {
-    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 export async function getConnectedUsbDevices(): Promise<BiometricDevice[]> {
-  if (typeof navigator === "undefined" || !(navigator as any).usb) {
-    return [];
+  const devices: BiometricDevice[] = [];
+  if (typeof navigator !== "undefined" && (navigator as any).usb) {
+    try {
+      const usbDevices = await (navigator as any).usb.getDevices();
+      for (const dev of usbDevices) {
+        devices.push({
+          id: `usb-${dev.vendorId}-${dev.productId}`,
+          name: dev.productName || "USB Biometric Platen Scanner",
+          type: "usb_hardware",
+          status: "connected",
+          vendorId: `0x${dev.vendorId.toString(16)}`,
+          productId: `0x${dev.productId.toString(16)}`,
+          manufacturerName: dev.manufacturerName || "Optical Sensor",
+          details: "USB Fingerprint Optical Sensor connected",
+        });
+      }
+    } catch {
+      // ignore
+    }
   }
-  try {
-    const devices = await (navigator as any).usb.getDevices();
-    return devices.map((d: any, idx: number) => ({
-      id: `usb-${d.vendorId}-${d.productId}-${idx}`,
-      name: d.productName || "USB Fingerprint Scanner",
-      type: "webusb" as const,
-      status: "connected" as const,
-      manufacturerName: d.manufacturerName || "HID Global",
-      vendorId: `0x${d.vendorId.toString(16).padStart(4, "0")}`,
-      productId: `0x${d.productId.toString(16).padStart(4, "0")}`,
-      details: "Hardware WebUSB compliant sensor connected"
-    }));
-  } catch {
-    return [];
-  }
+  return devices;
 }
 
 export async function getConnectedHidDevices(): Promise<BiometricDevice[]> {
-  if (typeof navigator === "undefined" || !(navigator as any).hid) {
-    return [];
+  const devices: BiometricDevice[] = [];
+  if (typeof navigator !== "undefined" && (navigator as any).hid) {
+    try {
+      const hidDevices = await (navigator as any).hid.getDevices();
+      for (const dev of hidDevices) {
+        devices.push({
+          id: `hid-${dev.vendorId}-${dev.productId}`,
+          name: dev.productName || "HID Biometric Reader",
+          type: "hid_hardware",
+          status: "connected",
+          vendorId: `0x${dev.vendorId.toString(16)}`,
+          productId: `0x${dev.productId.toString(16)}`,
+          manufacturerName: "HID Global",
+          details: "HID Standard Compliant Biometric Reader",
+        });
+      }
+    } catch {
+      // ignore
+    }
   }
-  try {
-    const devices = await (navigator as any).hid.getDevices();
-    return devices.map((d: any, idx: number) => ({
-      id: `hid-${d.vendorId}-${d.productId}-${idx}`,
-      name: d.productName || "HID Biometric Terminal",
-      type: "usb_hid" as const,
-      status: "connected" as const,
-      manufacturerName: "HID Biometrics",
-      vendorId: `0x${d.vendorId.toString(16).padStart(4, "0")}`,
-      productId: `0x${d.productId.toString(16).padStart(4, "0")}`,
-      details: "Hardware HID biometric peripheral"
-    }));
-  } catch {
-    return [];
-  }
+  return devices;
 }
 
 export async function pairUsbBiometricScanner(): Promise<BiometricDevice | null> {
   if (typeof navigator !== "undefined" && (navigator as any).usb) {
-    try {
-      const device = await (navigator as any).usb.requestDevice({ filters: [] });
-      if (device) {
-        return {
-          id: `usb-${device.vendorId}-${device.productId}`,
-          name: device.productName || "DigitalPersona U.are.U 4500",
-          type: "webusb",
-          status: "connected",
-          manufacturerName: device.manufacturerName || "HID Global",
-          vendorId: `0x${device.vendorId.toString(16).padStart(4, "0")}`,
-          productId: `0x${device.productId.toString(16).padStart(4, "0")}`,
-          details: "USB Fingerprint Reader Paired Successfully"
-        };
-      }
-    } catch (err) {
-      console.warn("User cancelled WebUSB device request or not supported:", err);
+    const dev = await (navigator as any).usb.requestDevice({ filters: [] });
+    if (dev) {
+      return {
+        id: `usb-${dev.vendorId}-${dev.productId}`,
+        name: dev.productName || "SecuGen / DigitalPersona USB Scanner",
+        type: "usb_hardware",
+        status: "connected",
+        vendorId: `0x${dev.vendorId.toString(16)}`,
+        productId: `0x${dev.productId.toString(16)}`,
+        manufacturerName: dev.manufacturerName || "Optical Scanner",
+        details: "USB Optical Platen paired successfully",
+      };
     }
   }
-
-  // Fallback simulated device
-  return {
-    id: `usb-paired-${Date.now()}`,
-    name: "SecuGen Hamster Pro 20 / DigitalPersona Reader",
-    type: "smart_app_sdk",
-    status: "connected",
-    manufacturerName: "SecuGen / Smart Applications",
-    details: "Universal Kenyan Hospital Biometric Scanner Ready"
-  };
+  return null;
 }
 
 export async function pairHidBiometricScanner(): Promise<BiometricDevice | null> {
-  return pairUsbBiometricScanner();
+  if (typeof navigator !== "undefined" && (navigator as any).hid) {
+    const devs = await (navigator as any).hid.requestDevice({ filters: [] });
+    if (devs && devs.length > 0) {
+      const dev = devs[0];
+      return {
+        id: `hid-${dev.vendorId}-${dev.productId}`,
+        name: dev.productName || "HID Biometric Scanner",
+        type: "hid_hardware",
+        status: "connected",
+        vendorId: `0x${dev.vendorId.toString(16)}`,
+        productId: `0x${dev.productId.toString(16)}`,
+        manufacturerName: "HID Global",
+        details: "HID Fingerprint Sensor paired successfully",
+      };
+    }
+  }
+  return null;
 }
 
-export function triggerHapticFeedback(pattern: number[] = [40]): void {
+export function triggerHapticFeedback(pattern: number[] = [50]) {
   if (typeof navigator !== "undefined" && navigator.vibrate) {
     try {
       navigator.vibrate(pattern);
     } catch {
-      // Ignored if vibration permission disallowed
+      // ignore
     }
   }
 }
 
-export async function captureBiometricFingerprint({
-  patientName,
-  nationalId,
-  fingerIndex = "Right Thumb",
-  preferredDevice
-}: {
-  patientName: string;
+export async function captureBiometricFingerprint(params: {
+  patientName?: string;
   nationalId?: string;
   fingerIndex?: string;
   preferredDevice?: BiometricDevice | null;
 }): Promise<BiometricScanResult> {
-  // Simulate hardware optical / capacitive capture delay
-  await new Promise((res) => setTimeout(res, 1200));
-
-  const qualityScore = Math.floor(92 + Math.random() * 8);
-  const matchScore = Math.floor(95 + Math.random() * 5);
-
+  await new Promise((r) => setTimeout(r, 1000));
+  const quality = Math.floor(88 + Math.random() * 11);
+  const minutiae = Math.floor(45 + Math.random() * 30);
   return {
-    scanId: `SCAN-${Date.now().toString().slice(-6)}`,
-    shaTemplateHash: `ISO19794-2-ANSI378-${Math.random().toString(36).substring(2, 14).toUpperCase()}`,
-    qualityScore,
-    matchScore,
-    isMatch: true,
-    matchedPatientName: patientName,
-    matchedNationalId: nationalId || "32441928",
-    deviceName: preferredDevice?.name || "Standard Biometric Scanner",
-    deviceType: preferredDevice?.type || "mobile_fingerprint",
-    timestamp: new Date().toISOString(),
-    fingerIndex,
-    isPhoneSensor: preferredDevice?.isMobileNative || false
+    scanId: `BIO-SCAN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+    patientName: params.patientName || "Patient",
+    nationalId: params.nationalId || "UNKNOWN",
+    fingerIndex: params.fingerIndex || "Right Thumb",
+    deviceUsed: params.preferredDevice?.name || "Optical Biometric Scanner",
+    qualityScore: quality,
+    minutiaeCount: minutiae,
+    nfiqScore: 1,
+    templateBase64: "dGVzdC1iaW9tZXRyaWMtdGVtcGxhdGUtZGF0YS1pc28tMTk3OTQtMg==",
+    capturedAt: new Date().toISOString(),
+    verified: true,
   };
 }
 
-export async function broadcastRemoteBiometricResult(
-  sessionCode: string,
-  result: BiometricScanResult
-): Promise<void> {
-  try {
-    await setDoc(doc(db, "biometric_sessions", sessionCode), {
-      ...result,
-      updatedAt: new Date().toISOString()
-    });
-  } catch (err) {
-    console.warn("Failed to broadcast remote biometric result via firestore:", err);
-  }
-}
+const remoteScanListeners = new Map<string, (result: BiometricScanResult) => void>();
 
 export function subscribeToRemoteBiometricScan(
   sessionCode: string,
-  onResult: (result: BiometricScanResult) => void
+  callback: (result: BiometricScanResult) => void
 ): () => void {
-  return onSnapshot(
-    doc(db, "biometric_sessions", sessionCode),
-    (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data && data.scanId) {
-          onResult(data as BiometricScanResult);
-        }
-      }
-    },
-    (err) => {
-      console.warn("subscribeToRemoteBiometricScan error:", err);
-    }
-  );
+  remoteScanListeners.set(sessionCode, callback);
+  return () => {
+    remoteScanListeners.delete(sessionCode);
+  };
+}
+
+export function broadcastRemoteBiometricResult(sessionCode: string, result: BiometricScanResult) {
+  const cb = remoteScanListeners.get(sessionCode);
+  if (cb) {
+    cb(result);
+  }
 }

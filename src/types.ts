@@ -1,535 +1,3 @@
-// NextGen HMS Shared TypeScript Types
-
-export interface Tenant {
-  id: string;
-  name: string;
-  type: "clinic" | "hospital_level_4" | "hospital_level_5";
-  county: string;
-}
-
-export interface DepartmentToggles {
-  reception: boolean;
-  queue: boolean;
-  doctor: boolean;
-  pharmacy: boolean;
-  laboratory: boolean;
-  radiology: boolean;
-  billing: boolean;
-}
-
-export interface QueueTicket {
-  id: string;
-  ticketNo: string; // e.g., GEN-002, LAB-045, RAD-012, PHA-089
-  patientName: string;
-  patientId?: string;
-  nationalId: string;
-  biometricStatus: "verified" | "not_verified";
-  service: string; // e.g., "General Doctor", "Laboratory", "Pharmacy", "Radiology"
-  currentDepartment: "reception" | "queue" | "doctor" | "laboratory" | "radiology" | "pharmacy" | "billing" | "labour_room" | "gyna" | "inpatient_ward" | string;
-  department?: string;
-  assignedDoctorId?: string;
-  consultationDoctorId?: string;
-  assignedDoctor?: string;
-  status: "pending" | "serving" | "completed" | "skipped";
-  notes?: string;
-  timestamp: string;
-  phone?: string;
-  age?: number;
-  gender?: string;
-  issue?: string;
-  assignedSpecialistId?: string;
-  assignedSpecialistName?: string;
-  specialistTitle?: string;
-  consultationRoom?: string;
-  targetDepartment?: string;
-  targetClinic?: string;
-  allergies?: string;
-  chronicConditions?: string;
-  vitals?: {
-    temp?: string;
-    bp?: string;
-    pulse?: string;
-    respRate?: string;
-    spo2?: string;
-    rbs?: string;
-    weight?: string;
-    height?: string;
-    bmi?: string;
-    painScale?: string;
-    [key: string]: any;
-  };
-  triageScore?: "GREEN" | "YELLOW" | "RED" | string;
-  triageCompletedAt?: string;
-  // Modern Kenyan Journey Extensions
-  isResultsReview?: boolean;
-  resultsReady?: boolean;
-  labSummary?: string;
-  originDoctorName?: string;
-  encounterId?: string;
-  mohCategory?: "MOH 705A (Under 5)" | "MOH 705B (Over 5)" | string;
-  billingStatus?: "PAY_BEFORE_SERVICE" | "RENDER_THEN_CLAIM" | "PAID" | "PENDING";
-  paymentMode?: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split";
-  gatePassIssued?: boolean;
-  gatePassCode?: string;
-  gatePassTimestamp?: string;
-  admissionRequired?: boolean;
-  assignedWardName?: string;
-  assignedBedNumber?: string;
-  requestedTests?: string[];
-  labTestsOrdered?: string[];
-  labPriority?: "routine" | "urgent" | "stat";
-  priority?: "normal" | "urgent" | "stat_emergency" | string;
-  bloodType?: string;
-  symptoms?: string;
-  triageNotes?: string;
-  provisionalDiagnosis?: string;
-  paymentScheme?: string;
-  insurancePolicyNo?: string;
-  createdAt?: string;
-  triageStage?: string;
-}
-
-export interface Medication {
-  id: string;
-  name: string;
-  genericName?: string;
-  brandLabel?: string;
-  formulation?: string;
-  strength?: string;
-  category: string;
-  quantity: number;
-  minThreshold: number;
-  stock?: number;
-  dosage?: string;
-  barcode?: string;
-  batchNo: string;
-  batchNumber?: string;
-  expiryDate: string; // YYYY-MM-DD
-  price: number;
-  imageUrl?: string;
-  updatedAt?: any;
-}
-
-export interface PrescriptionItem {
-  drugName: string;
-  genericName?: string;
-  brandLabel?: string;
-  quantity: number;
-  dosage: string;
-  instructions: string;
-  status: "pending" | "dispensed";
-  medicationId?: string;
-  unitPrice?: number;
-  totalPrice?: number;
-  price?: number;
-  formulation?: string;
-  strength?: string;
-  pricedBy?: "doctor" | "pharmacist" | "default";
-}
-
-export interface MedicalRecord {
-  id: string;
-  patientId?: string;
-  patientName: string;
-  name?: string; // Compatibility alias
-  patientNumber?: string;
-  patientNo?: string;
-  nextOfKin?: any;
-  nextOfKinPhone?: string;
-  insuranceScheme?: string;
-  nationalId: string;
-  phone: string;
-  age: number;
-  gender: string;
-  bloodType: string;
-  shaEligible: "eligible" | "not_eligible" | "unchecked";
-  shaId?: string;
-  visits: ClinicalVisit[];
-  vitals?: any;
-  latestVitals?: {
-    temp?: string;
-    bp?: string;
-    pulse?: string;
-    weight?: string;
-    height?: string;
-    respRate?: string;
-    spo2?: string;
-    rbs?: string;
-    bmi?: string;
-    recordedAt?: string;
-    recordedBy?: string;
-    triageScore?: string;
-    notes?: string;
-  };
-  latestDiagnosis?: string;
-  latestSymptoms?: string;
-  currentDepartment?: string;
-  activeTicketNo?: string;
-  activeEncounterId?: string;
-  chronicConditions?: string;
-  allergies?: any;
-  ticketNo?: string;
-  symptoms?: string;
-  residence?: string;
-  doctorName?: string;
-  diagnosis?: string;
-  paymentScheme?: string;
-  insurancePolicyNo?: string;
-  isResultsReview?: boolean;
-  prescriptions?: any;
-  referrals?: any;
-  sourceStation?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface ClinicalVisit {
-  id: string;
-  date: string;
-  doctor?: string;
-  doctorName?: string;
-  vitals: {
-    temp: string; // °C
-    bp: string; // mmHg e.g. 120/80
-    pulse: string; // bpm
-    weight: string; // kg
-  };
-  symptoms: string;
-  diagnosis: string;
-  mohCategory?: "MOH 705A (Under 5)" | "MOH 705B (Over 5)" | string;
-  icd10Code?: string;
-  icd10Title?: string;
-  encounterId?: string;
-  allergies?: string;
-  admittedToWard?: string;
-  prescriptions: PrescriptionItem[];
-    referrals: {
-      id: string;
-      department: "laboratory" | "radiology" | "labour_room" | "gyna" | string;
-      testName: string;
-      notes: string;
-      status: "pending" | "completed";
-      results?: string;
-    }[];
-}
-
-export interface SplitBilling {
-  sha: number;
-  insurance: number;
-  outOfPocket: number;
-  insuranceCoveredAmount?: number;
-  copayAmount?: number;
-  copayPaymentMethod?: "Cash" | "M-PESA" | "Card" | "Credit Card" | "Debit Card" | string;
-  insuranceProvider?: string;
-  policyNumber?: string;
-  cardMemberNumber?: string;
-  preAuthCode?: string;
-  copayMpesaReceiptNumber?: string;
-  cashTendered?: number;
-  cashChange?: number;
-  notes?: string;
-}
-
-// -------------------------------------------------------------
-// ADMISSION-TO-DISCHARGE PARENT & SUBCOLLECTION ENCOUNTER TYPES
-// -------------------------------------------------------------
-
-export type EncounterStatus =
-  | "REGISTERED"
-  | "TRIAGE"
-  | "DOCTOR_CONSULT"
-  | "ADMITTED"
-  | "DISCHARGING"
-  | "DISCHARGED"
-  | "MORGUE"
-  | "DECEASED";
-
-export type AdmissionType =
-  | "OUTPATIENT"
-  | "INPATIENT"
-  | "EMERGENCY"
-  | "DAY_SURGERY"
-  | "MATERNITY";
-
-export interface MorgueAdmissionRecord {
-  id: string;
-  encounterId: string;
-  patientId: string;
-  patientName: string;
-  nationalId: string;
-  age?: number;
-  gender?: string;
-  fromWardId?: string;
-  fromWardName: string;
-  fromBedNumber?: string;
-  timeOfDeath: string;
-  certifiedByDoctor: string;
-  doctorLicenseNo?: string;
-  causeOfDeathImmediate: string;
-  causeOfDeathUnderlying?: string;
-  mohDeathNoticeNo?: string; // MOH 214 Death Notification No
-  admittedToMorgueAt: string;
-  morgueUnitName: string; // e.g. "Hospital Mortuary & Cold Room A", "Cabinet C-04"
-  cabinetOrBayNumber: string; // e.g. "Bay 04", "Cabinet 12"
-  morgueAttendantName: string;
-  nurseHandoverName: string;
-  nextOfKinName: string;
-  nextOfKinPhone: string;
-  nextOfKinRelationship: string;
-  belongingsInventory?: string;
-  tagsVerified: boolean;
-  notes?: string;
-}
-
-export interface BedTransferRecord {
-  id: string;
-  fromWardId?: string;
-  fromWardName: string;
-  fromBedId?: string;
-  fromBedNumber: string;
-  toWardId: string;
-  toWardName: string;
-  toBedId: string;
-  toBedNumber: string;
-  transferredAt: string;
-  transferredBy: string;
-  reason?: string;
-  dailyRate: number;
-  daysSpent?: number;
-  accumulatedCost?: number;
-}
-
-export interface DoctorDischargeClearance {
-  cleared: boolean;
-  doctorName: string;
-  doctorId?: string;
-  clearedAt: string;
-  dischargeCondition: "Recovered" | "Improved / Stable for Home Care" | "Transferred / Referred" | "Against Medical Advice (DAMA)" | "Deceased";
-  clinicalSummary: string;
-  dischargeMedications?: string;
-  followUpDate?: string;
-  followUpInstructions?: string;
-  doctorSignature?: string;
-}
-
-export interface Encounter {
-  id: string; // e.g. "ENC-2026-001" or Firestore ID
-  patientId: string;
-  patientName: string;
-  nationalId: string;
-  phone?: string;
-  age?: number;
-  gender?: string;
-  bloodType?: string;
-  status: EncounterStatus;
-  admissionType: AdmissionType;
-  admissionDate?: string;
-  initialSymptoms?: string;
-  initialDiagnosis?: string;
-  initialVitals?: any;
-  recordedBy?: string;
-  assignedWard?: string;
-  assignedWardName?: string;
-  assignedWardId?: string;
-  assignedBed?: string;
-  assignedBedId?: string;
-  assignedBedNumber?: string;
-  admittedAt?: string;
-  dischargedAt?: string | null;
-  dischargedBy?: string;
-  dischargeReason?: string;
-  dischargeNotes?: string;
-  doctorDischargeApproved?: boolean;
-  doctorDischargeApprovedBy?: string;
-  doctorDischargeApprovedAt?: string;
-  doctorClearance?: DoctorDischargeClearance;
-  clinicalDischargeSigned?: boolean;
-  clinicalDischargeNotes?: string;
-  clinicalDischargedBy?: string;
-  clinicalDischargedAt?: string;
-  dischargeCondition?: string;
-  dischargeMedications?: any;
-  followUpDate?: string;
-  followUpInstructions?: string;
-  doctorSignature?: string;
-  deceasedNotes?: string;
-  deceasedDate?: string;
-  timeOfDeath?: string;
-  certifiedByDoctor?: string;
-  causeOfDeathImmediate?: string;
-  causeOfDeathUnderlying?: string;
-  mohDeathNoticeNo?: string;
-  morgueUnitName?: string;
-  cabinetOrBayNumber?: string;
-  lastBedTransfer?: any;
-  bedTransfers?: BedTransferRecord[];
-  morgueAdmission?: MorgueAdmissionRecord;
-  morgueTransferredAt?: string;
-  billingCleared: boolean;
-  totalBilled: number;
-  totalPaid: number;
-  pendingLabOrders: number;
-  pendingPrescriptions: number;
-  latestDiagnosis?: string;
-  latestSymptoms?: string;
-  attendingDoctorName?: string;
-  attendingDoctorId?: string;
-  activeQueueTicketId?: string;
-  notes?: string;
-  paymentScheme?: string;
-  insuranceScheme?: string;
-  insuranceNumber?: string;
-  activeTicketNo?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface EncounterVital {
-  id: string;
-  temp: string; // °C
-  bp: string; // e.g. 120/80
-  pulse: string; // bpm
-  weight: string; // kg
-  spo2?: string; // %
-  respiratoryRate?: string; // /min
-  notes?: string;
-  recordedBy: string;
-  recordedAt: string;
-  timestamp?: string;
-}
-
-export interface EncounterPrescription {
-  id: string;
-  drugName: string;
-  quantity: number;
-  dosage: string;
-  instructions: string;
-  unitPrice: number;
-  totalPrice: number;
-  status: "pending" | "dispensed" | "cancelled" | "BILLED";
-  isBilled?: boolean;
-  isPaid?: boolean;
-  billedInvoiceId?: string;
-  prescribedBy: string;
-  dispensedBy?: string;
-  dispensedAt?: string;
-  createdAt: string;
-}
-
-export interface EncounterLabRequest {
-  id: string;
-  testName: string;
-  department: "laboratory" | "radiology" | "labour_room" | "gyna" | string;
-  sampleType?: string;
-  notes?: string;
-  unitPrice: number;
-  status: "pending" | "sample_collected" | "processing" | "completed" | "cancelled" | "BILLED";
-  isBilled?: boolean;
-  isPaid?: boolean;
-  billedInvoiceId?: string;
-  results?: string;
-  abnormalFlags?: string;
-  orderedBy: string;
-  performedBy?: string;
-  completedAt?: string;
-  createdAt: string;
-}
-
-export interface EncounterBillItem {
-  id: string;
-  description: string;
-  category: "consultation" | "pharmacy" | "laboratory" | "radiology" | "ward_bed" | "nursing" | "procedure" | "other";
-  unitPrice: number;
-  quantity: number;
-  total: number;
-  isPaid: boolean;
-  status?: string;
-  paidAt?: string;
-  paymentMethod?: string;
-  invoiceId?: string;
-  timestamp: string;
-}
-
-export interface EncounterNursingNote {
-  id: string;
-  note: string;
-  shift: "Morning" | "Afternoon" | "Night";
-  nurseName: string;
-  nurseId?: string;
-  timestamp: string;
-}
-
-export interface EncounterDoctorNote {
-  id: string;
-  category?: "Ward Round Review" | "Treatment Plan" | "Specialist Consultation" | "Clinical Progress" | "Procedure / Intervention" | "Emergency Assessment" | "General" | string;
-  note: string;
-  doctorName: string;
-  doctorId?: string;
-  doctorKmpdc?: string;
-  clinicalPlan?: string;
-  orders?: string;
-  timestamp: string;
-}
-
-export interface WardBed {
-  id: string;
-  bedNumber: string; // e.g. "Bed-1", "Bed-2"
-  wardId: string;
-  wardName: string; // e.g. "Male Medical Ward", "Female Surgical Ward", "Maternity & Labour Ward", "Pediatric Ward", "ICU / HDU"
-  category: "General" | "Semi-Private" | "Private" | "ICU" | "Maternity";
-  status: "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "CLEANING";
-  dailyRate: number; // KES e.g. 1500, 3500, 8000
-  currentPatientId?: string | null;
-  currentPatientName?: string | null;
-  currentEncounterId?: string | null;
-  occupiedSince?: string | null;
-}
-
-export interface HospitalWard {
-  id: string;
-  name: string;
-  code: string;
-  floor: string;
-  category: string;
-  totalBeds: number;
-  dailyBaseRate: number;
-}
-
-export interface Invoice {
-  id: string;
-  patientId: string;
-  patientName: string;
-  nationalId: string;
-  items: {
-    description: string;
-    amount: number;
-    department: string;
-  }[];
-  total: number;
-  split: SplitBilling;
-  paymentMethod: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split" | "Insurance + Copay" | "Card" | string;
-  paymentStatus: "unpaid" | "pending_mpesa" | "paid";
-  mpesaCheckoutId?: string;
-  mpesaReceiptNumber?: string;
-  transactionRef?: string;
-  kraCompliantInvoiceNo?: string;
-  etimsControlUnitNumber?: string;
-  shaClaimId?: string;
-  timestamp: string;
-  encounterId?: string;
-  paidAt?: string;
-  paidAmount?: number;
-}
-
-export interface ExpenseItem {
-  id: string;
-  description: string;
-  amount: number;
-  category: "supplies" | "salaries" | "utilities" | "equipment" | "rent" | "other";
-  date: string;
-  supplier?: string;
-}
-
 export type SystemRole =
   | "Super Admin"
   | "Admin"
@@ -542,590 +10,856 @@ export type SystemRole =
   | "Payroll"
   | "Finance"
   | "Procurement"
-  | "Billing & Accounts";
+  | "Billing & Accounts"
+  | string;
 
-export interface SystemUserAccount {
+export interface DepartmentToggles {
+  reception?: boolean;
+  triage?: boolean;
+  doctor?: boolean;
+  pharmacy?: boolean;
+  laboratory?: boolean;
+  radiology?: boolean;
+  billing?: boolean;
+  finance?: boolean;
+  hr?: boolean;
+  payroll?: boolean;
+  procurement?: boolean;
+  transfers?: boolean;
+  admissions?: boolean;
+  forms?: boolean;
+  admin?: boolean;
+  [key: string]: boolean | undefined;
+}
+
+export interface Tenant {
   id: string;
   name: string;
-  email: string;
-  role: SystemRole;
-  department: string;
+  tagline?: string;
   phone?: string;
-  nationalId?: string;
-  photoURL?: string;
-  avatarUrl?: string;
-  pin?: string;
-  password?: string;
-  status: "active" | "inactive" | "suspended";
-  createdDate: string;
-  createdBy?: string;
-  lastLogin?: string;
+  email?: string;
+  address?: string;
+  logoUrl?: string;
+  currency?: string;
+  country?: string;
+  shaFacilityCode?: string;
+  shaFacilityName?: string;
+  pwaIconUrl?: string;
+  pwaAppName?: string;
+  pwaThemeColor?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  [key: string]: any;
 }
 
 export interface Employee {
   id: string;
   name: string;
-  nationalId: string;
-  role: SystemRole | string;
-  department: string; // e.g. "medical", "pharmacy", "finance", "hr", "security", "nursing", "administration", "procurement", "laboratory", "billing"
-  specialty?: string; // e.g. "Gynecology", "Dentistry", "Laboratory Medicine", "Radiology", "General Practice"
-  salary: number; // Base salary in KES
-  phone: string;
-  email: string;
-  photoURL?: string;
+  email?: string;
+  role: SystemRole;
+  department: string;
+  status: "active" | "inactive" | "terminated" | "on_leave" | string;
+  phone?: string;
+  nationalId?: string;
+  specialty?: string;
+  room?: string;
+  roomNumber?: string;
+  basicSalary?: number;
+  allowances?: number;
+  deductions?: number;
+  netSalary?: number;
+  kraPin?: string;
+  nssfNo?: string;
+  nhifNo?: string;
+  shaNo?: string;
+  bankName?: string;
+  bankAccount?: string;
+  hireDate?: string;
+  createdAt?: string;
+  isSuperAdmin?: boolean;
   avatarUrl?: string;
-  pin?: string;
-  password?: string;
-  signatureUrl?: string;
-  status: "active" | "on_leave" | "terminated";
-  hireDate: string;
-  accessLevel?: "Super Admin" | "Department Admin" | "Standard Staff";
-  systemRole?: SystemRole;
-  lastLogin?: string;
-  isEmployee?: boolean;
-  employmentType?: "employee" | "developer" | "contractor" | "external";
+  [key: string]: any;
+}
+
+export interface QueueTicket {
+  id: string;
+  ticketNumber: string;
+  patientId: string;
+  patientName: string;
+  nationalId?: string;
+  phone?: string;
+  age?: number | string;
+  gender?: string;
+  category?: string;
+  priority?: "normal" | "urgent" | "emergency" | string;
+  status:
+    | "waiting"
+    | "called"
+    | "in_triage"
+    | "in_consultation"
+    | "in_pharmacy"
+    | "in_lab"
+    | "in_billing"
+    | "completed"
+    | "cancelled"
+    | "transferred"
+    | string;
+  department: string;
+  station?: string;
+  assignedDoctor?: string;
+  assignedDoctorId?: string;
+  room?: string;
+  consultationRoom?: string;
+  vitals?: {
+    bp?: string;
+    temperature?: number | string;
+    pulse?: number | string;
+    respiratoryRate?: number | string;
+    spo2?: number | string;
+    weight?: number | string;
+    height?: number | string;
+    bmi?: number | string;
+    bloodSugar?: number | string;
+    triageNotes?: string;
+    triageCategory?: string;
+    [key: string]: any;
+  };
+  symptoms?: string;
+  notes?: string;
+  createdAt: string;
+  calledAt?: string;
+  completedAt?: string;
+  servedBy?: string;
+  source?: string;
+  [key: string]: any;
+}
+
+export interface MedicalRecord {
+  id: string;
+  patientNumber?: string;
+  patientNo?: string;
+  name: string;
+  patientName?: string;
+  nationalId: string;
+  phone?: string;
+  email?: string;
+  gender: string;
+  dob?: string;
+  age?: number | string;
+  bloodGroup?: string;
+  allergies?: string[] | string;
+  chronicConditions?: string[] | string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+  insuranceProvider?: string;
+  insuranceMemberNo?: string;
+  shaNo?: string;
+  residence?: string;
+  occupation?: string;
+  createdAt: string;
+  updatedAt?: string;
+  biometricEnrolled?: boolean;
+  biometricTemplate?: string;
+  photoUrl?: string;
+  [key: string]: any;
+}
+
+export interface ClinicalVisit {
+  id: string;
+  patientId?: string;
+  patientName?: string;
+  doctorName?: string;
+  doctorId?: string;
+  date: string;
+  symptoms?: string;
+  diagnosis?: string;
+  icd10Code?: string;
+  icd10Description?: string;
+  clinicalNotes?: string;
+  prescriptions?: PrescriptionItem[];
+  labRequests?: string[];
+  radiologyRequests?: string[];
+  vitals?: any;
+  referrals?: any[];
+  status?: string;
+  followUpDate?: string;
+  [key: string]: any;
+}
+
+export interface Medication {
+  id: string;
+  name: string;
+  genericName?: string;
+  brandName?: string;
+  category: string;
+  strength?: string;
+  dosageForm?: string;
+  unitPrice?: number;
+  price?: number;
+  costPrice?: number;
+  stockQuantity?: number;
+  quantity?: number;
+  reorderLevel?: number;
+  minThreshold?: number;
+  batchNumber?: string;
+  batchNo?: string;
+  expiryDate?: string;
+  barcode?: string;
+  location?: string;
+  manufacturer?: string;
+  status?: "available" | "low_stock" | "out_of_stock" | "expired" | string;
+  [key: string]: any;
+}
+
+export interface PrescriptionItem {
+  id?: string;
+  medicationId?: string;
+  medicationName?: string;
+  drugName?: string;
+  genericName?: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  quantity?: number;
+  unitPrice?: number;
+  totalPrice?: number;
+  instructions?: string;
+  dispensed?: boolean;
+  status?: "pending" | "dispensed" | "cancelled" | string;
+  [key: string]: any;
+}
+
+export interface InvoiceItem {
+  id?: string;
+  name?: string;
+  description: string;
+  category?: string;
+  quantity?: number;
+  unitPrice?: number;
+  amount?: number;
+  totalPrice?: number;
+  waived?: boolean;
+  department?: string;
+  [key: string]: any;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber?: string;
+  patientId: string;
+  patientName: string;
+  nationalId?: string;
+  date?: string;
+  timestamp?: string;
+  items: InvoiceItem[];
+  subtotal?: number;
+  total?: number;
+  discount?: number;
+  tax?: number;
+  shaCoverageAmount?: number;
+  insuranceCoverageAmount?: number;
+  totalAmount?: number;
+  amountPaid?: number;
+  balanceDue?: number;
+  paymentStatus?: "unpaid" | "partial" | "paid" | "waived" | string;
+  paymentMethod?: "Cash" | "M-Pesa" | "Insurance" | "SHA" | "Card" | "Bank Transfer" | string;
+  mpesaReceiptNumber?: string;
+  cashierName?: string;
+  cashierId?: string;
+  shiftId?: string;
+  notes?: string;
+  createdAt?: string;
+  paidAt?: string;
+  [key: string]: any;
+}
+
+export interface ExpenseItem {
+  id: string;
+  category: string;
+  description: string;
+  amount: number;
+  date: string;
+  approvedBy?: string;
+  paymentMethod?: string;
+  receiptNumber?: string;
+  receiptUrl?: string;
+  [key: string]: any;
 }
 
 export interface PayrollRecord {
   id: string;
   employeeId: string;
   employeeName: string;
-  month: string; // e.g., "July 2026"
-  baseSalary: number;
+  month: string;
+  year: number;
+  basicSalary: number;
   allowances: number;
-  deductions: {
-    shif: number; // Social Health Insurance Fund (2.75% standard in Kenya)
-    paye: number; // KRA PAYE tax
-    housingLevy: number; // Affordable Housing Levy (1.5% employee share)
-    nssf: number; // National Social Security Fund (standard pension contribution)
-    other: number;
-  };
-  netPay: number;
-  paymentStatus: "paid" | "pending";
-  paidDate?: string;
+  grossSalary: number;
+  paye: number;
+  nssf: number;
+  nhif: number;
+  housingLevy?: number;
+  otherDeductions: number;
+  totalDeductions: number;
+  netSalary: number;
+  paymentStatus: "pending" | "paid" | "processed" | string;
+  paymentDate?: string;
+  paymentReference?: string;
+  kraPin?: string;
+  [key: string]: any;
 }
 
-export interface SecurityLog {
+export interface InternalMessage {
   id: string;
-  type: "individual" | "vehicle";
-  nameOrPlate: string; // Name for individual, License plate for vehicle
-  entityType: "staff" | "patient" | "visitor" | "contractor" | "delivery" | "other";
-  direction: "entry" | "exit";
-  checkpoint: string; // "Main Gate", "Reception Desk", "Emergency Gate", "Staff Gate"
-  idOrPhone?: string; // National ID / Passport or phone number
-  nationalId?: string;
-  patientName?: string;
-  phone?: string;
+  senderId?: string;
+  senderName?: string;
+  senderEmail?: string;
+  senderRole?: SystemRole;
+  targetType?: "all" | "role" | "department" | "user" | "individual" | string;
+  targetRole?: string;
+  targetDepartment?: string;
+  targetUserId?: string;
+  recipientId?: string;
+  recipientName?: string;
+  recipientEmail?: string;
+  recipientRole?: string;
+  recipientDepartment?: string;
+  message: string;
+  priority?: "normal" | "urgent" | "stat_emergency" | string;
   timestamp: string;
-  status: "authorized" | "flagged" | "denied";
-  notes?: string;
-  officerName: string;
-  receptionStatus?: "pending" | "retrieved" | "registered";
-  receptionTicketNo?: string;
+  readBy?: string[];
+  attachments?: ChatTicketAttachment[];
+  [key: string]: any;
+}
+
+export interface ChatTicketAttachment {
+  id?: string;
+  name?: string;
+  url?: string;
+  type?: string;
+  size?: number;
+  ticketId?: string;
+  ticketNo?: string;
+  title?: string;
+  patientName?: string;
+  patientId?: string;
+  nationalId?: string;
+  patientAge?: string;
+  patientGender?: string;
+  fromDepartment?: string;
+  fromRole?: string;
+  fromUserName?: string;
+  [key: string]: any;
+}
+
+export interface ChatTicketItem {
+  id: string;
+  ticketId?: string;
+  title?: string;
+  description?: string;
+  priority?: "low" | "medium" | "high" | "urgent" | string;
+  status?: "open" | "in_progress" | "resolved" | "closed" | string;
+  assignedToRole?: SystemRole;
+  assignedToUser?: string;
+  createdBy?: string;
+  createdAt?: string;
+  quantity?: number;
+  unitPrice?: number;
+  amount?: number;
+  department?: string;
+  [key: string]: any;
 }
 
 export interface SystemTicket {
   id: string;
-  ticketNumber: string; // e.g. TCK-8492
-  patientId?: string;
-  patientName: string;
-  nationalId: string;
-  phone?: string;
-  visitReason: string;
+  title: string;
+  description: string;
   department: string;
-  priority: "Normal" | "Urgent" | "Emergency";
-  status: "open" | "in_progress" | "closed" | "cancelled";
-  createdTime: string;
-  closedTime?: string;
-  closedBy?: string;
+  priority: "low" | "medium" | "high" | "critical" | string;
+  status: "open" | "assigned" | "in_progress" | "resolved" | "closed" | string;
+  patientId?: string;
+  patientName?: string;
+  assignedTo?: string;
+  createdBy: string;
+  createdAt: string;
+  resolvedAt?: string;
   resolutionNotes?: string;
-  autoGenerated: boolean;
-  assignedSpecialistId?: string;
-  assignedSpecialistName?: string;
-  specialistTitle?: string;
-  consultationRoom?: string;
+  [key: string]: any;
+}
+
+export interface PatientTransfer {
+  id: string;
+  patientId?: string;
+  patientName?: string;
+  fromDepartment?: string;
+  toDepartment?: string;
+  fromDoctor?: string;
+  toDoctor?: string;
+  reason?: string;
+  clinicalSummary?: string;
+  vitals?: any;
+  priority?: "routine" | "urgent" | "emergency" | string;
+  status?: "pending" | "accepted" | "rejected" | "completed" | string;
+  initiatedBy?: string;
+  initiatedAt?: string;
+  acceptedBy?: string;
+  acceptedAt?: string;
+  [key: string]: any;
+}
+
+export interface PurchaseRequisition {
+  id: string;
+  requisitionNumber: string;
+  department: string;
+  requestedBy: string;
+  date: string;
+  items: {
+    name?: string;
+    itemName?: string;
+    quantity: number;
+    estimatedCost?: number;
+    unit?: string;
+    specifications?: string;
+    [key: string]: any;
+  }[];
+  totalEstimatedCost: number;
+  status: "pending_approval" | "approved" | "rejected" | "ordered" | string;
+  approvalNotes?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  [key: string]: any;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  poNumber: string;
+  supplierId: string;
+  supplierName: string;
+  date: string;
+  deliveryDueDate?: string;
+  items: {
+    name?: string;
+    itemName?: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    [key: string]: any;
+  }[];
+  subtotal: number;
+  tax?: number;
+  totalAmount: number;
+  status: "draft" | "issued" | "partially_received" | "fulfilled" | "cancelled" | string;
+  issuedBy: string;
+  [key: string]: any;
 }
 
 export interface Supplier {
   id: string;
   name: string;
-  kraPin: string;
-  category: "Pharmaceuticals" | "Medical Consumables" | "Laboratory Reagents" | "Radiology Equipment" | "General Supplies";
-  contactPerson: string;
-  phone: string;
-  email: string;
-  address: string;
-  status: "active" | "under_review" | "blacklisted";
-  rating: number; // 1 to 5
-}
-
-export interface PurchaseRequisition {
-  id: string;
-  requisitionNo: string; // e.g., REQ-2026-081
-  department: string;
-  requestedBy: string;
-  items: {
-    itemName: string;
-    category: string;
-    quantity: number;
-    estimatedCost: number;
-  }[];
-  totalEstimatedCost: number;
-  priority: "Low" | "Medium" | "High" | "Emergency";
-  status: "pending_approval" | "approved" | "rejected" | "ordered";
-  requestDate: string;
-  notes?: string;
-}
-
-export interface PurchaseOrder {
-  id: string;
-  poNumber: string; // e.g., LPO-2026-402
-  requisitionId?: string;
-  supplierId: string;
-  supplierName: string;
-  supplierPin: string;
-  department: string;
-  items: {
-    itemName: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-  }[];
-  subtotal: number;
-  vatAmount: number;
-  totalAmount: number;
-  status: "draft" | "issued" | "partially_fulfilled" | "completed" | "cancelled";
-  createdDate: string;
-  deliveryDueDate: string;
-  paymentTerms: string; // e.g., "Net 30 Days", "Cash On Delivery"
+  category: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  kraPin?: string;
+  paymentTerms?: string;
+  rating?: number;
+  status: "active" | "inactive" | "blacklisted" | string;
+  [key: string]: any;
 }
 
 export interface GoodsReceivedNote {
   id: string;
-  grnNumber: string; // e.g., GRN-2026-109
+  grnNumber: string;
   poNumber: string;
   supplierName: string;
   receivedDate: string;
   receivedBy: string;
   items: {
-    itemName: string;
-    orderedQuantity: number;
-    receivedQuantity: number;
-    batchNo: string;
-    expiryDate: string;
+    name?: string;
+    itemName?: string;
+    orderedQty?: number;
+    orderedQuantity?: number;
+    receivedQty?: number;
+    receivedQuantity?: number;
     unitPrice: number;
-    total: number;
-    passInspection: boolean;
+    totalPrice: number;
+    batchNo?: string;
+    expiryDate?: string;
+    [key: string]: any;
   }[];
-  notes?: string;
-  inventoryUpdated: boolean;
+  totalValue: number;
+  inspectionStatus: "passed" | "rejected" | "conditional" | string;
+  remarks?: string;
+  [key: string]: any;
 }
 
-export interface ChatTicketItem {
+export interface SecurityLog {
   id: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  amount: number;
-  department?: string;
-}
-
-export interface ChatTicketAttachment {
-  id?: string;
-  ticketId?: string;
-  ticketNo?: string; // e.g. "INV-4821", "QUO-9201", "TRF-3810", "ORD-1029"
-  ticketNumber?: string;
-  type?: "invoice" | "pre_quote" | "patient_transfer" | "service_order" | "clinical_handover" | string;
-  title: string;
-  description?: string;
-  category?: string;
-  priority?: string;
-  raisedBy?: string;
-  patientName?: string;
-  patientTicketNo?: string;
-  patientId?: string;
-  nationalId?: string;
-  patientAge?: number | string;
-  patientGender?: string;
-  targetRole?: string;
-  fromDepartment?: string;
-  fromRole?: string;
-  fromUserName?: string;
-  toDepartment?: string;
-  toRole?: string;
-  toSpecialistId?: string;
-  toSpecialistName?: string;
-  toUserName?: string;
-  // Invoice / Pre-Quote Financial details
-  items?: ChatTicketItem[];
-  subtotal?: number;
-  taxOrDiscount?: number;
-  totalAmount?: number;
-  currency?: string; // "KES"
-  paymentMethod?: "Cash" | "M-PESA" | "SHA/NHIF" | "Insurance" | "Split";
-  paymentStatus?: "unpaid" | "pending_mpesa" | "paid";
-  mpesaPhone?: string;
-  validUntil?: string; // e.g. "14 Days" for pre-quotes
-  depositRequired?: number;
-  // Clinical / Transfer details
-  symptoms?: string;
-  provisionalDiagnosis?: string;
-  clinicalNotes?: string;
-  vitals?: {
-    temp?: string;
-    bp?: string;
-    pulse?: string;
-    weight?: string;
-  };
-  urgency?: "Routine" | "Urgent" | "STAT Emergency";
-  status: "pending" | "accepted" | "invoiced" | "paid" | "completed" | "declined" | "on_hold" | string;
-  statusUpdatedBy?: string;
-  statusUpdatedAt?: string;
-  actionNotes?: string;
-  linkedTransferDocId?: string;
-  linkedInvoiceId?: string;
-  createdAt?: string;
-  createdBy?: string;
-  createdRole?: string;
-}
-
-export interface InternalMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  senderRole: SystemRole | string;
-  senderAvatar?: string;
-  targetType: "role" | "department" | "all" | "direct";
-  targetRole?: SystemRole | string;
-  targetDepartment?: string;
-  targetUserId?: string;
-  targetUserName?: string;
-  targetUserEmail?: string;
-  channelId?: string; // e.g. "general", "doctors", "pharmacy", "lab", "nursing", "emergency"
-  subject: string;
-  message: string;
-  priority: "normal" | "urgent" | "stat_emergency";
-  category: "clinical_handover" | "general" | "stat_alert" | "pharmacy_query" | "lab_result" | "security" | "referral_notice" | "invoice_ticket" | "pre_quote_estimate" | "patient_transfer" | "service_order";
-  relatedPatientId?: string;
-  relatedPatientName?: string;
-  relatedTicketNo?: string;
-  ticketAttachment?: ChatTicketAttachment;
-  readBy: string[]; // IDs or emails or roles that have read it
-  timestamp: string; // ISO 8601
-}
-
-export interface PatientTransfer {
-  id: string;
-  ticketId: string;
-  ticketNo: string;
-  patientId?: string;
-  patientName: string;
-  nationalId: string;
-  age?: number;
-  phone?: string;
-  gender?: string;
-  fromDepartment: string;
-  fromUnitName: string;
-  referredByDoctorName: string;
-  referredByEmail?: string;
-  toDepartment: string; // e.g. "doctor", "cardiology", "surgery", "laboratory", "radiology", "gyna", "labour_room", "pharmacy", "inpatient", "icu", "emergency"
-  toSpecialistId?: string;
-  toSpecialistName?: string;
-  toSpecialistTitle?: string;
-  reasonForTransfer: string;
-  clinicalSummary: string;
-  priority: "Routine" | "Urgent" | "STAT Emergency";
-  vitalsSummary?: {
-    temp?: string;
-    bp?: string;
-    pulse?: string;
-    weight?: string;
-  };
-  status: "pending" | "accepted" | "declined" | "on_hold";
-  actionBy?: string;
-  actionByRole?: string;
-  actionTimestamp?: string;
-  actionNotes?: string;
-  holdReason?: string;
-  declineReason?: string;
-  assignedRoomOrBed?: string;
   timestamp: string;
+  userId?: string;
+  userEmail?: string;
+  userRole?: string;
+  action: string;
+  ipAddress?: string;
+  device?: string;
+  severity: "info" | "warning" | "critical" | string;
+  details?: string;
+  [key: string]: any;
 }
 
 export interface SettingsAuditLog {
   id: string;
   timestamp: string;
   changedBy: string;
-  userEmail: string;
-  userRole: string;
-  changeType: "KRA_PIN_MODIFIED" | "LICENSE_NO_MODIFIED" | "HOSPITAL_NAME_CHANGED" | "FACILITY_TIER_CHANGED" | "LEGAL_DETAILS_UPDATED" | "SYSTEM_SECURITY_CONFIG";
+  changeType: string;
   fieldName: string;
-  oldValue: string;
-  newValue: string;
+  oldValue: any;
+  newValue: any;
   reason?: string;
-  ipAddress?: string;
+  [key: string]: any;
 }
 
-export interface MpesaTransactionRecord {
+export type AdmissionType = "Inpatient" | "Day Surgery" | "Observation" | "Emergency" | "Maternity" | string;
+export type EncounterStatus = "active" | "discharged" | "transferred" | "deceased" | "cancelled" | string;
+
+export interface WardBed {
   id: string;
-  checkoutRequestId: string;
-  merchantRequestId?: string;
-  mpesaReceiptNumber?: string;
-  phoneNumber: string;
-  amount: number;
+  bedNumber: string;
+  wardId: string;
+  wardName: string;
+  wardCategory: string;
+  dailyRate: number;
+  isOccupied: boolean;
+  patientId?: string | null;
+  patientName?: string | null;
+  status: "available" | "occupied" | "maintenance" | "cleaning" | string;
+  [key: string]: any;
+}
+
+export interface HospitalWard {
+  id: string;
+  name: string;
+  category: "General" | "Maternity" | "Paediatric" | "Surgical" | "ICU" | "HDU" | "Amenity" | "Morgue" | string;
+  totalBeds: number;
+  dailyBaseRate: number;
+  nurseInCharge?: string;
+  description?: string;
+  [key: string]: any;
+}
+
+export interface EncounterVital {
+  id: string;
+  bp?: string;
+  temperature?: number | string;
+  pulse?: number | string;
+  respiratoryRate?: number | string;
+  spo2?: number | string;
+  recordedAt: string;
+  recordedBy?: string;
+  [key: string]: any;
+}
+
+export interface EncounterPrescription {
+  id: string;
+  medicationName: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  quantity: number;
+  status: "pending" | "dispensed" | "cancelled" | string;
+  prescribedAt: string;
+  prescribedBy?: string;
+  [key: string]: any;
+}
+
+export interface EncounterLabRequest {
+  id: string;
+  testName: string;
+  category?: string;
+  status: "pending" | "in_progress" | "completed" | string;
+  requestedAt: string;
+  requestedBy?: string;
+  results?: any;
+  [key: string]: any;
+}
+
+export interface EncounterBillItem {
+  id: string;
+  name?: string;
+  description?: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice?: number;
+  total?: number;
+  amount?: number;
+  paid?: boolean;
+  isPaid?: boolean;
+  paymentMethod?: string;
   invoiceId?: string;
-  patientName?: string;
-  status: "Pending" | "Success" | "Failed" | "Cancelled";
-  resultDesc?: string;
-  initiatedAt: string;
-  completedAt?: string;
-  reconciled: boolean;
+  addedAt?: string;
+  timestamp?: string;
+  [key: string]: any;
+}
+
+export interface EncounterNursingNote {
+  id: string;
+  note: string;
+  category?: string;
+  nurseName?: string;
+  timestamp: string;
+  [key: string]: any;
+}
+
+export interface EncounterDoctorNote {
+  id: string;
+  note: string;
+  doctorName?: string;
+  timestamp: string;
+  [key: string]: any;
+}
+
+export interface BedTransferRecord {
+  id: string;
+  fromWardName?: string;
+  toWardName: string;
+  fromBedId?: string;
+  toBedId: string;
+  reason?: string;
+  transferredBy?: string;
+  timestamp: string;
+  [key: string]: any;
+}
+
+export interface DoctorDischargeClearance {
+  doctorName: string;
+  dischargeDate: string;
+  clinicalSummary: string;
+  dischargeMedications?: string;
+  followUpPlan?: string;
+  fitForDischarge: boolean;
+  clearedAt: string;
+  [key: string]: any;
+}
+
+export interface Encounter {
+  id: string;
+  patientId: string;
+  patientName: string;
+  nationalId?: string;
+  phone?: string;
+  age?: number | string;
+  gender?: string;
+  admissionType: AdmissionType;
+  status: EncounterStatus;
+  currentWard?: string;
+  currentBedId?: string;
+  admittingDoctor?: string;
+  admittedAt: string;
+  dischargedAt?: string;
+  doctorDischargeApproved?: boolean;
+  dischargeClearance?: DoctorDischargeClearance;
+  vitals?: EncounterVital[];
+  prescriptions?: EncounterPrescription[];
+  labRequests?: EncounterLabRequest[];
+  billItems?: EncounterBillItem[];
+  nursingNotes?: EncounterNursingNote[];
+  doctorNotes?: EncounterDoctorNote[];
+  [key: string]: any;
+}
+
+export interface CashierShift {
+  id: string;
+  cashierId: string;
+  cashierName: string;
+  shiftNumber: string;
+  startTime: string;
+  endTime?: string;
+  openingFloat: number;
+  totalCashCollected: number;
+  totalMpesaCollected: number;
+  totalCardCollected: number;
+  totalShaCollected: number;
+  totalCollected: number;
+  invoicesCount: number;
+  status: "open" | "closed" | "reconciled" | string;
+  closingNotes?: string;
+  zReportGenerated?: boolean;
+  [key: string]: any;
+}
+
+export interface ChartOfAccount {
+  id?: string;
+  accountNumber?: string;
+  accountName?: string;
+  name?: string;
+  code?: string;
+  category?: string;
+  subCategory?: string;
+  normalBalance?: string;
+  balance?: number;
+  currency?: string;
+  status?: "active" | "inactive" | string;
+  [key: string]: any;
+}
+
+export interface GeneralLedgerEntry {
+  id: string;
+  transactionDate: string;
+  referenceNumber: string;
+  description: string;
+  accountNumber: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+  postedBy: string;
+  postedAt: string;
+  [key: string]: any;
+}
+
+export interface DebtorInsuranceClaim {
+  id: string;
+  claimNumber: string;
+  patientId: string;
+  patientName: string;
+  insuranceName?: string;
+  insurerName?: string;
+  shaMemberNo?: string;
+  invoiceId: string;
+  invoiceNumber?: string;
+  claimAmount?: number;
+  originalAmount?: number;
+  approvedAmount?: number;
+  status: "draft" | "submitted" | "approved" | "remitted" | "rejected" | "disputed" | string;
+  submissionDate?: string;
+  claimDate?: string;
+  remittanceDate?: string;
+  agingDays?: number;
+  agingBucket?: string;
+  [key: string]: any;
+}
+
+export interface RemittanceBatch {
+  id: string;
+  batchNumber: string;
+  payerName: string;
+  totalAmount: number;
+  claimsCount: number;
+  receivedDate: string;
+  paymentReference: string;
+  status: "reconciled" | "partial" | "pending" | string;
+  [key: string]: any;
+}
+
+export interface StatutoryTaxLiability {
+  period: string;
+  payeAmount: number;
+  nssfAmount: number;
+  nhifAmount: number;
+  housingLevyAmount: number;
+  totalPayable: number;
+  dueDate: string;
+  status: "pending" | "filed" | "paid" | string;
+  krapin?: string;
+  [key: string]: any;
+}
+
+export interface SupplierPayableInvoice {
+  id: string;
+  invoiceNumber: string;
+  poNumber: string;
+  grnNumber: string;
+  supplierName: string;
+  invoiceAmount: number;
+  dueDate: string;
+  matchStatus?: "matched" | "variance" | "pending" | string;
+  paymentStatus?: "unpaid" | "approved_for_payment" | "paid" | string;
+  [key: string]: any;
+}
+
+export interface PaymentVoucher {
+  id: string;
+  voucherNumber?: string;
+  payee?: string;
+  amount?: number;
+  date?: string;
+  description?: string;
+  paymentMethod?: string;
+  approvedBy?: string;
+  status?: "draft" | "approved" | "paid" | string;
+  [key: string]: any;
 }
 
 export interface ProcedureTariffItem {
   id: string;
   code: string;
   name: string;
-  category: "consultation" | "pharmacy" | "laboratory" | "radiology" | "ward_bed" | "nursing" | "procedure" | "surgery" | "other";
-  department: string;
+  category: string;
   standardAmount: number;
-  description?: string;
-  isTaxable?: boolean;
-  isActive: boolean;
-  updatedAt?: string;
+  shaReimbursementAmount?: number;
+  department: string;
+  isCoveredBySha?: boolean;
+  status?: "active" | "inactive" | string;
+  isActive?: boolean;
+  [key: string]: any;
 }
 
 export interface WardBedRateSetting {
   id: string;
-  wardId: string;
-  wardName: string;
-  category: string;
+  wardCategory?: string;
+  category?: string;
+  wardId?: string;
+  wardName?: string;
   dailyRate: number;
   nursingDailyFee?: number;
   fileOpeningFee?: number;
-  updatedAt?: string;
-}
-
-export interface BillItemDraft {
-  id: string;
-  sourceId?: string;
-  sourceType: "prescription" | "lab_order" | "bed_stay" | "consultation" | "procedure" | "tariff" | "custom";
-  description: string;
-  category: "consultation" | "pharmacy" | "laboratory" | "radiology" | "ward_bed" | "nursing" | "procedure" | "surgery" | "other";
-  department: string;
-  quantity: number;
-  unitPrice: number;
-  amount: number;
-  notes?: string;
-  drugDosage?: string;
-  durationDays?: number;
-  addedAt: string;
+  description?: string;
+  [key: string]: any;
 }
 
 export interface PatientCartItem {
   id: string;
-  patientId: string;
-  patientName: string;
-  ticketNo?: string;
-  encounterId?: string;
-  stage: "Registration & Triage" | "Doctor Consultation" | "Laboratory Diagnostics" | "Radiology & Imaging" | "Pharmacy Dispensing" | "Nursing & Consumables" | "Ward & Inpatient Bed" | "Surgical & Theatre" | string;
-  department: string;
-  category: "consultation" | "pharmacy" | "laboratory" | "radiology" | "ward_bed" | "nursing" | "procedure" | "surgery" | "supplies" | "other";
-  itemCode?: string;
   name: string;
-  unitPrice: number;
+  description?: string;
+  category: string;
   quantity: number;
+  unitPrice: number;
   totalPrice: number;
-  notes?: string;
-  addedBy: string;
-  addedByRole?: string;
-  addedAt: string;
-  status: "pending_checkout" | "checked_out" | "waived" | "cancelled";
+  waived?: boolean;
+  waiverReason?: string;
+  department?: string;
+  timestamp?: string;
+  [key: string]: any;
 }
 
 export interface PatientCart {
-  id: string; // cart-${patientId}
+  id: string;
   patientId: string;
-  patientName: string;
-  nationalId: string;
-  phone?: string;
-  activeTicketNo?: string;
-  encounterId?: string;
+  patientName?: string;
+  nationalId?: string;
   items: PatientCartItem[];
-  totalAmount: number;
-  itemCount: number;
-  status: "active" | "checked_out" | "closed";
-  lastAddedStage?: string;
-  createdAt: string;
-  updatedAt: string;
-  checkedOutAt?: string;
-  checkedOutBy?: string;
-  finalInvoiceId?: string;
-}
-
-// ==========================================
-// ACCOUNTING & FINANCIAL OPERATIONS TYPES
-// ==========================================
-
-export interface CashierShift {
-  id: string;
-  shiftNumber: string; // e.g. SHF-20260903-01
-  cashierId: string;
-  cashierName: string;
-  stationName: string; // e.g. "Main OPD Cashier Desk 1", "Pharmacy POS Till"
-  startTime: string;
-  endTime?: string;
-  status: "open" | "reconciled" | "closed";
-  openingFloat: number;
-  expectedCash: number;
-  countedCash: number;
-  cashVariance: number;
-  expectedMpesa: number;
-  declaredMpesa: number;
-  mpesaVariance: number;
-  expectedCard: number;
-  declaredCard: number;
-  totalExpected: number;
-  totalDeclared: number;
-  totalVariance: number;
-  invoicesCount: number;
-  zReportNumber?: string;
-  reconciliationNotes?: string;
-  supervisorSignedBy?: string;
-  supervisorSignedAt?: string;
-  createdAt: string;
-}
-
-export interface DebtorInsuranceClaim {
-  id: string;
-  claimNumber: string; // e.g. CLM-SHA-2026-091
-  invoiceId: string;
-  patientId: string;
-  patientName: string;
-  nationalId: string;
-  shaNumber?: string;
-  insurerName: "Social Health Authority (SHA)" | "Jubilee Insurance" | "Britam Insurance" | "CIC General Insurance" | "AAR Health Services" | "Madison Insurance" | "First Assurance" | "Corporate Direct" | string;
-  schemeType: "SHA / NHIF Public" | "Comprehensive Corporate" | "Standard Inpatient/OPD" | "Managed Care";
-  claimDate: string;
-  originalAmount: number;
-  approvedAmount: number;
-  copayAmount: number;
-  paidAmount: number;
-  disallowedAmount: number;
-  disallowanceReason?: string;
-  balance: number;
-  status: "Submitted" | "Vetted" | "Approved" | "Remitted" | "Disallowed" | "Under Review";
-  agingDays: number;
-  agingBucket: "0-30 Days" | "31-60 Days" | "61-90 Days" | "90+ Days";
-  remittanceBatchNo?: string;
-  preAuthCode?: string;
-  icd10Code?: string;
-}
-
-export interface RemittanceBatch {
-  id: string;
-  batchNumber: string; // e.g. REM-2026-W36-JUB
-  insurerName: string;
-  remittanceDate: string;
-  bankReference: string;
-  paymentMethod: "EFT / Bank Transfer" | "Cheque" | "RTGS";
-  totalRemittedAmount: number;
-  allocatedAmount: number;
-  disallowedAmount: number;
-  unallocatedAmount: number;
-  claimsCount: number;
-  status: "Allocated" | "Partially Allocated" | "Draft";
-  processedBy: string;
-  notes?: string;
-}
-
-export interface SupplierPayableInvoice {
-  id: string;
-  invoiceNumber: string; // e.g. INV-MEDS-8841
-  supplierId: string;
-  supplierName: string;
-  supplierKraPin: string;
-  poNumber?: string; // Matching LPO
-  grnNumber?: string; // Matching GRN
-  invoiceDate: string;
-  dueDate: string;
-  category: "Pharmaceuticals" | "Medical Consumables" | "Laboratory Reagents" | "Radiology Equipment" | "General Hospital Supplies" | "Utilities & Services";
-  items: {
-    itemName: string;
-    orderedQty?: number;
-    receivedQty?: number;
-    billedQty: number;
-    unitPrice: number;
-    total: number;
-    varianceFlag?: boolean;
-    varianceNote?: string;
-  }[];
   subtotal: number;
-  vatAmount: number;
-  totalAmount: number;
-  paidAmount: number;
-  balanceDue: number;
-  matchStatus: "3-Way Matched" | "Variance Flagged" | "Pending GRN" | "Direct Overhead";
-  paymentStatus: "Unpaid" | "Partially Paid" | "Paid" | "On Hold";
-  paymentVoucherNo?: string;
-  paymentMethod?: "EFT" | "Cheque" | "M-PESA Paybill B2B" | "Cash";
-  paymentReference?: string;
+  status: "active" | "cleared" | "invoiced" | string;
+  updatedAt?: string;
+  [key: string]: any;
+}
+
+export interface BillItemDraft {
+  id?: string;
+  name?: string;
+  description?: string;
+  quantity: number;
+  unitPrice: number;
+  amount?: number;
+  totalPrice?: number;
+  category?: string;
+  department?: string;
+  sourceType?: string;
+  sourceId?: string;
   notes?: string;
-}
-
-export interface PaymentVoucher {
-  id: string;
-  voucherNumber: string; // e.g. PV-2026-0428
-  supplierInvoiceId: string;
-  supplierName: string;
-  supplierKraPin: string;
-  amount: number;
-  paymentDate: string;
-  paymentMethod: "EFT" | "Cheque" | "M-PESA B2B" | "Cash";
-  referenceNumber: string;
-  bankAccount: string;
-  withholdingTaxAmount: number; // 5% WHT where applicable
-  netPaidAmount: number;
-  preparedBy: string;
-  approvedBy: string;
-  status: "Approved & Disbursed" | "Pending Approval" | "Cancelled";
-}
-
-export interface ChartOfAccount {
-  code: string;
-  name: string;
-  category: "Asset" | "Liability" | "Equity" | "Revenue" | "Cost of Sales" | "Operating Expense";
-  subCategory: string;
-  balance: number;
-  normalBalance: "Debit" | "Credit";
-}
-
-export interface GeneralLedgerEntry {
-  id: string;
-  entryNumber: string; // e.g. JRN-2026-1049
-  date: string;
-  sourceModule: "Patient Billing" | "Pharmacy POS" | "Procurement & AP" | "Payroll & Staff" | "Cashier Shift Closeout" | "Manual Adjustment";
-  referenceNumber: string;
-  description: string;
-  debitAccountCode: string;
-  debitAccountName: string;
-  creditAccountCode: string;
-  creditAccountName: string;
-  amount: number;
-  postedBy: string;
-  timestamp: string;
-}
-
-export interface StatutoryTaxLiability {
-  periodMonth: string; // e.g. "August 2026"
-  dueDate: string; // e.g. "9th September 2026"
-  payeAmount: number;
-  shifAmount: number;
-  nssfAmount: number;
-  housingLevyAmount: number;
-  withholdingTaxAmount: number;
-  totalStatutoryDue: number;
-  status: "Pending Remittance" | "Paid & Cleared" | "Overdue";
-  kraReceiptNo?: string;
-  remittedDate?: string;
+  drugDosage?: string;
+  durationDays?: number;
+  addedAt?: string;
+  [key: string]: any;
 }

@@ -46,6 +46,9 @@ import SplashScreenLoader from "./components/SplashScreenLoader";
 import UserGuide from "./components/UserGuide";
 import { OfflineManagerModal } from "./components/OfflineManagerModal";
 import { PWAInstallButton } from "./components/PWAInstallButton";
+import { PWAInstallBanner } from "./components/PWAInstallBanner";
+import { PushNotificationHeaderButton } from "./components/PushNotificationHeaderButton";
+import { PushNotificationPromptBanner } from "./components/PushNotificationPromptBanner";
 import { bootstrapCloudFirestore, ensureSuperAdminsExist } from "./lib/dbInit";
 import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "./lib/superAdmins";
 import { toast } from "./lib/promptService";
@@ -714,6 +717,7 @@ export default function App() {
 
   const activeUser = user 
     ? { 
+        uid: user.uid,
         email: profileOverride.email || user.email || "", 
         displayName: profileOverride.displayName || user.displayName || "Google User", 
         isSimulated: false, 
@@ -721,6 +725,7 @@ export default function App() {
       } 
     : (simulatedUser 
         ? {
+            uid: (simulatedUser as any).uid || (simulatedUser as any).id || "simulated-user",
             ...simulatedUser,
             displayName: profileOverride.displayName || simulatedUser.displayName,
             email: profileOverride.email || simulatedUser.email,
@@ -1584,6 +1589,16 @@ export default function App() {
               {/* Mobile In-App PWA Install Trigger */}
               <PWAInstallButton variant="header-mobile" />
 
+              {/* Mobile Web Push Notification Button */}
+              <PushNotificationHeaderButton
+                currentUser={{
+                  name: activeUser?.displayName || loggedInEmployee?.name || "Medical Staff",
+                  role: loggedInEmployee?.role || "Staff",
+                  department: loggedInEmployee?.department || "General",
+                  email: activeUser?.email || loggedInEmployee?.email,
+                }}
+              />
+
               {/* Mobile Offline/Online Indicator - Large White Icon (No Background) */}
               <button
                 onClick={() => setShowOfflineManagerModal(true)}
@@ -1620,6 +1635,16 @@ export default function App() {
           <div className="hidden md:flex flex-wrap items-center gap-3 lg:gap-4 relative z-10">
             {/* In-App PWA Install Trigger */}
             <PWAInstallButton variant="header" />
+
+            {/* Native Web Push Notification Toggle / Modal Trigger */}
+            <PushNotificationHeaderButton
+              currentUser={{
+                name: activeUser?.displayName || loggedInEmployee?.name || "Medical Staff",
+                role: loggedInEmployee?.role || "Staff",
+                department: loggedInEmployee?.department || "General",
+                email: activeUser?.email || loggedInEmployee?.email,
+              }}
+            />
 
             {/* Offline/Online Status Indicator & Reconnection - Large White Icon (No Background) */}
             <button
@@ -2449,6 +2474,18 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* 6b. Mobile PWA Installation Section */}
+                <div className="bg-slate-950/80 rounded-2xl p-4 border border-emerald-500/30 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Mobile & Offline Installation</span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/30">PWA</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Install HMIS directly to your iPhone or Android home screen for full offline resilience, biometric security, and full-screen hospital workflow.
+                  </p>
+                  <PWAInstallButton variant="full" />
+                </div>
+
                 {/* 7. Live System Clock Display - Big Bold Font */}
                 <div className="flex items-center justify-between p-4 bg-slate-950/80 rounded-2xl border border-slate-800 text-slate-400">
                   <div className="flex items-center gap-2.5">
@@ -3124,6 +3161,18 @@ export default function App() {
       onComplete={() => setIsInitialLoading(false)}
       logoUrl={brandLogoUrl}
       hospitalName={brandCustomName || "The Tassia Hill Hospital"}
+    />
+
+    {/* Floating Smart Mobile / iPhone PWA Installation Banner */}
+    <PWAInstallBanner />
+
+    {/* Native Web Push Permission Prompt Banner */}
+    <PushNotificationPromptBanner
+      currentUser={{
+        name: activeUser?.displayName || loggedInEmployee?.name || "Medical Staff",
+        role: loggedInEmployee?.role || "Staff",
+        department: loggedInEmployee?.department || "General",
+      }}
     />
   </div>
   );

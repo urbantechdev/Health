@@ -6,58 +6,42 @@ export interface UserIdentity {
   department?: string;
   specialty?: string;
   specialistTitle?: string;
+  [key: string]: any;
 }
 
-export function shouldShowPopupNotification(
-  message: {
-    senderId?: string;
-    senderEmail?: string;
-    targetType?: "all" | "department" | "role" | "individual" | "direct" | string;
-    targetDepartment?: string;
-    targetRole?: string;
-    recipientId?: string;
-    recipientEmail?: string;
-    department?: string;
-    priority?: string;
-    [key: string]: any;
-  },
-  user: UserIdentity
-): boolean {
-  if (!message || !user) return false;
+export function shouldShowPopupNotification(msg: any, user: UserIdentity | null | undefined): boolean {
+  if (!msg || !user) return false;
 
-  // Don't notify the sender of their own message
-  if (
-    (user.id && message.senderId === user.id) ||
-    (user.email && message.senderEmail?.toLowerCase() === user.email?.toLowerCase())
-  ) {
+  // Never notify self of own outgoing messages
+  if (user.id && msg.senderId && String(msg.senderId) === String(user.id)) {
+    return false;
+  }
+  if (user.email && msg.senderEmail && msg.senderEmail.toLowerCase().trim() === user.email.toLowerCase().trim()) {
     return false;
   }
 
-  // Broadcast to all
-  if (message.targetType === "all" || (!message.targetType && !message.recipientId && !message.recipientEmail && !message.targetDepartment && !message.targetRole)) {
+  // Broadcast to all hospital staff
+  if (msg.targetType === "all" || msg.recipientId === "all" || (!msg.targetType && !msg.recipientId && !msg.recipientRole)) {
     return true;
   }
 
-  // Direct recipient match
-  if (
-    (user.id && message.recipientId === user.id) ||
-    (user.email && message.recipientEmail?.toLowerCase() === user.email?.toLowerCase())
-  ) {
-    return true;
+  // Direct recipient by user ID or email
+  if (msg.targetType === "user" || msg.targetType === "individual" || msg.recipientId) {
+    if (user.id && msg.recipientId && String(msg.recipientId) === String(user.id)) return true;
+    if (user.email && msg.recipientEmail && msg.recipientEmail.toLowerCase().trim() === user.email.toLowerCase().trim()) return true;
+    if (user.id && msg.targetUserId && String(msg.targetUserId) === String(user.id)) return true;
   }
 
-  // Target Department match
-  const userDept = (user.department || "").toLowerCase().trim();
-  const targetDept = (message.targetDepartment || message.department || "").toLowerCase().trim();
-  if (targetDept && targetDept === userDept) {
-    return true;
+  // Role targeted (e.g., all Nurses, Doctors, Pharmacists)
+  if (msg.targetType === "role" || msg.targetRole || msg.recipientRole) {
+    const roleTarget = (msg.targetRole || msg.recipientRole || "").toLowerCase().trim();
+    if (user.role && user.role.toLowerCase().trim() === roleTarget) return true;
   }
 
-  // Target Role match
-  const userRole = (user.role || "").toLowerCase().trim();
-  const targetRole = (message.targetRole || "").toLowerCase().trim();
-  if (targetRole && (targetRole === userRole || userRole.includes(targetRole) || targetRole.includes(userRole))) {
-    return true;
+  // Department targeted (e.g., Casualty, Maternity, Pharmacy)
+  if (msg.targetType === "department" || msg.targetDepartment || msg.recipientDepartment) {
+    const deptTarget = (msg.targetDepartment || msg.recipientDepartment || "").toLowerCase().trim();
+    if (user.department && user.department.toLowerCase().trim() === deptTarget) return true;
   }
 
   return false;
