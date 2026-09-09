@@ -1550,24 +1550,24 @@ export default function KenyanHospitalFormsModal({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 border border-slate-300 rounded-xl text-center">
                   <div className="p-2 bg-slate-50 rounded">
                     <span className="text-slate-500 block text-[10px]">Blood Pressure</span>
-                    <strong className="text-sm">{formData.vitals.bp}</strong>
+                    <strong className="text-sm">{formData.triageVitals.bp}</strong>
                   </div>
                   <div className="p-2 bg-slate-50 rounded">
                     <span className="text-slate-500 block text-[10px]">Temperature</span>
-                    <strong className="text-sm text-rose-700">{formData.vitals.temp}</strong>
+                    <strong className="text-sm text-rose-700">{formData.triageVitals.temp}</strong>
                   </div>
                   <div className="p-2 bg-slate-50 rounded">
                     <span className="text-slate-500 block text-[10px]">Heart Rate / Pulse</span>
-                    <strong className="text-sm">{formData.vitals.pulse}</strong>
+                    <strong className="text-sm">{formData.triageVitals.pulse}</strong>
                   </div>
                   <div className="p-2 bg-slate-50 rounded">
                     <span className="text-slate-500 block text-[10px]">Weight / BMI</span>
-                    <strong className="text-sm">{formData.vitals.weight} ({formData.vitals.bmi.split(" ")[0]})</strong>
+                    <strong className="text-sm">{formData.triageVitals.weight} ({formData.triageVitals.bmi.split(" ")[0]})</strong>
                   </div>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl space-y-1">
-                  <p><strong>Presenting Symptoms:</strong> {formData.symptoms}</p>
+                  <p><strong>Presenting Symptoms:</strong> {formData.chiefComplaints}</p>
                   <p><strong>Pain Score:</strong> {formData.triagePainScore}</p>
                 </div>
 

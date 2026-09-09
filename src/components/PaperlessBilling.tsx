@@ -1012,7 +1012,7 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled, initial
       );
 
       // 6. Open Receipt Modal
-      setActiveReceiptInvoice(newInvoice);
+      setActiveReceiptInvoice(newInvoice as unknown as Invoice);
       setPrintOpen(true);
       toast.success(`Official Receipt ${invoiceId} generated for ${patientDisplayName}.`, "Payment Completed");
 

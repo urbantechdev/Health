@@ -256,7 +256,7 @@ export default function PatientTransferModal({
       );
 
       if (onTransferSuccess) {
-        onTransferSuccess({ id: docRef.id, ...newTransfer });
+        onTransferSuccess({ id: docRef.id, ...newTransfer } as PatientTransfer);
       }
 
       onClose();

@@ -400,8 +400,8 @@ export default function TicketSystem() {
     setEditPhone(ticket.phone || "");
     setEditDepartment(ticket.department || "reception");
     setEditVisitReason(ticket.visitReason || "");
-    setEditPriority(ticket.priority || "Normal");
-    setEditStatus(ticket.status || "open");
+    setEditPriority((ticket.priority as any) || "Normal");
+    setEditStatus((ticket.status as any) || "open");
     setEditResolutionNotes(ticket.resolutionNotes || "");
   };
 

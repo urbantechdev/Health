@@ -69,14 +69,20 @@ export interface UnifiedDailyPatientVisit {
   symptoms?: string;
   triageVitals?: {
     bp?: string;
-    temp?: string;
-    pulse?: string;
-    respRate?: string;
-    spo2?: string;
-    weight?: string;
-    height?: string;
-    bmi?: string;
-    painScale?: string;
+    temp?: string | number;
+    temperature?: string | number;
+    pulse?: string | number;
+    respRate?: string | number;
+    respiratoryRate?: string | number;
+    spo2?: string | number;
+    weight?: string | number;
+    height?: string | number;
+    bmi?: string | number;
+    painScale?: string | number;
+    bloodSugar?: string | number;
+    triageNotes?: string;
+    triageCategory?: string;
+    [key: string]: any;
   };
   triageScore?: string;
   procedures: {

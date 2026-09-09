@@ -41,7 +41,9 @@ import {
   FilePlus,
   Pill,
   Plus,
-  Trash2
+  Trash2,
+  BookOpen,
+  Microscope
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import KenyanHospitalFormsModal, { KenyanFormType, COMMON_ICD10_KENYA } from "./KenyanHospitalFormsModal";
@@ -53,6 +55,7 @@ import { syncDoctorConsultationToCart } from "../lib/patientCartService";
 import { DEFAULT_HOSPITAL_WARDS, createHospitalEncounter } from "../lib/encounterService";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
+import { LabDirectoryModal } from "./LabDirectoryModal";
 
 interface DoctorsDeskProps {
   toggles: any;
@@ -113,6 +116,9 @@ export default function DoctorsDesk({
   const [kenyanFormModalOpen, setKenyanFormModalOpen] = useState(false);
   const [activeKenyanFormType, setActiveKenyanFormType] = useState<KenyanFormType>("sick_sheet");
   const [selectedFormVisit, setSelectedFormVisit] = useState<ClinicalVisit | null>(null);
+
+  // Global Laboratory Catalog Modal State (All 9 Disciplines)
+  const [showLabCatalogModal, setShowLabCatalogModal] = useState(false);
   const [showIcdDropdown, setShowIcdDropdown] = useState(false);
 
   // History Lookup Modal state & Patient filter
@@ -350,7 +356,7 @@ export default function DoctorsDesk({
   }, [selectedPatient]);
 
   // MOH 705 Category Determination
-  const mohCategory = (selectedPatient?.age || 0) < 5 
+  const mohCategory = Number(selectedPatient?.age || 0) < 5 
     ? "MOH 705A (Under 5 Morbidity)" 
     : "MOH 705B (Over 5 Morbidity)";
 
@@ -2139,25 +2145,42 @@ export default function DoctorsDesk({
 
                 {/* Quick Lab Presets Grid */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1">
-                      <Droplets className="w-3 h-3 text-rose-500" />
-                      <span>Frequent Clinical Lab Order Presets (Click to add or wire):</span>
-                    </label>
-                    <span className="text-[10px] text-blue-600 font-medium">Auto-populates Lab Worksheet</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Droplets className="w-3.5 h-3.5 text-rose-500" />
+                      <label className="text-[11px] font-bold text-slate-800">
+                        Frequent Diagnostic Order Presets (Auto-routed to Laboratory LIS):
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowLabCatalogModal(true)}
+                      className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <Microscope className="w-3.5 h-3.5 text-blue-200" />
+                      <span>Browse All 9 Lab Disciplines (Worldwide Catalog)</span>
+                    </button>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
                     {[
-                      { name: "Urinalysis (Complete Dipstick & Micro)", dept: "laboratory", badge: "Urinalysis", color: "amber" },
-                      { name: "Full Haemogram (CBC + Diff + Film)", dept: "laboratory", badge: "Full Haemogram", color: "rose" },
-                      { name: "Blood Slide for Malaria (BS for MPS)", dept: "laboratory", badge: "BS Malaria", color: "purple" },
-                      { name: "Blood Grouping & Rh Crossmatch", dept: "laboratory", badge: "Blood Grouping", color: "red" },
-                      { name: "Stool Routine & Microscopy", dept: "laboratory", badge: "Stool O/C", color: "emerald" },
-                      { name: "Liver Function Tests (LFTs)", dept: "laboratory", badge: "LFTs", color: "blue" },
-                      { name: "Renal Profile / U&E", dept: "laboratory", badge: "Renal U&E", color: "indigo" },
-                      { name: "Random Blood Sugar (RBS)", dept: "laboratory", badge: "RBS Glucose", color: "teal" },
-                      { name: "Chest X-Ray PA View", dept: "radiology", badge: "CXR", color: "slate" },
+                      { name: "Full Haemogram (CBC + Diff + Film)", dept: "laboratory", badge: "CBC / Haemogram" },
+                      { name: "Coagulation Profile (PT/INR & aPTT)", dept: "laboratory", badge: "PT/INR / aPTT" },
+                      { name: "Comprehensive Metabolic Panel (CMP)", dept: "laboratory", badge: "CMP Panel" },
+                      { name: "Liver Function Tests (LFTs)", dept: "laboratory", badge: "LFTs" },
+                      { name: "Renal Function / U&E & Creatinine", dept: "laboratory", badge: "Renal U&E" },
+                      { name: "Cardiac Profile (Troponin I & CK-MB)", dept: "laboratory", badge: "Cardiac Troponin" },
+                      { name: "Lipid Profile Panel", dept: "laboratory", badge: "Lipids" },
+                      { name: "Thyroid Function Tests (TSH/FT4/FT3)", dept: "laboratory", badge: "Thyroid (TSH)" },
+                      { name: "HbA1c Glycated Hemoglobin", dept: "laboratory", badge: "HbA1c" },
+                      { name: "Urinalysis (Complete Dipstick & Micro)", dept: "laboratory", badge: "Urinalysis" },
+                      { name: "Blood Slide for Malaria (BS for MPS)", dept: "laboratory", badge: "BS Malaria" },
+                      { name: "Blood Grouping & Rh Crossmatch", dept: "laboratory", badge: "Blood Grouping" },
+                      { name: "Stool Routine & Microscopy", dept: "laboratory", badge: "Stool O/C" },
+                      { name: "Blood & Urine MCS Culture", dept: "laboratory", badge: "MCS Culture" },
+                      { name: "Tumor Marker (Total PSA)", dept: "laboratory", badge: "PSA (Oncology)" },
+                      { name: "Toxicology Drug Screen (DOA 10)", dept: "laboratory", badge: "Drug Screen" },
+                      { name: "Chest X-Ray PA View", dept: "radiology", badge: "CXR (PA View)" },
                     ].map((item) => {
                       const isSelected = draftReferrals.some(r => r.testName.toLowerCase().includes(item.badge.toLowerCase()));
                       return (
@@ -2566,6 +2589,22 @@ export default function DoctorsDesk({
           </div>
         </div>
       )}
+
+      {/* Global Laboratory Test Directory & Order Modal (All 9 Disciplines) */}
+      <LabDirectoryModal
+        isOpen={showLabCatalogModal}
+        onClose={() => setShowLabCatalogModal(false)}
+        onSelectTest={(test) => {
+          addReferralDraft(
+            test.name,
+            "laboratory",
+            `Clinical test order: ${test.name} [${test.code}] - ${test.disciplineName} (${test.familyName})`
+          );
+          toast.success(`Ordered ${test.name} (${test.code}) for Laboratory Diagnostic Queue`, "Lab Order Queued");
+        }}
+        title="Hospital Laboratory Test Ordering Catalog (9 Core Disciplines)"
+        actionButtonLabel="Add to Lab Orders"
+      />
     </div>
   );
 }

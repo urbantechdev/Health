@@ -228,7 +228,7 @@ export default function ReceiptsClearanceModal({
         patientName: pat.patientName || (pat as any).name || "Unknown Patient",
         nationalId: pat.nationalId || "N/A",
         phone: pat.phone || "N/A",
-        age: pat.age || 30,
+        age: Number(pat.age) || 30,
         gender: pat.gender || "Not specified",
         patientNumber: pat.patientNumber,
         record: pat,

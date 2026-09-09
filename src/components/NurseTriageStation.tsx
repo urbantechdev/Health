@@ -270,24 +270,28 @@ export default function NurseTriageStation({
         setSystolic(parts[0].trim());
         setDiastolic(parts[1].trim());
       }
-      if (t.vitals.temp) setTemp(t.vitals.temp);
-      if (t.vitals.pulse) setPulse(t.vitals.pulse);
-      if (t.vitals.weight) setWeight(t.vitals.weight);
+      if (t.vitals.temp) setTemp(String(t.vitals.temp));
+      if (t.vitals.pulse) setPulse(String(t.vitals.pulse));
+      if (t.vitals.weight) setWeight(String(t.vitals.weight));
     }
 
     const pat = findUnifiedPatient(t.patientId || t.nationalId || t.patientName, patients);
     if (pat) {
-      if (pat.allergies && !t.allergies) setAllergies(pat.allergies);
-      if (pat.chronicConditions && !t.issue) setChiefComplaint(pat.chronicConditions);
+      if (pat.allergies && !t.allergies) {
+        setAllergies(Array.isArray(pat.allergies) ? pat.allergies.join(", ") : String(pat.allergies));
+      }
+      if (pat.chronicConditions && !t.issue) {
+        setChiefComplaint(Array.isArray(pat.chronicConditions) ? pat.chronicConditions.join(", ") : String(pat.chronicConditions));
+      }
       if (pat.latestVitals && !t.vitals) {
         if (pat.latestVitals.bp && pat.latestVitals.bp.includes("/")) {
           const parts = pat.latestVitals.bp.split("/");
           setSystolic(parts[0].trim());
           setDiastolic(parts[1].trim());
         }
-        if (pat.latestVitals.temp) setTemp(pat.latestVitals.temp);
-        if (pat.latestVitals.pulse) setPulse(pat.latestVitals.pulse);
-        if (pat.latestVitals.weight) setWeight(pat.latestVitals.weight);
+        if (pat.latestVitals.temp) setTemp(String(pat.latestVitals.temp));
+        if (pat.latestVitals.pulse) setPulse(String(pat.latestVitals.pulse));
+        if (pat.latestVitals.weight) setWeight(String(pat.latestVitals.weight));
       }
     }
   };

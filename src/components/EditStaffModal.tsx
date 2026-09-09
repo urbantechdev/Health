@@ -55,7 +55,7 @@ export default function EditStaffModal({
   const [accessLevel, setAccessLevel] = useState<"Super Admin" | "Department Admin" | "Standard Staff">(
     employee.accessLevel || "Standard Staff"
   );
-  const [status, setStatus] = useState<"active" | "on_leave" | "terminated">(
+  const [status, setStatus] = useState<"active" | "on_leave" | "terminated" | string>(
     employee.status || "active"
   );
   const [bankName, setBankName] = useState((employee as any).bankName || "Equity Bank Kenya");

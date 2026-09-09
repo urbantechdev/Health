@@ -13,9 +13,15 @@ import {
   Clock, 
   Smartphone, 
   Monitor,
-  Info
+  Info,
+  BellRing,
+  BellOff,
+  Zap,
+  Send
 } from "lucide-react";
 import { usePWAInstall } from "../hooks/usePWAInstall";
+import { PWAInstallGuideModal } from "./PWAInstallGuideModal";
+import { useWebPush } from "../hooks/useWebPush";
 import { 
   PWASettings, 
   getLocalPwaSettings, 
@@ -39,13 +45,14 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
   pendingSyncCount,
   onRefreshNetwork,
 }) => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
+  const pwaState = usePWAInstall();
+  const { isInstalled, isIOS, install, openGuide, closeGuide, isGuideOpen } = pwaState;
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString());
   const [swRegistered, setSwRegistered] = useState(false);
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
   const [pwaSettings, setPwaSettings] = useState<PWASettings>(getLocalPwaSettings);
   const [isPwaSyncing, setIsPwaSyncing] = useState(false);
+  const { isSubscribed, isSubscribing, isTesting, subscribe, unsubscribe, sendTest, status } = useWebPush();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -77,7 +84,7 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
 
   const handleInstallClick = async () => {
     if (isIOS) {
-      setShowIOSGuide(true);
+      openGuide();
     } else {
       await install();
     }
@@ -289,6 +296,62 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
             </div>
           </div>
 
+          {/* Native Web Push Notifications Card */}
+          <div className="p-4 rounded-xl border border-teal-200 bg-teal-50/50 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BellRing className="w-4 h-4 text-teal-700" />
+                <span className="text-xs font-bold text-teal-950 uppercase tracking-wider">
+                  Native Web Push Notifications (Zero OneSignal)
+                </span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1 ${
+                isSubscribed ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-700"
+              }`}>
+                {isSubscribed ? "Registered • Active" : "Not Registered"}
+              </span>
+            </div>
+
+            <p className="text-xs text-teal-950/80 leading-relaxed">
+              Receive real-time emergency trauma calls, pharmacy drug stock warnings, and stat lab results directly to your phone screen even when HMIS is closed.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {!isSubscribed ? (
+                <button
+                  type="button"
+                  disabled={isSubscribing}
+                  onClick={subscribe}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
+                >
+                  <BellRing className="w-3.5 h-3.5" />
+                  <span>{isSubscribing ? "Registering..." : "Enable Push on this Device"}</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={isTesting}
+                    onClick={sendTest}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{isTesting ? "Firing..." : "Test Push Alert"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubscribing}
+                    onClick={unsubscribe}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs rounded-xl transition disabled:opacity-50 cursor-pointer"
+                  >
+                    <BellOff className="w-3.5 h-3.5" />
+                    <span>Disable Push</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
           {/* Practical Guidelines for Healthcare Staff */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
             <div className="flex items-center gap-2 text-slate-800 font-semibold text-xs uppercase tracking-wider">
@@ -311,28 +374,12 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
             </ul>
           </div>
 
-          {/* iOS Safari Installation Guide Modal */}
-          {showIOSGuide && (
-            <div className="p-4 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 space-y-2 animate-in fade-in">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-semibold text-xs uppercase tracking-wider">
-                  <Smartphone className="w-4 h-4 text-teal-700" />
-                  <span>How to Install on iPhone / iPad (iOS Safari)</span>
-                </div>
-                <button 
-                  onClick={() => setShowIOSGuide(false)}
-                  className="text-xs font-semibold text-teal-700 hover:text-teal-900"
-                >
-                  Close
-                </button>
-              </div>
-              <p className="text-xs text-teal-800 leading-relaxed">
-                1. Tap the <strong>Share</strong> button (box with an arrow pointing up) in your Safari toolbar.<br />
-                2. Scroll down and select <strong>Add to Home Screen</strong>.<br />
-                3. Tap <strong>Add</strong> at top right. The HMIS icon will appear on your iPad/iPhone home screen and work completely offline.
-              </p>
-            </div>
-          )}
+          {/* PWA Guided Installation Modal */}
+          <PWAInstallGuideModal
+            isOpen={isGuideOpen}
+            onClose={closeGuide}
+            pwaState={pwaState}
+          />
 
         </div>
 

@@ -190,10 +190,10 @@ export default function RaiseChatTicketModal({
       setSymptoms(found.symptoms || found.triageNotes || "");
       setProvisionalDiagnosis(found.provisionalDiagnosis || "");
       if (found.vitals) {
-        setTemp(found.vitals.temp || "");
-        setBp(found.vitals.bp || "");
-        setPulse(found.vitals.pulse || "");
-        setWeight(found.vitals.weight || "");
+        setTemp(found.vitals.temp ? String(found.vitals.temp) : "");
+        setBp(found.vitals.bp ? String(found.vitals.bp) : "");
+        setPulse(found.vitals.pulse ? String(found.vitals.pulse) : "");
+        setWeight(found.vitals.weight ? String(found.vitals.weight) : "");
       }
     }
   };

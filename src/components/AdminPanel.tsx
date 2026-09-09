@@ -53,8 +53,15 @@ import {
   IdCard,
   Smartphone,
   Download,
-  HardDrive
+  HardDrive,
+  BellRing,
+  Bell,
+  Send,
+  Zap,
+  Radio
 } from "lucide-react";
+import { PushNotificationManagerModal } from "./PushNotificationManagerModal";
+import { useWebPush } from "../hooks/useWebPush";
 import { 
   PWASettings, 
   getLocalPwaSettings, 
@@ -206,7 +213,9 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
     queue: 0,
     invoices: 0,
     medications: 0,
-    payroll: 0
+    payroll: 0,
+    suppliers: 0,
+    procurement_orders: 0
   });
   const [isBootstrappingDb, setIsBootstrappingDb] = React.useState(false);
   const [dbSyncMessage, setDbSyncMessage] = React.useState<string | null>(null);
@@ -220,6 +229,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   const [pwaConfig, setPwaConfig] = React.useState<PWASettings>(getLocalPwaSettings);
   const [pwaIsSaving, setPwaIsSaving] = React.useState(false);
   const [pwaLastSyncedTime, setPwaLastSyncedTime] = React.useState<string>("");
+  const [showPushModal, setShowPushModal] = React.useState(false);
 
   React.useEffect(() => {
     const unsubPwa = subscribePwaSettings((settings) => {
@@ -2352,6 +2362,105 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
           </div>
         </div>
       </div>
+
+      {/* 7b. Native Web Push Notifications (Zero OneSignal / VAPID Engine) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-5 bg-gradient-to-r from-teal-950 via-emerald-950 to-slate-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
+              <BellRing className="w-5 h-5 text-emerald-300 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                  7b. Native Web Push Architecture (Zero OneSignal)
+                </h3>
+                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[9px] font-mono font-bold">
+                  100% Free & Open Standards
+                </span>
+              </div>
+              <p className="text-xs text-emerald-200/80">
+                W3C Push API + VAPID Cryptographic Keys + Background Service Worker
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPushModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Launch Push Dispatcher & Test</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Feature 1: Service Worker */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
+                <HardDrive className="w-4 h-4 text-emerald-600" />
+                <span>1. Service Worker Script</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Background thread (<code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">sw-push-listener.js</code>) listening independently for signals from Google FCM and Apple APNs even when the app is completely closed.
+              </p>
+            </div>
+
+            {/* Feature 2: Push API & VAPID */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
+                <Radio className="w-4 h-4 text-teal-600" />
+                <span>2. Push API & VAPID Keys</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Asymmetric cryptographic keypair authenticates hospital server HTTP payloads directly to browser push endpoints without any third-party gateway fees.
+              </p>
+            </div>
+
+            {/* Feature 3: Notifications API */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
+                <Smartphone className="w-4 h-4 text-blue-600" />
+                <span>3. Native System Rendering</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Renders system lock screen banners, emergency vibration sequences, and 1-tap deep links directly into Triage, Pharmacy POS, or Lab Results.
+              </p>
+            </div>
+          </div>
+
+          {/* OS Compatibility Notice */}
+          <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-950 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-xs font-black uppercase tracking-wider text-emerald-900 block">
+                Mobile OS Compatibility
+              </span>
+              <p className="text-xs text-emerald-800 leading-relaxed">
+                • <strong>Android / Chrome / Edge:</strong> Works out of the box natively.<br />
+                • <strong>Apple iOS (iPhones/iPads):</strong> Supported on iOS 16.4+ once the user adds the HMIS PWA to their iPhone Home Screen from Safari.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPushModal(true)}
+              className="px-4 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl transition shrink-0 cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+            >
+              <BellRing className="w-3.5 h-3.5" />
+              <span>Manage Notifications & Dispatcher</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <PushNotificationManagerModal
+        isOpen={showPushModal}
+        onClose={() => setShowPushModal(false)}
+        currentUser={{ name: "Hospital Administrator", role: "Super Admin", department: "Administration" }}
+      />
 
       {/* 8. Security Audit Trail & Governance Log */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">

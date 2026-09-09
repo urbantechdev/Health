@@ -161,8 +161,8 @@ export default function StaffOnboardingModal({
 
       const fullEmployee: Employee = {
         id: docRef.id,
-        ...newEmployeeData
-      };
+        ...newEmployeeData,
+      } as Employee;
 
       if (onStaffCreated) {
         onStaffCreated(fullEmployee);

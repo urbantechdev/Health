@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { 
   Printer, 
   Download, 
-  Loader2,
+  Loader2, 
   X, 
   ShieldCheck, 
   Droplets, 
@@ -11,19 +11,19 @@ import {
   CheckCircle2, 
   FileText, 
   Maximize2, 
-  Minimize2, 
-  FlaskRound,
-  Microscope,
-  Info,
-  Calendar,
-  User,
-  Building2,
-  Stethoscope
+  Microscope, 
+  Info, 
+  User, 
+  Building2, 
+  Stethoscope,
+  Sparkles,
+  Calendar
 } from "lucide-react";
 import { 
   HaemogramReportData, 
   parseHaemogramData, 
-  isHaemogramReport 
+  isHaemogramReport,
+  HaemogramParameter
 } from "../lib/haemogramParser";
 import { printElement, downloadElementAsPdf } from "../lib/printUtils";
 import DocumentLogo from "./DocumentLogo";
@@ -52,10 +52,10 @@ export default function HaemogramDocument({
   mode = "inline",
   isOpen = false,
   onClose,
-  title = "Official Clinical Laboratory Report: Full Haemogram (CBC)",
+  title = "Official Clinical Laboratory Report: Comprehensive Full Haemogram (CBC)",
 }: HaemogramDocumentProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [activeViewSection, setActiveViewSection] = useState<"all" | "erythrocytes" | "differential" | "pbf">("all");
+  const [activeViewSection, setActiveViewSection] = useState<"all" | "erythrocytes" | "differential" | "platelets" | "pbf">("all");
   const [printing, setPrinting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -120,7 +120,7 @@ export default function HaemogramDocument({
   };
 
   // Render Flag Badge
-  const renderFlag = (flag: "NORMAL" | "HIGH" | "LOW" | "CRITICAL") => {
+  const renderFlag = (flag: "NORMAL" | "HIGH" | "LOW" | "CRITICAL" | string) => {
     switch (flag) {
       case "HIGH":
         return (
@@ -154,18 +154,11 @@ export default function HaemogramDocument({
     }
   };
 
-  // Erythrocyte parameters
-  const erythrocyteParams = report.parameters.filter(
-    (p) => p.category === "erythrocytes"
-  );
-  // Leukocyte & differential parameters
-  const leukocyteParams = report.parameters.filter(
-    (p) => p.category === "leukocytes" || p.category === "differential"
-  );
-  // Platelet & other parameters
-  const plateletParams = report.parameters.filter(
-    (p) => p.category === "platelets" || p.category === "inflammatory"
-  );
+  // Filter parameters by category
+  const erythrocyteParams = report.parameters.filter((p) => p.category === "erythrocytes");
+  const leukocyteParams = report.parameters.filter((p) => p.category === "leukocytes" || p.category === "differential");
+  const plateletParams = report.parameters.filter((p) => p.category === "platelets");
+  const inflammatoryParams = report.parameters.filter((p) => p.category === "inflammatory");
 
   // Document Body Content Component
   const DocumentPaper = ({ isPrintView = false }: { isPrintView?: boolean }) => (
@@ -180,10 +173,10 @@ export default function HaemogramDocument({
                 {report.facilityName}
               </h1>
               <p className="text-xs font-semibold text-rose-900">
-                Department of Clinical Pathology & Laboratory Medicine
+                Department of Clinical Pathology, Hematology & Blood Transfusion
               </p>
               <p className="text-[11px] text-slate-500 font-mono">
-                {report.facilityAddress} • Standard ISO 15189 Accredited
+                {report.facilityAddress} • Standard ISO 15189 / KMLTTB Registered Laboratory
               </p>
             </div>
           </div>
@@ -192,23 +185,28 @@ export default function HaemogramDocument({
             <span className="inline-block px-2.5 py-1 bg-slate-900 text-white text-[10px] font-mono font-bold rounded uppercase tracking-wider mb-1">
               Official Diagnostic Report
             </span>
-            <p className="text-[11px] text-slate-600 font-mono">LIS ID: {report.sampleId}</p>
+            <p className="text-[11px] text-slate-600 font-mono">LIS Sample: {report.sampleId}</p>
             <p className="text-[10px] text-emerald-800 font-semibold flex items-center justify-start sm:justify-end gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-              Verified Digital Record
+              Verified Electronic Medical Record
             </p>
           </div>
         </div>
 
-        {/* Title Ribbon */}
-        <div className="mt-3 py-1.5 px-3 bg-slate-100 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs font-bold text-slate-800 gap-1 border border-slate-200">
-          <span className="uppercase tracking-wider flex items-center gap-1.5 text-slate-900">
+        {/* Title Ribbon & Age/Gender Reference Indicator */}
+        <div className="mt-3 py-2 px-3.5 bg-gradient-to-r from-slate-100 via-rose-50/50 to-slate-100 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs font-bold text-slate-800 gap-1.5 border border-slate-200">
+          <span className="uppercase tracking-wider flex items-center gap-1.5 text-slate-950 font-black">
             <FileText className="w-4 h-4 text-rose-600" />
-            FULL HAEMOGRAM / COMPLETE BLOOD COUNT (CBC) & 5-PART DIFFERENTIAL
+            COMPREHENSIVE FULL HAEMOGRAM (FBC / CBC) & 5-PART ADVANCED DIFFERENTIAL
           </span>
-          <span className="text-[11px] text-slate-600 font-mono">
-            Analyte: 5-Part Automated Hematology + Smear PBF
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="px-2 py-0.5 bg-rose-100 text-rose-900 text-[10px] font-bold rounded-md border border-rose-200">
+              Reference: {report.cohortLabel || `${report.patientGender} (${report.patientAge}y)`}
+            </span>
+            <span className="text-[10px] text-slate-600 font-mono">
+              {report.analyzerModel || "Automated 5-Part Hematology Analyzer"}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -223,8 +221,13 @@ export default function HaemogramDocument({
           <span className="font-mono font-bold text-slate-800">{report.patientNo}</span>
         </div>
         <div>
-          <span className="text-[10px] text-slate-600 uppercase font-bold block">Age / Gender</span>
-          <span className="font-bold text-slate-800">{report.patientAge} Yrs / {report.patientGender}</span>
+          <span className="text-[10px] text-slate-600 uppercase font-bold block">Age & Biological Gender</span>
+          <div className="flex items-center gap-1">
+            <span className="font-bold text-slate-900">{report.patientAge} Yrs / {report.patientGender}</span>
+            <span className="text-[9px] bg-slate-200 px-1 py-0.2 rounded font-semibold text-slate-700">
+              {report.cohortLabel?.split("(")[0]?.trim() || "Stratified"}
+            </span>
+          </div>
         </div>
         <div>
           <span className="text-[10px] text-slate-600 uppercase font-bold block">Specimen Type</span>
@@ -251,15 +254,17 @@ export default function HaemogramDocument({
 
       {/* 3. STRUCTURED CLINICAL PARAMETERS TABLE */}
       <div className="space-y-4 mb-5">
-        {/* Table 1: Red Blood Cells (Erythron) */}
+        {/* Table 1: Red Blood Cells (Erythron) - 13 items */}
         {(activeViewSection === "all" || activeViewSection === "erythrocytes") && (
           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-            <div className="bg-rose-50/80 px-3.5 py-2 border-b border-rose-200 flex justify-between items-center">
+            <div className="bg-rose-50/90 px-3.5 py-2 border-b border-rose-200 flex justify-between items-center">
               <span className="text-xs font-bold text-rose-950 uppercase tracking-wide flex items-center gap-1.5">
                 <Droplets className="w-3.5 h-3.5 text-rose-600" />
-                1. Erythrocyte Profile (Red Blood Cells & Indices)
+                1. Red Blood Cell (RBC) & Hemoglobin Parameters ({erythrocyteParams.length})
               </span>
-              <span className="text-[10px] text-rose-800 font-semibold font-mono">Erythron Panel</span>
+              <span className="text-[10px] text-rose-800 font-semibold font-mono">
+                Erythron Panel • Age & Gender Calibrated
+              </span>
             </div>
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -268,19 +273,24 @@ export default function HaemogramDocument({
                   <th className="py-2 px-3 font-bold text-right">Result</th>
                   <th className="py-2 px-2.5 font-bold">Unit</th>
                   <th className="py-2 px-3 font-bold">Reference Interval</th>
-                  <th className="py-2 px-3 font-bold">Flag</th>
+                  <th className="py-2 px-3 font-bold">Alert Flag</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-150">
                 {erythrocyteParams.map((param, idx) => (
-                  <tr key={idx} className={param.flag !== "NORMAL" ? "bg-rose-50/30" : "hover:bg-slate-50/50"}>
-                    <td className="py-2 px-3.5 font-semibold text-slate-900">{param.name}</td>
-                    <td className={`py-2 px-3 text-right font-mono font-bold text-sm ${param.flag === "HIGH" ? "text-rose-700 font-black" : param.flag === "LOW" ? "text-amber-700 font-black" : "text-slate-900"}`}>
+                  <tr key={idx} className={param.flag === "CRITICAL" ? "bg-rose-100/60" : param.flag !== "NORMAL" ? "bg-rose-50/40" : "hover:bg-slate-50/50"}>
+                    <td className="py-1.5 px-3.5">
+                      <div className="font-semibold text-slate-900">{param.name}</div>
+                      {param.description && (
+                        <div className="text-[10px] text-slate-500 font-normal">{param.description}</div>
+                      )}
+                    </td>
+                    <td className={`py-1.5 px-3 text-right font-mono font-bold text-sm ${param.flag === "CRITICAL" ? "text-red-700 font-black" : param.flag === "HIGH" ? "text-rose-700 font-black" : param.flag === "LOW" ? "text-amber-700 font-black" : "text-slate-900"}`}>
                       {param.value}
                     </td>
-                    <td className="py-2 px-2.5 text-slate-600 font-mono text-[11px]">{param.unit}</td>
-                    <td className="py-2 px-3 text-slate-600 font-mono text-[11px]">{param.referenceRange}</td>
-                    <td className="py-2 px-3">{renderFlag(param.flag)}</td>
+                    <td className="py-1.5 px-2.5 text-slate-600 font-mono text-[11px]">{param.unit}</td>
+                    <td className="py-1.5 px-3 text-slate-600 font-mono text-[11px]">{param.referenceRange}</td>
+                    <td className="py-1.5 px-3">{renderFlag(param.flag)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -288,60 +298,62 @@ export default function HaemogramDocument({
           </div>
         )}
 
-        {/* Table 2: White Blood Cells & 5-Part Differential */}
+        {/* Table 2: White Blood Cells & 5-Part Differential + Absolutes + Advanced Flags */}
         {(activeViewSection === "all" || activeViewSection === "differential") && (
           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-            <div className="bg-blue-50/80 px-3.5 py-2 border-b border-blue-200 flex justify-between items-center">
+            <div className="bg-blue-50/90 px-3.5 py-2 border-b border-blue-200 flex justify-between items-center">
               <span className="text-xs font-bold text-blue-950 uppercase tracking-wide flex items-center gap-1.5">
                 <Microscope className="w-3.5 h-3.5 text-blue-600" />
-                2. Total Leucocyte Count & 5-Part Differential
+                2. White Blood Cell (WBC) Parameters & 5-Part Differential with Absolutes ({leukocyteParams.length})
               </span>
-              <span className="text-[10px] text-blue-800 font-semibold font-mono">Leukon Panel</span>
+              <span className="text-[10px] text-blue-800 font-semibold font-mono">
+                Leukon & Granulocyte Panel
+              </span>
             </div>
             
-            {/* Visual Differential Bar */}
+            {/* Visual Differential Distribution Bar */}
             <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200">
               <div className="flex justify-between items-center text-[10px] text-slate-600 mb-1 font-semibold">
-                <span>5-Part Differential Distribution:</span>
+                <span>5-Part Relative Leukocyte Distribution:</span>
                 <span className="font-mono">
-                  Neut: {report.differential.neutrophils}% | Lymph: {report.differential.lymphocytes}% | Mono: {report.differential.monocytes}% | Eos: {report.differential.eosinophils}% | Baso: {report.differential.basophils}%
+                  Neut: {report.differential?.neutrophils}% | Lymph: {report.differential?.lymphocytes}% | Mono: {report.differential?.monocytes}% | Eos: {report.differential?.eosinophils}% | Baso: {report.differential?.basophils}%
                 </span>
               </div>
               <div className="w-full h-3.5 bg-slate-200 rounded-full overflow-hidden flex text-[8px] font-bold text-white text-center leading-3.5 shadow-inner">
                 <div 
-                  style={{ width: `${Math.min(100, Math.max(0, report.differential.neutrophils))}%` }} 
+                  style={{ width: `${Math.min(100, Math.max(0, report.differential?.neutrophils || 58))}%` }} 
                   className="bg-indigo-600 h-full truncate px-1"
-                  title={`Neutrophils: ${report.differential.neutrophils}%`}
+                  title={`Neutrophils: ${report.differential?.neutrophils}% (ANC: ${report.differential?.neutrophilsAbs ?? "N/A"})`}
                 >
-                  {report.differential.neutrophils > 10 ? `NEU ${report.differential.neutrophils}%` : ""}
+                  {(report.differential?.neutrophils || 0) > 10 ? `NEU ${report.differential?.neutrophils}%` : ""}
                 </div>
                 <div 
-                  style={{ width: `${Math.min(100, Math.max(0, report.differential.lymphocytes))}%` }} 
+                  style={{ width: `${Math.min(100, Math.max(0, report.differential?.lymphocytes || 32))}%` }} 
                   className="bg-teal-600 h-full truncate px-1"
-                  title={`Lymphocytes: ${report.differential.lymphocytes}%`}
+                  title={`Lymphocytes: ${report.differential?.lymphocytes}% (ALC: ${report.differential?.lymphocytesAbs ?? "N/A"})`}
                 >
-                  {report.differential.lymphocytes > 10 ? `LYM ${report.differential.lymphocytes}%` : ""}
+                  {(report.differential?.lymphocytes || 0) > 10 ? `LYM ${report.differential?.lymphocytes}%` : ""}
                 </div>
                 <div 
-                  style={{ width: `${Math.min(100, Math.max(0, report.differential.monocytes))}%` }} 
+                  style={{ width: `${Math.min(100, Math.max(0, report.differential?.monocytes || 6))}%` }} 
                   className="bg-amber-500 h-full truncate px-1"
-                  title={`Monocytes: ${report.differential.monocytes}%`}
+                  title={`Monocytes: ${report.differential?.monocytes}% (AMC: ${report.differential?.monocytesAbs ?? "N/A"})`}
                 >
-                  {report.differential.monocytes > 5 ? `MON` : ""}
+                  {(report.differential?.monocytes || 0) > 4 ? `MON` : ""}
                 </div>
                 <div 
-                  style={{ width: `${Math.min(100, Math.max(0, report.differential.eosinophils))}%` }} 
+                  style={{ width: `${Math.min(100, Math.max(0, report.differential?.eosinophils || 3))}%` }} 
                   className="bg-purple-500 h-full truncate px-1"
-                  title={`Eosinophils: ${report.differential.eosinophils}%`}
+                  title={`Eosinophils: ${report.differential?.eosinophils}% (AEC: ${report.differential?.eosinophilsAbs ?? "N/A"})`}
                 >
-                  {report.differential.eosinophils > 3 ? `EOS` : ""}
+                  {(report.differential?.eosinophils || 0) > 2 ? `EOS` : ""}
                 </div>
                 <div 
-                  style={{ width: `${Math.min(100, Math.max(0, report.differential.basophils))}%` }} 
+                  style={{ width: `${Math.min(100, Math.max(0, report.differential?.basophils || 1))}%` }} 
                   className="bg-rose-500 h-full truncate px-1"
-                  title={`Basophils: ${report.differential.basophils}%`}
+                  title={`Basophils: ${report.differential?.basophils}% (ABC: ${report.differential?.basophilsAbs ?? "N/A"})`}
                 >
-                  {report.differential.basophils > 2 ? `BAS` : ""}
+                  {(report.differential?.basophils || 0) > 1 ? `BAS` : ""}
                 </div>
               </div>
             </div>
@@ -353,19 +365,24 @@ export default function HaemogramDocument({
                   <th className="py-2 px-3 font-bold text-right">Result</th>
                   <th className="py-2 px-2.5 font-bold">Unit</th>
                   <th className="py-2 px-3 font-bold">Reference Interval</th>
-                  <th className="py-2 px-3 font-bold">Flag</th>
+                  <th className="py-2 px-3 font-bold">Alert Flag</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-150">
                 {leukocyteParams.map((param, idx) => (
-                  <tr key={idx} className={param.flag !== "NORMAL" ? "bg-blue-50/30" : "hover:bg-slate-50/50"}>
-                    <td className="py-2 px-3.5 font-semibold text-slate-900">{param.name}</td>
-                    <td className={`py-2 px-3 text-right font-mono font-bold text-sm ${param.flag === "HIGH" ? "text-rose-700 font-black" : param.flag === "LOW" ? "text-amber-700 font-black" : "text-slate-900"}`}>
+                  <tr key={idx} className={param.flag === "CRITICAL" ? "bg-rose-100/60" : param.flag !== "NORMAL" ? "bg-blue-50/40" : "hover:bg-slate-50/50"}>
+                    <td className="py-1.5 px-3.5">
+                      <div className="font-semibold text-slate-900">{param.name}</div>
+                      {param.description && (
+                        <div className="text-[10px] text-slate-500 font-normal">{param.description}</div>
+                      )}
+                    </td>
+                    <td className={`py-1.5 px-3 text-right font-mono font-bold text-sm ${param.flag === "CRITICAL" ? "text-red-700 font-black" : param.flag === "HIGH" ? "text-rose-700 font-black" : param.flag === "LOW" ? "text-amber-700 font-black" : "text-slate-900"}`}>
                       {param.value}
                     </td>
-                    <td className="py-2 px-2.5 text-slate-600 font-mono text-[11px]">{param.unit}</td>
-                    <td className="py-2 px-3 text-slate-600 font-mono text-[11px]">{param.referenceRange}</td>
-                    <td className="py-2 px-3">{renderFlag(param.flag)}</td>
+                    <td className="py-1.5 px-2.5 text-slate-600 font-mono text-[11px]">{param.unit}</td>
+                    <td className="py-1.5 px-3 text-slate-600 font-mono text-[11px]">{param.referenceRange}</td>
+                    <td className="py-1.5 px-3">{renderFlag(param.flag)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -373,15 +390,15 @@ export default function HaemogramDocument({
           </div>
         )}
 
-        {/* Table 3: Platelets & Special Hematology */}
-        {(activeViewSection === "all") && (
+        {/* Table 3: Platelet (PLT) Parameters - 6 items */}
+        {(activeViewSection === "all" || activeViewSection === "platelets") && (
           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-            <div className="bg-purple-50/80 px-3.5 py-2 border-b border-purple-200 flex justify-between items-center">
+            <div className="bg-purple-50/90 px-3.5 py-2 border-b border-purple-200 flex justify-between items-center">
               <span className="text-xs font-bold text-purple-950 uppercase tracking-wide flex items-center gap-1.5">
                 <Activity className="w-3.5 h-3.5 text-purple-600" />
-                3. Platelets, Erythrocyte Sedimentation (ESR) & Malaria Parasitology
+                3. Platelet (PLT) & Thrombocyte Indices ({plateletParams.length})
               </span>
-              <span className="text-[10px] text-purple-800 font-semibold font-mono">Thrombocyte & Inflammatory</span>
+              <span className="text-[10px] text-purple-800 font-semibold font-mono">Thrombocyte Panel</span>
             </div>
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -390,19 +407,68 @@ export default function HaemogramDocument({
                   <th className="py-2 px-3 font-bold text-right">Result</th>
                   <th className="py-2 px-2.5 font-bold">Unit</th>
                   <th className="py-2 px-3 font-bold">Reference Interval</th>
-                  <th className="py-2 px-3 font-bold">Flag</th>
+                  <th className="py-2 px-3 font-bold">Alert Flag</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-150">
                 {plateletParams.map((param, idx) => (
-                  <tr key={idx} className={param.flag !== "NORMAL" ? "bg-purple-50/30" : "hover:bg-slate-50/50"}>
-                    <td className="py-2 px-3.5 font-semibold text-slate-900">{param.name}</td>
-                    <td className={`py-2 px-3 text-right font-mono font-bold text-sm ${param.flag === "HIGH" ? "text-rose-700 font-black" : param.flag === "LOW" ? "text-amber-700 font-black" : "text-slate-900"}`}>
+                  <tr key={idx} className={param.flag === "CRITICAL" ? "bg-rose-100/60" : param.flag !== "NORMAL" ? "bg-purple-50/40" : "hover:bg-slate-50/50"}>
+                    <td className="py-1.5 px-3.5">
+                      <div className="font-semibold text-slate-900">{param.name}</div>
+                      {param.description && (
+                        <div className="text-[10px] text-slate-500 font-normal">{param.description}</div>
+                      )}
+                    </td>
+                    <td className={`py-1.5 px-3 text-right font-mono font-bold text-sm ${param.flag === "CRITICAL" ? "text-red-700 font-black" : param.flag === "HIGH" ? "text-rose-700 font-black" : param.flag === "LOW" ? "text-amber-700 font-black" : "text-slate-900"}`}>
                       {param.value}
                     </td>
-                    <td className="py-2 px-2.5 text-slate-600 font-mono text-[11px]">{param.unit}</td>
-                    <td className="py-2 px-3 text-slate-600 font-mono text-[11px]">{param.referenceRange}</td>
-                    <td className="py-2 px-3">{renderFlag(param.flag)}</td>
+                    <td className="py-1.5 px-2.5 text-slate-600 font-mono text-[11px]">{param.unit}</td>
+                    <td className="py-1.5 px-3 text-slate-600 font-mono text-[11px]">{param.referenceRange}</td>
+                    <td className="py-1.5 px-3">{renderFlag(param.flag)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Table 4: Systemic Inflammation (ESR) & Ancillary Testing */}
+        {(activeViewSection === "all" || activeViewSection === "pbf") && inflammatoryParams.length > 0 && (
+          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+            <div className="bg-amber-50/90 px-3.5 py-2 border-b border-amber-200 flex justify-between items-center">
+              <span className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-amber-600" />
+                4. Systemic Inflammation & Acute Phase Reactants
+              </span>
+              <span className="text-[10px] text-amber-800 font-semibold font-mono">
+                Westergren Sedimentation
+              </span>
+            </div>
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100/90 text-slate-700 text-[10px] uppercase border-b border-slate-200">
+                  <th className="py-2 px-3.5 font-bold">Investigation / Parameter</th>
+                  <th className="py-2 px-3 font-bold text-right">Result</th>
+                  <th className="py-2 px-2.5 font-bold">Unit</th>
+                  <th className="py-2 px-3 font-bold">Reference Interval (Westergren)</th>
+                  <th className="py-2 px-3 font-bold">Alert Flag</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-150">
+                {inflammatoryParams.map((param, idx) => (
+                  <tr key={idx} className={param.flag !== "NORMAL" ? "bg-amber-50/40" : "hover:bg-slate-50/50"}>
+                    <td className="py-1.5 px-3.5">
+                      <div className="font-semibold text-slate-900">{param.name}</div>
+                      {param.description && (
+                        <div className="text-[10px] text-slate-500 font-normal">{param.description}</div>
+                      )}
+                    </td>
+                    <td className={`py-1.5 px-3 text-right font-mono font-bold text-sm ${param.flag === "HIGH" ? "text-rose-700 font-black" : param.flag === "LOW" ? "text-amber-700 font-black" : "text-slate-900"}`}>
+                      {param.value}
+                    </td>
+                    <td className="py-1.5 px-2.5 text-slate-600 font-mono text-[11px]">{param.unit}</td>
+                    <td className="py-1.5 px-3 text-slate-600 font-mono text-[11px]">{param.referenceRange}</td>
+                    <td className="py-1.5 px-3">{renderFlag(param.flag)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -411,27 +477,89 @@ export default function HaemogramDocument({
         )}
       </div>
 
-      {/* 4. PERIPHERAL BLOOD FILM (PBF) MORPHOLOGY & INTERPRETATION */}
+      {/* 4. STRUCTURED BLOOD FILM / PERIPHERAL SMEAR (PBF) MORPHOLOGY REPORT */}
       {(activeViewSection === "all" || activeViewSection === "pbf") && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-900 uppercase tracking-wide">
-              <Microscope className="w-4 h-4 text-emerald-600" />
-              <span>Peripheral Blood Film (PBF) Morphology</span>
+        <div className="space-y-3 mb-5">
+          <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+            <div className="bg-emerald-800 text-white px-3.5 py-2 flex justify-between items-center">
+              <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+                <Microscope className="w-4 h-4 text-emerald-300" />
+                4. Peripheral Blood Film (PBF) Microscopic Smear Examination
+              </span>
+              <span className="text-[10px] bg-emerald-700 px-2 py-0.5 rounded font-mono text-emerald-100">
+                Wright-Giemsa Oil Immersion (100x)
+              </span>
             </div>
-            <p className="text-xs text-slate-700 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200/80">
-              {report.pbfMorphology || "Normocytic normochromic red cells with adequate platelets and normal leucocyte morphology."}
-            </p>
-          </div>
 
-          <div className="bg-emerald-50/40 border border-emerald-200 rounded-xl p-3.5 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-950 uppercase tracking-wide">
-              <Info className="w-4 h-4 text-emerald-700" />
-              <span>Pathologist Impression & Diagnostic Correlation</span>
+            <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              {/* RBC Morphology */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                  <span className="font-bold text-rose-950 uppercase text-[11px]">RBC Morphology</span>
+                  <span className="text-[10px] text-rose-700 font-semibold">Erythrocytes</span>
+                </div>
+                <div className="space-y-1 text-slate-700 text-[11px]">
+                  <p><strong>Anisocytosis:</strong> {report.pbfDetails?.rbc?.anisocytosis || "None"}</p>
+                  <p><strong>Poikilocytosis:</strong> {report.pbfDetails?.rbc?.poikilocytosis || "None"}</p>
+                  <p><strong>Hypochromia:</strong> {report.pbfDetails?.rbc?.hypochromia ? "Present (+)" : "Absent (Normochromic)"}</p>
+                  <p><strong>Polychromasia:</strong> {report.pbfDetails?.rbc?.polychromasia ? "Present (+)" : "Absent"}</p>
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {report.pbfDetails?.rbc?.targetCells && <span className="px-1.5 py-0.5 bg-rose-50 text-rose-800 rounded border border-rose-200 text-[9px] font-bold">Target Cells</span>}
+                    {report.pbfDetails?.rbc?.sickleCells && <span className="px-1.5 py-0.5 bg-red-100 text-red-900 rounded border border-red-300 text-[9px] font-black">Sickle Cells</span>}
+                    {report.pbfDetails?.rbc?.spherocytes && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 rounded border border-amber-200 text-[9px] font-bold">Spherocytes</span>}
+                    {report.pbfDetails?.rbc?.schistocytes && <span className="px-1.5 py-0.5 bg-red-50 text-red-800 rounded border border-red-200 text-[9px] font-bold">Schistocytes</span>}
+                    {report.pbfDetails?.rbc?.rouleaux && <span className="px-1.5 py-0.5 bg-purple-50 text-purple-800 rounded border border-purple-200 text-[9px] font-bold">Rouleaux</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* WBC Morphology */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                  <span className="font-bold text-blue-950 uppercase text-[11px]">WBC Morphology</span>
+                  <span className="text-[10px] text-blue-700 font-semibold">Leukocytes</span>
+                </div>
+                <div className="space-y-1 text-slate-700 text-[11px]">
+                  <p><strong>Toxic Granulation:</strong> {report.pbfDetails?.wbc?.toxicGranulation || "Absent"}</p>
+                  <p><strong>Vacuolation:</strong> {report.pbfDetails?.wbc?.vacuolation ? "Present (+)" : "Absent"}</p>
+                  <p><strong>Reactive Lymphocytes:</strong> {report.pbfDetails?.wbc?.reactiveLymphocytes ? "Present (Downey cells)" : "None"}</p>
+                  <p><strong>Left Shift (Bands):</strong> {report.pbfDetails?.wbc?.leftShift ? "Yes (Band forms increased)" : "No"}</p>
+                  <p className="text-[10px] text-slate-500 italic mt-1">{report.pbfDetails?.wbc?.notes || "Normal mature leukocyte series."}</p>
+                </div>
+              </div>
+
+              {/* Platelet Morphology */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                  <span className="font-bold text-purple-950 uppercase text-[11px]">Platelet Morphology</span>
+                  <span className="text-[10px] text-purple-700 font-semibold">Thrombocytes</span>
+                </div>
+                <div className="space-y-1 text-slate-700 text-[11px]">
+                  <p><strong>Smear Estimation:</strong> {report.pbfDetails?.platelets?.adequateSmear !== false ? "Adequate on smear" : "Reduced on smear"}</p>
+                  <p><strong>Platelet Clumping:</strong> {report.pbfDetails?.platelets?.clumping ? "Observed (Rule out EDTA pseudothrombocytopenia)" : "Absent"}</p>
+                  <p><strong>Giant Platelets:</strong> {report.pbfDetails?.platelets?.giantPlatelets ? "Present (Megathrombocytes)" : "None"}</p>
+                  <p className="text-[10px] text-slate-500 italic mt-1">{report.pbfDetails?.platelets?.notes || "Normal platelet size and distribution on smear."}</p>
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-emerald-900 font-medium leading-relaxed bg-white p-2.5 rounded-lg border border-emerald-100">
-              {report.clinicalImpression || "Parameters within reference biological intervals."}
-            </p>
+
+            {/* Pathologist Clinical Impression & Diagnostic Correlation */}
+            <div className="p-4 pt-0">
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-1.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                  <Info className="w-4 h-4 text-emerald-700" />
+                  <span>Comprehensive Pathologist Interpretation & Impression</span>
+                </div>
+                <p className="text-xs text-emerald-950 font-medium leading-relaxed bg-white p-2.5 rounded-lg border border-emerald-100">
+                  {report.clinicalImpression || report.pbfMorphology || "Parameters within normal biological limits for age and gender."}
+                </p>
+                {report.pathologistComment && (
+                  <p className="text-[11px] text-slate-600 italic">
+                    Note: {report.pathologistComment}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -441,20 +569,20 @@ export default function HaemogramDocument({
         <div>
           <span className="text-[10px] text-slate-600 uppercase font-bold block mb-1">Laboratory Technologist</span>
           <p className="font-bold text-slate-900">{report.technologistName}</p>
-          <span className="text-[10px] text-slate-600 block">KMLTTB Licensed Practitioner</span>
+          <span className="text-[10px] text-slate-600 block">KMLTTB Licensed Medical Laboratory Practitioner</span>
         </div>
 
         <div>
           <span className="text-[10px] text-slate-600 uppercase font-bold block mb-1">Consultant Pathologist</span>
           <p className="font-bold text-slate-900">{report.pathologistName}</p>
-          <span className="text-[10px] text-slate-600 block">KMPDC / Certified Pathology</span>
+          <span className="text-[10px] text-slate-600 block">KMPDC Specialist Registry / Fellow Pathologist</span>
         </div>
 
         <div className="col-span-2 sm:col-span-1 flex flex-col sm:items-end justify-center">
           <div className="px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-lg text-center w-full sm:w-auto">
-            <span className="text-[9px] font-mono font-bold text-slate-700 uppercase block">Electronic Verification Code</span>
+            <span className="text-[9px] font-mono font-bold text-slate-700 uppercase block">Electronic Verification Hash</span>
             <span className="text-[11px] font-mono font-black text-slate-900 tracking-wider">
-              {report.sampleId}-MOH-LIS
+              {report.sampleId}-CBC-MOH-ISO15189
             </span>
           </div>
         </div>
@@ -479,7 +607,7 @@ export default function HaemogramDocument({
                   {title}
                 </h3>
                 <p className="text-[11px] text-slate-300 font-mono">
-                  Official Standard ISO 15189 / KMLTTB Clinical Diagnostic Document
+                  {report.parameters.length} Parameters Evaluated • Stratified for {report.cohortLabel || "Age & Gender"}
                 </p>
               </div>
             </div>
@@ -546,16 +674,16 @@ export default function HaemogramDocument({
             </div>
           </div>
 
-          {/* Section Filter Pills */}
+          {/* Section Filter Tabs */}
           <div className="flex items-center gap-1.5 px-5 py-2 bg-slate-100 border-b border-slate-200 shrink-0 text-xs overflow-x-auto">
-            <span className="text-[10px] font-bold uppercase text-slate-600 mr-1">View Focus:</span>
+            <span className="text-[10px] font-bold uppercase text-slate-600 mr-1">Filter Panel:</span>
             <button
               onClick={() => setActiveViewSection("all")}
               className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                 activeViewSection === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-700 hover:bg-slate-200 border border-slate-300"
               }`}
             >
-              Full CBC Document
+              All Panels ({report.parameters.length})
             </button>
             <button
               onClick={() => setActiveViewSection("erythrocytes")}
@@ -563,7 +691,7 @@ export default function HaemogramDocument({
                 activeViewSection === "erythrocytes" ? "bg-rose-700 text-white" : "bg-white text-rose-900 hover:bg-rose-100 border border-rose-200"
               }`}
             >
-              Red Cells (Hb / RBC / MCV)
+              1. Red Cells & Indices ({erythrocyteParams.length})
             </button>
             <button
               onClick={() => setActiveViewSection("differential")}
@@ -571,7 +699,15 @@ export default function HaemogramDocument({
                 activeViewSection === "differential" ? "bg-blue-700 text-white" : "bg-white text-blue-900 hover:bg-blue-100 border border-blue-200"
               }`}
             >
-              WBC & 5-Part Differential
+              2. WBC & Differential ({leukocyteParams.length})
+            </button>
+            <button
+              onClick={() => setActiveViewSection("platelets")}
+              className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                activeViewSection === "platelets" ? "bg-purple-700 text-white" : "bg-white text-purple-900 hover:bg-purple-100 border border-purple-200"
+              }`}
+            >
+              3. Platelets ({plateletParams.length})
             </button>
             <button
               onClick={() => setActiveViewSection("pbf")}
@@ -579,7 +715,7 @@ export default function HaemogramDocument({
                 activeViewSection === "pbf" ? "bg-emerald-700 text-white" : "bg-white text-emerald-900 hover:bg-emerald-100 border border-emerald-200"
               }`}
             >
-              PBF Morphology & Impression
+              4. Inflammation & Morphology
             </button>
           </div>
 
@@ -594,7 +730,7 @@ export default function HaemogramDocument({
     );
   }
 
-  // INLINE CARD VIEW (Replaces raw green monospace code box)
+  // INLINE CARD VIEW
   return (
     <div className="bg-white text-slate-900 rounded-2xl border-2 border-rose-200 shadow-sm overflow-hidden space-y-0 animate-in fade-in duration-200">
       {/* Card Header */}
@@ -609,11 +745,14 @@ export default function HaemogramDocument({
                 Full Haemogram Clinical Document
               </h4>
               <span className="px-2 py-0.5 bg-rose-500/20 text-rose-200 text-[10px] font-bold rounded-full border border-rose-400/40">
-                Official CBC Report
+                {report.parameters.length} Parameters
+              </span>
+              <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-200 text-[10px] font-semibold rounded-full border border-emerald-400/30">
+                {report.cohortLabel || "Age & Gender Calibrated"}
               </span>
             </div>
             <p className="text-[11px] text-rose-200/80">
-              Sample ID: {report.sampleId} • Reported {report.reportedDate}
+              Sample ID: {report.sampleId} • Patient: {report.patientName} ({report.patientAge}y / {report.patientGender})
             </p>
           </div>
         </div>
@@ -626,7 +765,7 @@ export default function HaemogramDocument({
             title="Open Full Sized Document"
           >
             <Maximize2 className="w-3.5 h-3.5 text-rose-300" />
-            <span>Expand</span>
+            <span>Expand Full View</span>
           </button>
           <button
             type="button"
@@ -656,7 +795,7 @@ export default function HaemogramDocument({
           <span className="text-[10px] text-slate-600 font-bold block uppercase">Hemoglobin (Hb)</span>
           <div className="flex items-baseline justify-between mt-0.5">
             <span className="text-sm font-black text-slate-900 font-mono">
-              {report.parameters.find(p => p.code === "HB")?.value || "13.8"}
+              {report.parameters.find(p => p.key === "hb")?.value || "13.8"}
             </span>
             <span className="text-[10px] text-slate-600 font-mono">g/dL</span>
           </div>
@@ -666,7 +805,7 @@ export default function HaemogramDocument({
           <span className="text-[10px] text-slate-600 font-bold block uppercase">Total WBC Count</span>
           <div className="flex items-baseline justify-between mt-0.5">
             <span className="text-sm font-black text-slate-900 font-mono">
-              {report.parameters.find(p => p.code === "WBC")?.value || "7.4"}
+              {report.parameters.find(p => p.key === "wbc")?.value || "7.4"}
             </span>
             <span className="text-[10px] text-slate-600 font-mono">×10⁹/L</span>
           </div>
@@ -676,24 +815,24 @@ export default function HaemogramDocument({
           <span className="text-[10px] text-slate-600 font-bold block uppercase">Platelets</span>
           <div className="flex items-baseline justify-between mt-0.5">
             <span className="text-sm font-black text-slate-900 font-mono">
-              {report.parameters.find(p => p.code === "PLT")?.value || "260"}
+              {report.parameters.find(p => p.key === "plt")?.value || "260"}
             </span>
             <span className="text-[10px] text-slate-600 font-mono">×10⁹/L</span>
           </div>
         </div>
 
         <div className="p-1.5 bg-white rounded-lg border border-slate-200">
-          <span className="text-[10px] text-slate-600 font-bold block uppercase">Malaria MPS / ESR</span>
+          <span className="text-[10px] text-slate-600 font-bold block uppercase">ESR & Malaria</span>
           <div className="flex items-baseline justify-between mt-0.5">
             <span className="text-xs font-black text-emerald-800">
               {report.malaria || "Negative"}
             </span>
-            <span className="text-[10px] text-slate-600 font-mono">{report.esr} mm/h</span>
+            <span className="text-[10px] text-slate-600 font-mono">{report.esr} mm/1h</span>
           </div>
         </div>
       </div>
 
-      {/* Main Parameters Structured Table */}
+      {/* Main Parameters Structured Table Preview */}
       <div className="p-4 space-y-3">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
@@ -701,12 +840,12 @@ export default function HaemogramDocument({
               <th className="py-1.5 px-3 font-bold">Investigation Parameter</th>
               <th className="py-1.5 px-2.5 font-bold text-right">Result</th>
               <th className="py-1.5 px-2 font-bold">Unit</th>
-              <th className="py-1.5 px-2.5 font-bold">Reference Interval</th>
+              <th className="py-1.5 px-2.5 font-bold">Age/Gender Ref</th>
               <th className="py-1.5 px-2.5 font-bold">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-150">
-            {report.parameters.slice(0, 8).map((param, idx) => (
+            {report.parameters.slice(0, 10).map((param, idx) => (
               <tr key={idx} className={param.flag !== "NORMAL" ? "bg-rose-50/40" : "hover:bg-slate-50/60"}>
                 <td className="py-1.5 px-3 font-semibold text-slate-900">{param.name}</td>
                 <td className={`py-1.5 px-2.5 text-right font-mono font-bold ${param.flag === "HIGH" ? "text-rose-700 font-black" : param.flag === "LOW" ? "text-amber-700 font-black" : "text-slate-900"}`}>
@@ -725,34 +864,34 @@ export default function HaemogramDocument({
           <div className="flex justify-between items-center text-[10px] text-slate-600 font-bold uppercase">
             <span>5-Part Leucocyte Differential:</span>
             <span className="font-mono">
-              Neut: {report.differential.neutrophils}% | Lymph: {report.differential.lymphocytes}% | Mono: {report.differential.monocytes}% | Eos: {report.differential.eosinophils}% | Baso: {report.differential.basophils}%
+              Neut: {report.differential?.neutrophils}% | Lymph: {report.differential?.lymphocytes}% | Mono: {report.differential?.monocytes}% | Eos: {report.differential?.eosinophils}% | Baso: {report.differential?.basophils}%
             </span>
           </div>
           <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden flex">
             <div 
-              style={{ width: `${Math.min(100, Math.max(0, report.differential.neutrophils))}%` }} 
+              style={{ width: `${Math.min(100, Math.max(0, report.differential?.neutrophils || 58))}%` }} 
               className="bg-indigo-600 h-full"
-              title={`Neutrophils: ${report.differential.neutrophils}%`}
+              title={`Neutrophils: ${report.differential?.neutrophils}%`}
             />
             <div 
-              style={{ width: `${Math.min(100, Math.max(0, report.differential.lymphocytes))}%` }} 
+              style={{ width: `${Math.min(100, Math.max(0, report.differential?.lymphocytes || 32))}%` }} 
               className="bg-teal-600 h-full"
-              title={`Lymphocytes: ${report.differential.lymphocytes}%`}
+              title={`Lymphocytes: ${report.differential?.lymphocytes}%`}
             />
             <div 
-              style={{ width: `${Math.min(100, Math.max(0, report.differential.monocytes))}%` }} 
+              style={{ width: `${Math.min(100, Math.max(0, report.differential?.monocytes || 6))}%` }} 
               className="bg-amber-500 h-full"
-              title={`Monocytes: ${report.differential.monocytes}%`}
+              title={`Monocytes: ${report.differential?.monocytes}%`}
             />
             <div 
-              style={{ width: `${Math.min(100, Math.max(0, report.differential.eosinophils))}%` }} 
+              style={{ width: `${Math.min(100, Math.max(0, report.differential?.eosinophils || 3))}%` }} 
               className="bg-purple-500 h-full"
-              title={`Eosinophils: ${report.differential.eosinophils}%`}
+              title={`Eosinophils: ${report.differential?.eosinophils}%`}
             />
             <div 
-              style={{ width: `${Math.min(100, Math.max(0, report.differential.basophils))}%` }} 
+              style={{ width: `${Math.min(100, Math.max(0, report.differential?.basophils || 1))}%` }} 
               className="bg-rose-500 h-full"
-              title={`Basophils: ${report.differential.basophils}%`}
+              title={`Basophils: ${report.differential?.basophils}%`}
             />
           </div>
         </div>
@@ -761,7 +900,7 @@ export default function HaemogramDocument({
         <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 text-xs space-y-1">
           <div className="flex items-center gap-1.5 font-bold text-emerald-950 text-[11px] uppercase">
             <Microscope className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Blood Film (PBF) & Impression:</span>
+            <span>Microscopic Blood Film (PBF) & Impression:</span>
           </div>
           <p className="text-slate-800 text-xs leading-relaxed">
             {report.pbfMorphology}
@@ -771,7 +910,7 @@ export default function HaemogramDocument({
         {/* Expand Document Trigger Footer */}
         <div className="pt-2 flex justify-between items-center text-xs text-slate-600 border-t border-slate-200">
           <span className="text-[11px] text-slate-500 italic">
-            Signed off by {report.technologistName} (KMLTTB)
+            Signed off by {report.technologistName}
           </span>
           <button
             type="button"

@@ -1923,7 +1923,7 @@ export default function AdmissionDischargeManager({
                         setAdmPatientName(matched.patientName);
                         setAdmNationalId(matched.nationalId);
                         setAdmPhone(matched.phone || "");
-                        setAdmAge(matched.age || 32);
+                        setAdmAge(Number(matched.age) || 32);
                         setAdmGender(matched.gender || "Male");
                         setAdmBloodType(matched.bloodType || "Not Sure");
                       }

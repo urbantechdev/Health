@@ -25,10 +25,22 @@ import {
   Zap,
   Layers,
   Search,
-  Filter
+  Filter,
+  Microscope,
+  BookOpen
 } from "lucide-react";
 import { toast } from "../lib/promptService";
 import HaemogramDocument from "./HaemogramDocument";
+import { getReferenceRange, determineAgeCohort, evaluateFlag, PbfMorphologyDetails } from "../lib/haemogramParser";
+import {
+  LAB_DISCIPLINES,
+  LabDiscipline,
+  LabTestItem,
+  getAllLabTests,
+  findDisciplineByTestName
+} from "../data/labTestDirectory";
+import { LabDisciplineWorksheet } from "./LabDisciplineWorksheet";
+import { LabDirectoryModal } from "./LabDirectoryModal";
 
 interface AncillaryLabsProps {
   toggles: any;
@@ -51,9 +63,12 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
   const [selectedTicket, setSelectedTicket] = useState<QueueTicket | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Active Lab Worksheet Sub-tab
-  const [activeLabTab, setActiveLabTab] = useState<"urinalysis" | "haemogram" | "blood_group" | "biochem" | "serology" | "custom">("urinalysis");
+  // Active Lab Worksheet Sub-tab (supports all 9 core international disciplines + specialized worksheets)
+  const [activeLabTab, setActiveLabTab] = useState<string>("hematology_coagulation");
   const [showHaemogramDocModal, setShowHaemogramDocModal] = useState(false);
+  const [disciplineResults, setDisciplineResults] = useState<Record<string, string>>({});
+  const [disciplineRemarks, setDisciplineRemarks] = useState<Record<string, string>>({});
+  const [isLabDirModalOpen, setIsLabDirModalOpen] = useState(false);
 
   // --- 1. URINALYSIS STATE ---
   const [urinalysisData, setUrinalysisData] = useState({
@@ -84,26 +99,67 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
 
   // --- 2. FULL HAEMOGRAM (CBC / FBC) STATE ---
   const [haemogramData, setHaemogramData] = useState({
-    // Primary CBC Indices
+    // Patient demographic overrides for dynamic age/gender reference calibration
+    customAge: "",
+    customGender: "",
+    // 1. Red Blood Cell (RBC) & Hemoglobin Parameters (13 items)
     hb: "13.8",
-    wbc: "7.4",
-    platelets: "260",
     rbc: "4.85",
     hct: "41.5",
-    mcv: "87.0",
-    mch: "29.2",
-    mchc: "33.6",
+    mcv: "85.6",
+    mch: "28.5",
+    mchc: "33.3",
     rdw: "12.8",
-    // Differential Count (5-Part %)
+    rdw_sd: "42.5",
+    retic_pct: "1.2",
+    retic_abs: "58.2",
+    irf: "6.5",
+    nrbc_pct: "0.0",
+    nrbc_abs: "0.00",
+    // 2. White Blood Cell (WBC) Parameters & 5-Part Differential + Absolutes + Advanced (15 items)
+    wbc: "7.4",
     neutrophils: "58",
+    neut_abs: "4.29",
     lymphocytes: "32",
+    lymph_abs: "2.37",
     monocytes: "6",
+    mono_abs: "0.44",
     eosinophils: "3",
+    eos_abs: "0.22",
     basophils: "1",
-    // Special Hematology
+    baso_abs: "0.07",
+    ig_pct: "0.2",
+    ig_abs: "0.01",
+    bands: "1",
+    bands_abs: "0.07",
+    // 3. Platelet (PLT) Parameters (6 items)
+    platelets: "260",
+    mpv: "9.4",
+    pdw: "12.8",
+    pct: "0.244",
+    p_lcr: "26.5",
+    p_lcc: "68.9",
+    // 4. Systemic Inflammation & Microscopic Morphology Review
     esr: "10",
     malaria: "Negative",
-    pbf: "Normocytic normochromic red blood cells. Normal leucocyte count and distribution. Adequate platelets on film with normal morphology."
+    pbf: "Normocytic normochromic red blood cells. Normal leucocyte count and distribution. Adequate platelets on film with normal morphology.",
+    // Structured Peripheral Smear (PBF) details
+    anisocytosis: "None" as "None" | "Mild (+)" | "Moderate (++)" | "Marked (+++)",
+    poikilocytosis: "None" as "None" | "Mild (+)" | "Moderate (++)" | "Marked (+++)",
+    hypochromia: false,
+    polychromasia: false,
+    targetCells: false,
+    sickleCells: false,
+    spherocytes: false,
+    schistocytes: false,
+    rouleaux: false,
+    toxicGranulation: "Absent" as "Absent" | "Mild (+)" | "Moderate (++)" | "Severe (+++)",
+    vacuolation: false,
+    reactiveLymphocytes: false,
+    leftShift: false,
+    plateletClumping: false,
+    giantPlatelets: false,
+    adequateSmear: true
   });
 
   // --- 3. BLOOD GROUPING & IMMUNOHEMATOLOGY ---
@@ -212,21 +268,31 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
     setSelectedTicket(t);
     setTestResults("");
 
-    // Detect doctor-ordered tests and intelligently pre-select active tab
+    // Detect doctor-ordered tests and intelligently pre-select active tab among the 9 disciplines
     const requested = (t.requestedTests || t.labTestsOrdered || []).join(" ").toLowerCase() + " " + (t.notes || "").toLowerCase() + " " + (t.service || "").toLowerCase();
     
-    if (requested.includes("haemogram") || requested.includes("cbc") || requested.includes("full blood")) {
-      setActiveLabTab("haemogram");
-    } else if (requested.includes("urinalysis") || requested.includes("urine")) {
-      setActiveLabTab("urinalysis");
+    if (requested.includes("cardiac") || requested.includes("troponin") || requested.includes("ck-mb") || requested.includes("bmp") || requested.includes("cmp") || requested.includes("lipid") || requested.includes("lft") || requested.includes("renal") || requested.includes("u&e") || requested.includes("glucose")) {
+      setActiveLabTab("clinical_chemistry");
+    } else if (requested.includes("thyroid") || requested.includes("tsh") || requested.includes("hormone") || requested.includes("fertility") || requested.includes("fsh") || requested.includes("prolactin") || requested.includes("cortisol") || requested.includes("testosterone") || requested.includes("amh")) {
+      setActiveLabTab("endocrinology");
+    } else if (requested.includes("hiv") || requested.includes("hepatitis") || requested.includes("syphilis") || requested.includes("torch") || requested.includes("ana") || requested.includes("crp") || requested.includes("esr") || requested.includes("rf") || requested.includes("autoimmune") || requested.includes("vdrl")) {
+      setActiveLabTab("immunology_serology");
+    } else if (requested.includes("culture") || requested.includes("mcs") || requested.includes("blood culture") || requested.includes("sputum") || requested.includes("wound") || requested.includes("tb") || requested.includes("afb") || requested.includes("gram") || requested.includes("stool")) {
+      setActiveLabTab("microbiology_culture");
+    } else if (requested.includes("pcr") || requested.includes("covid") || requested.includes("viral load") || requested.includes("hpv") || requested.includes("brca") || requested.includes("dna") || requested.includes("genetic")) {
+      setActiveLabTab("molecular_genetics");
+    } else if (requested.includes("toxicology") || requested.includes("drug") || requested.includes("substance") || requested.includes("doa") || requested.includes("tdm") || requested.includes("digoxin") || requested.includes("lithium") || requested.includes("valproat") || requested.includes("vancomycin")) {
+      setActiveLabTab("toxicology_tdm");
+    } else if (requested.includes("csf") || requested.includes("synovial") || requested.includes("pleural") || requested.includes("fluid") || requested.includes("urinalysis") || requested.includes("urine")) {
+      setActiveLabTab("urinalysis_fluids");
+    } else if (requested.includes("tumor") || requested.includes("psa") || requested.includes("ca-125") || requested.includes("cea") || requested.includes("ca 19-9") || requested.includes("afp") || requested.includes("pap") || requested.includes("biopsy") || requested.includes("histology")) {
+      setActiveLabTab("tumor_markers_cytology");
+    } else if (requested.includes("haemogram") || requested.includes("cbc") || requested.includes("coagulation") || requested.includes("pt") || requested.includes("inr") || requested.includes("aptt") || requested.includes("d-dimer")) {
+      setActiveLabTab("hematology_coagulation");
     } else if (requested.includes("group") || requested.includes("rh") || requested.includes("crossmatch")) {
       setActiveLabTab("blood_group");
-    } else if (requested.includes("lft") || requested.includes("renal") || requested.includes("sugar") || requested.includes("glucose") || requested.includes("u&e")) {
-      setActiveLabTab("biochem");
-    } else if (requested.includes("stool") || requested.includes("widal") || requested.includes("malaria") || requested.includes("pylori")) {
-      setActiveLabTab("serology");
     } else {
-      setActiveLabTab("urinalysis");
+      setActiveLabTab("hematology_coagulation");
     }
 
     const p = findUnifiedPatient(t.patientId || t.nationalId || t.patientName, patients);
@@ -380,93 +446,413 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
     }
   };
 
-  // Quick preset templates for Full Haemogram
-  const applyHaemogramPreset = (preset: "normal" | "anemia" | "infection" | "malaria_thrombocytopenia") => {
+  // Quick preset templates for Full Haemogram with age/gender calibrated profiles
+  const applyHaemogramPreset = (preset: "normal" | "pediatric" | "anemia" | "infection" | "malaria_thrombocytopenia" | "sickle_cell") => {
     if (preset === "normal") {
-      setHaemogramData({
+      setHaemogramData(prev => ({
+        ...prev,
         hb: "14.2",
         wbc: "6.8",
         platelets: "275",
         rbc: "4.90",
         hct: "42.0",
-        mcv: "86.5",
+        mcv: "85.7",
         mch: "29.0",
         mchc: "33.8",
         rdw: "12.5",
+        rdw_sd: "41.8",
+        retic_pct: "1.1",
+        retic_abs: "53.9",
+        irf: "5.8",
+        nrbc_pct: "0.0",
+        nrbc_abs: "0.00",
         neutrophils: "60",
+        neut_abs: "4.08",
         lymphocytes: "30",
+        lymph_abs: "2.04",
         monocytes: "6",
+        mono_abs: "0.41",
         eosinophils: "3",
+        eos_abs: "0.20",
         basophils: "1",
+        baso_abs: "0.07",
+        ig_pct: "0.2",
+        ig_abs: "0.01",
+        bands: "1",
+        bands_abs: "0.07",
+        mpv: "9.2",
+        pdw: "12.4",
+        pct: "0.253",
+        p_lcr: "24.5",
+        p_lcc: "67.4",
         esr: "8",
         malaria: "Negative",
-        pbf: "Normocytic normochromic red cells. Normal white cell count & morphology. Platelets adequate."
-      });
-      toast.success("Applied Normal Full Haemogram Template");
-    } else if (preset === "anemia") {
-      setHaemogramData({
-        hb: "8.4",
-        wbc: "6.2",
-        platelets: "310",
-        rbc: "3.40",
-        hct: "26.5",
-        mcv: "68.0",
-        mch: "21.5",
-        mchc: "29.0",
-        rdw: "18.5",
-        neutrophils: "56",
-        lymphocytes: "34",
-        monocytes: "7",
-        eosinophils: "2",
+        pbf: "Normocytic normochromic red blood cells. Normal white cell count & mature morphology. Platelets adequate on film.",
+        anisocytosis: "None",
+        poikilocytosis: "None",
+        hypochromia: false,
+        polychromasia: false,
+        targetCells: false,
+        sickleCells: false,
+        spherocytes: false,
+        schistocytes: false,
+        rouleaux: false,
+        toxicGranulation: "Absent",
+        vacuolation: false,
+        reactiveLymphocytes: false,
+        leftShift: false,
+        plateletClumping: false,
+        giantPlatelets: false,
+        adequateSmear: true
+      }));
+      toast.success("Applied Normal Full Haemogram Profile");
+    } else if (preset === "pediatric") {
+      setHaemogramData(prev => ({
+        ...prev,
+        customAge: "3",
+        hb: "12.2",
+        wbc: "9.5",
+        platelets: "320",
+        rbc: "4.45",
+        hct: "36.8",
+        mcv: "82.7",
+        mch: "27.4",
+        mchc: "33.2",
+        rdw: "13.0",
+        rdw_sd: "40.5",
+        retic_pct: "1.4",
+        retic_abs: "62.3",
+        irf: "7.2",
+        nrbc_pct: "0.0",
+        nrbc_abs: "0.00",
+        neutrophils: "42",
+        neut_abs: "3.99",
+        lymphocytes: "48", // physiologic relative lymphocytosis in pediatric cohort
+        lymph_abs: "4.56",
+        monocytes: "6",
+        mono_abs: "0.57",
+        eosinophils: "3",
+        eos_abs: "0.29",
         basophils: "1",
+        baso_abs: "0.10",
+        ig_pct: "0.1",
+        ig_abs: "0.01",
+        bands: "0",
+        bands_abs: "0.00",
+        mpv: "9.0",
+        pdw: "11.8",
+        pct: "0.288",
+        p_lcr: "22.0",
+        p_lcc: "70.4",
+        esr: "6",
+        malaria: "Negative",
+        pbf: "Normal pediatric blood film. Predominance of small mature lymphocytes consistent with age. Normal platelets and red cells.",
+        anisocytosis: "None",
+        poikilocytosis: "None",
+        hypochromia: false,
+        polychromasia: false,
+        targetCells: false,
+        sickleCells: false,
+        spherocytes: false,
+        schistocytes: false,
+        rouleaux: false,
+        toxicGranulation: "Absent",
+        vacuolation: false,
+        reactiveLymphocytes: false,
+        leftShift: false,
+        plateletClumping: false,
+        giantPlatelets: false,
+        adequateSmear: true
+      }));
+      toast.success("Applied Pediatric/Infant Cohort Preset (Age: 3y, Lymphocyte Predominance)");
+    } else if (preset === "anemia") {
+      setHaemogramData(prev => ({
+        ...prev,
+        hb: "8.2",
+        wbc: "6.2",
+        platelets: "390",
+        rbc: "3.35",
+        hct: "26.0",
+        mcv: "77.6",
+        mch: "24.5",
+        mchc: "31.5",
+        rdw: "18.8",
+        rdw_sd: "56.2",
+        retic_pct: "0.8",
+        retic_abs: "26.8",
+        irf: "4.2",
+        nrbc_pct: "0.0",
+        nrbc_abs: "0.00",
+        neutrophils: "56",
+        neut_abs: "3.47",
+        lymphocytes: "34",
+        lymph_abs: "2.11",
+        monocytes: "7",
+        mono_abs: "0.43",
+        eosinophils: "2",
+        eos_abs: "0.12",
+        basophils: "1",
+        baso_abs: "0.06",
+        ig_pct: "0.1",
+        ig_abs: "0.01",
+        bands: "1",
+        bands_abs: "0.06",
+        mpv: "8.8",
+        pdw: "13.2",
+        pct: "0.343",
+        p_lcr: "21.0",
+        p_lcc: "81.9",
         esr: "28",
         malaria: "Negative",
-        pbf: "Microcytic hypochromic red blood cells with marked anisopoikilocytosis and pencil cells. Features consistent with Iron Deficiency Anemia."
-      });
-      toast.success("Applied Microcytic Anemia Template");
+        pbf: "Microcytic hypochromic red blood cells with marked anisopoikilocytosis, pencil cells and target cells. Classical Iron Deficiency Anemia pattern.",
+        anisocytosis: "Marked (+++)",
+        poikilocytosis: "Moderate (++)",
+        hypochromia: true,
+        polychromasia: false,
+        targetCells: true,
+        sickleCells: false,
+        spherocytes: false,
+        schistocytes: false,
+        rouleaux: false,
+        toxicGranulation: "Absent",
+        vacuolation: false,
+        reactiveLymphocytes: false,
+        leftShift: false,
+        plateletClumping: false,
+        giantPlatelets: false,
+        adequateSmear: true
+      }));
+      toast.success("Applied Microcytic Hypochromic Anemia Preset");
     } else if (preset === "infection") {
-      setHaemogramData({
-        hb: "13.0",
-        wbc: "16.8",
-        platelets: "380",
-        rbc: "4.50",
-        hct: "39.0",
-        mcv: "86.0",
-        mch: "28.8",
-        mchc: "33.3",
-        rdw: "13.2",
-        neutrophils: "82",
-        lymphocytes: "12",
+      setHaemogramData(prev => ({
+        ...prev,
+        hb: "12.8",
+        wbc: "18.6",
+        platelets: "410",
+        rbc: "4.40",
+        hct: "38.5",
+        mcv: "87.5",
+        mch: "29.1",
+        mchc: "33.2",
+        rdw: "13.8",
+        rdw_sd: "45.0",
+        retic_pct: "1.6",
+        retic_abs: "70.4",
+        irf: "12.5",
+        nrbc_pct: "0.5",
+        nrbc_abs: "0.09",
+        neutrophils: "84",
+        neut_abs: "15.62",
+        lymphocytes: "9",
+        lymph_abs: "1.67",
         monocytes: "4",
+        mono_abs: "0.74",
         eosinophils: "1",
+        eos_abs: "0.19",
         basophils: "1",
-        esr: "45",
+        baso_abs: "0.19",
+        ig_pct: "1.8",
+        ig_abs: "0.33",
+        bands: "8",
+        bands_abs: "1.49",
+        mpv: "10.4",
+        pdw: "14.6",
+        pct: "0.426",
+        p_lcr: "32.0",
+        p_lcc: "131.2",
+        esr: "65",
         malaria: "Negative",
-        pbf: "Marked neutrophilic leukocytosis with left shift (band forms) and toxic granulations. Consistent with acute bacterial infection."
-      });
-      toast.success("Applied Bacterial Infection (Leukocytosis) Template");
+        pbf: "Marked neutrophilic leukocytosis with significant left shift (band forms & metamyelocytes), toxic granulation and cytoplasmic vacuolation. Severe bacterial sepsis / acute inflammatory response.",
+        anisocytosis: "None",
+        poikilocytosis: "None",
+        hypochromia: false,
+        polychromasia: true,
+        targetCells: false,
+        sickleCells: false,
+        spherocytes: false,
+        schistocytes: false,
+        rouleaux: true,
+        toxicGranulation: "Severe (+++)",
+        vacuolation: true,
+        reactiveLymphocytes: false,
+        leftShift: true,
+        plateletClumping: false,
+        giantPlatelets: true,
+        adequateSmear: true
+      }));
+      toast.success("Applied Acute Sepsis / Leukocytosis with Bandemia & Left Shift Preset");
     } else if (preset === "malaria_thrombocytopenia") {
-      setHaemogramData({
-        hb: "10.2",
-        wbc: "4.5",
-        platelets: "78",
-        rbc: "3.80",
-        hct: "31.0",
-        mcv: "83.0",
-        mch: "27.5",
-        mchc: "32.9",
-        rdw: "14.8",
+      setHaemogramData(prev => ({
+        ...prev,
+        hb: "9.8",
+        wbc: "4.1",
+        platelets: "52",
+        rbc: "3.50",
+        hct: "29.5",
+        mcv: "84.3",
+        mch: "28.0",
+        mchc: "33.2",
+        rdw: "15.2",
+        rdw_sd: "48.2",
+        retic_pct: "2.8",
+        retic_abs: "98.0",
+        irf: "14.0",
+        nrbc_pct: "0.2",
+        nrbc_abs: "0.01",
         neutrophils: "52",
+        neut_abs: "2.13",
         lymphocytes: "38",
+        lymph_abs: "1.56",
         monocytes: "8",
+        mono_abs: "0.33",
         eosinophils: "1",
+        eos_abs: "0.04",
         basophils: "1",
-        esr: "38",
+        baso_abs: "0.04",
+        ig_pct: "0.4",
+        ig_abs: "0.02",
+        bands: "2",
+        bands_abs: "0.08",
+        mpv: "11.2",
+        pdw: "16.8",
+        pct: "0.058",
+        p_lcr: "38.5",
+        p_lcc: "20.0",
+        esr: "46",
         malaria: "Positive (Plasmodium Falciparum Ring Forms ++ / High Density)",
-        pbf: "Normocytic red cells with intracellular ring-form trophozoites of P. falciparum. Moderate thrombocytopenia noted on film."
-      });
-      toast.success("Applied Malaria + Thrombocytopenia Template");
+        pbf: "Intracellular ring-form trophozoites of Plasmodium falciparum observed in red cells. Severe thrombocytopenia with giant platelets noted on Wright-Giemsa film.",
+        anisocytosis: "Mild (+)",
+        poikilocytosis: "Mild (+)",
+        hypochromia: false,
+        polychromasia: true,
+        targetCells: false,
+        sickleCells: false,
+        spherocytes: false,
+        schistocytes: true,
+        rouleaux: false,
+        toxicGranulation: "Mild (+)",
+        vacuolation: false,
+        reactiveLymphocytes: true,
+        leftShift: false,
+        plateletClumping: false,
+        giantPlatelets: true,
+        adequateSmear: false
+      }));
+      toast.success("Applied Malaria + Severe Thrombocytopenia Preset");
+    } else if (preset === "sickle_cell") {
+      setHaemogramData(prev => ({
+        ...prev,
+        hb: "7.4",
+        wbc: "15.2",
+        platelets: "480",
+        rbc: "2.65",
+        hct: "22.8",
+        mcv: "86.0",
+        mch: "27.9",
+        mchc: "32.5",
+        rdw: "21.5",
+        rdw_sd: "68.0",
+        retic_pct: "9.8",
+        retic_abs: "259.7",
+        irf: "24.5",
+        nrbc_pct: "5.0",
+        nrbc_abs: "0.76",
+        neutrophils: "72",
+        neut_abs: "10.94",
+        lymphocytes: "20",
+        lymph_abs: "3.04",
+        monocytes: "6",
+        mono_abs: "0.91",
+        eosinophils: "1",
+        eos_abs: "0.15",
+        basophils: "1",
+        baso_abs: "0.15",
+        ig_pct: "1.2",
+        ig_abs: "0.18",
+        bands: "3",
+        bands_abs: "0.46",
+        mpv: "9.6",
+        pdw: "13.5",
+        pct: "0.461",
+        p_lcr: "28.0",
+        p_lcc: "134.4",
+        esr: "12",
+        malaria: "Negative",
+        pbf: "Irreversible sickle cells (drepanocytes), target cells, polychromasia, and frequent nucleated RBCs seen. Features typical of homozygous Sickle Cell Disease (HbSS) in acute vaso-occlusive crisis.",
+        anisocytosis: "Marked (+++)",
+        poikilocytosis: "Marked (+++)",
+        hypochromia: false,
+        polychromasia: true,
+        targetCells: true,
+        sickleCells: true,
+        spherocytes: false,
+        schistocytes: true,
+        rouleaux: false,
+        toxicGranulation: "Mild (+)",
+        vacuolation: false,
+        reactiveLymphocytes: false,
+        leftShift: true,
+        plateletClumping: false,
+        giantPlatelets: true,
+        adequateSmear: true
+      }));
+      toast.success("Applied Sickle Cell Disease Crisis Preset");
     }
+  };
+
+  // Clinical calculation utility for derived red cell and leukocyte indices
+  const handleAutoCalculateHematologyIndices = () => {
+    const rbc = parseFloat(haemogramData.rbc) || 4.85;
+    const hb = parseFloat(haemogramData.hb) || 13.8;
+    const hct = parseFloat(haemogramData.hct) || 41.5;
+    const wbc = parseFloat(haemogramData.wbc) || 7.4;
+    const plt = parseFloat(haemogramData.platelets) || 260;
+    const mpv = parseFloat(haemogramData.mpv) || 9.4;
+    const plcr = parseFloat(haemogramData.p_lcr) || 26.5;
+    const neutP = parseFloat(haemogramData.neutrophils) || 58;
+    const lymphP = parseFloat(haemogramData.lymphocytes) || 32;
+    const monoP = parseFloat(haemogramData.monocytes) || 6;
+    const eosP = parseFloat(haemogramData.eosinophils) || 3;
+    const basoP = parseFloat(haemogramData.basophils) || 1;
+    const igP = parseFloat(haemogramData.ig_pct) || 0.2;
+    const bandsP = parseFloat(haemogramData.bands) || 1;
+    const reticP = parseFloat(haemogramData.retic_pct) || 1.2;
+    const nrbcP = parseFloat(haemogramData.nrbc_pct) || 0.0;
+
+    // Standard clinical formulas
+    const mcv = ((hct * 10) / rbc).toFixed(1);
+    const mch = ((hb * 10) / rbc).toFixed(1);
+    const mchc = ((hb * 100) / hct).toFixed(1);
+    const neutAbs = ((wbc * neutP) / 100).toFixed(2);
+    const lymphAbs = ((wbc * lymphP) / 100).toFixed(2);
+    const monoAbs = ((wbc * monoP) / 100).toFixed(2);
+    const eosAbs = ((wbc * eosP) / 100).toFixed(2);
+    const basoAbs = ((wbc * basoP) / 100).toFixed(2);
+    const igAbs = ((wbc * igP) / 100).toFixed(2);
+    const bandsAbs = ((wbc * bandsP) / 100).toFixed(2);
+    const pct = ((plt * mpv) / 10000).toFixed(3);
+    const plcc = ((plt * plcr) / 100).toFixed(1);
+    const reticAbs = (rbc * reticP * 10).toFixed(1);
+    const nrbcAbs = ((wbc * nrbcP) / 100).toFixed(2);
+
+    setHaemogramData(prev => ({
+      ...prev,
+      mcv,
+      mch,
+      mchc,
+      neut_abs: neutAbs,
+      lymph_abs: lymphAbs,
+      mono_abs: monoAbs,
+      eos_abs: eosAbs,
+      baso_abs: basoAbs,
+      ig_abs: igAbs,
+      bands_abs: bandsAbs,
+      pct,
+      p_lcc: plcc,
+      retic_abs: reticAbs,
+      nrbc_abs: nrbcAbs
+    }));
+    toast.success("Recalculated MCV, MCH, MCHC, Absolute Differentials, Retic # and Platelet Indices!");
   };
 
   // Add custom test row
@@ -541,14 +927,24 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
     ].join("\n");
     sections.push(uriText);
 
-    // 2. Full Haemogram Report
+    // 2. Comprehensive Full Haemogram Report
+    const effectivePatientAge = haemogramData.customAge || matchedPatient?.age || selectedTicket?.age || 30;
+    const effectivePatientGender = haemogramData.customGender || matchedPatient?.gender || selectedTicket?.gender || "Male";
+    const { label: activeCohortLabel } = determineAgeCohort(effectivePatientAge, effectivePatientGender);
+
     const cbcText = [
-      `=== FULL HAEMOGRAM (CBC + DIFF) ===`,
-      `• Primary: Hb: ${haemogramData.hb} g/dL (Ref: 12.0-17.5), WBC: ${haemogramData.wbc} x10^9/L (4.0-11.0), Platelets: ${haemogramData.platelets} x10^9/L (150-450), RBC: ${haemogramData.rbc} x10^12/L, HCT: ${haemogramData.hct}%`,
-      `• Red Cell Indices: MCV: ${haemogramData.mcv} fl, MCH: ${haemogramData.mch} pg, MCHC: ${haemogramData.mchc} g/dL, RDW: ${haemogramData.rdw}%`,
-      `• Differential (5-Part %): Neut: ${haemogramData.neutrophils}%, Lymph: ${haemogramData.lymphocytes}%, Mono: ${haemogramData.monocytes}%, Eos: ${haemogramData.eosinophils}%, Baso: ${haemogramData.basophils}%`,
-      `• ESR: ${haemogramData.esr} mm/hr • Malaria (MPS/RDT): ${haemogramData.malaria}`,
-      `• Film Morphology (PBF): ${haemogramData.pbf}`
+      `=== COMPREHENSIVE FULL HAEMOGRAM (CBC / FBC & 5-PART DIFFERENTIAL) ===`,
+      `• Patient Biological Stratification: Age: ${effectivePatientAge}y, Gender: ${effectivePatientGender} [Cohort: ${activeCohortLabel}]`,
+      `• 1. Red Cell Parameters: Hb: ${haemogramData.hb} g/dL, RBC: ${haemogramData.rbc} x10^12/L, HCT: ${haemogramData.hct}%, MCV: ${haemogramData.mcv} fL, MCH: ${haemogramData.mch} pg, MCHC: ${haemogramData.mchc} g/dL, RDW-CV: ${haemogramData.rdw}%, RDW-SD: ${haemogramData.rdw_sd} fL`,
+      `• Reticulocytes: Retic %: ${haemogramData.retic_pct}%, Retic #: ${haemogramData.retic_abs} x10^9/L, IRF: ${haemogramData.irf}%, NRBC %: ${haemogramData.nrbc_pct}%, NRBC #: ${haemogramData.nrbc_abs} x10^9/L`,
+      `• 2. White Cell & 5-Part Differential: Total WBC: ${haemogramData.wbc} x10^9/L`,
+      `  - Neutrophils: ${haemogramData.neutrophils}% (ANC: ${haemogramData.neut_abs} x10^9/L) | Lymphocytes: ${haemogramData.lymphocytes}% (ALC: ${haemogramData.lymph_abs} x10^9/L)`,
+      `  - Monocytes: ${haemogramData.monocytes}% (AMC: ${haemogramData.mono_abs} x10^9/L) | Eosinophils: ${haemogramData.eosinophils}% (AEC: ${haemogramData.eos_abs} x10^9/L) | Basophils: ${haemogramData.basophils}% (ABC: ${haemogramData.baso_abs} x10^9/L)`,
+      `  - Advanced Precursors: Immature Granulocytes (IG): ${haemogramData.ig_pct}% (${haemogramData.ig_abs} x10^9/L) | Bands: ${haemogramData.bands}% (${haemogramData.bands_abs} x10^9/L)`,
+      `• 3. Platelet Indices: PLT: ${haemogramData.platelets} x10^9/L, MPV: ${haemogramData.mpv} fL, PDW: ${haemogramData.pdw} fL, PCT: ${haemogramData.pct}%, P-LCR: ${haemogramData.p_lcr}%, P-LCC: ${haemogramData.p_lcc} x10^9/L`,
+      `• 4. Inflammation & Special Hematology: ESR (Westergren): ${haemogramData.esr} mm/1hr, Malaria (MPS/RDT): ${haemogramData.malaria}`,
+      `• Peripheral Blood Film (PBF): ${haemogramData.pbf}`,
+      `  [PBF Details: Anisocytosis: ${haemogramData.anisocytosis}, Poikilocytosis: ${haemogramData.poikilocytosis}, Hypochromia: ${haemogramData.hypochromia ? "Yes" : "No"}, Target Cells: ${haemogramData.targetCells ? "Yes" : "No"}, Sickle Cells: ${haemogramData.sickleCells ? "Yes" : "No"}, Spherocytes: ${haemogramData.spherocytes ? "Yes" : "No"}, Schistocytes: ${haemogramData.schistocytes ? "Yes" : "No"}, Toxic Granulation: ${haemogramData.toxicGranulation}, Left Shift: ${haemogramData.leftShift ? "Yes" : "No"}, Platelet Clumping: ${haemogramData.plateletClumping ? "Yes" : "No"}]`
     ].join("\n");
     sections.push(cbcText);
 
@@ -583,6 +979,32 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
       });
       sections.push(customLines.join("\n"));
     }
+
+    // 7. Results from 9 Core International Disciplines & Major Test Families
+    LAB_DISCIPLINES.forEach((disc) => {
+      const discLines: string[] = [];
+      disc.testFamilies.forEach((fam) => {
+        fam.tests.forEach((t) => {
+          const testParamLines: string[] = [];
+          t.parameters.forEach((param) => {
+            const key = `${t.id}_${param.id}`;
+            const val = disciplineResults[key] !== undefined ? disciplineResults[key] : (disciplineResults[param.id] || "");
+            if (val && val.trim() !== "") {
+              testParamLines.push(`  - ${param.name}: ${val} ${param.unit} (Ref: ${param.referenceRange})`);
+            }
+          });
+          if (testParamLines.length > 0) {
+            discLines.push(`• [${t.code}] ${t.name} (${t.sampleType}):\n${testParamLines.join("\n")}`);
+            if (disciplineRemarks[t.id] && disciplineRemarks[t.id].trim()) {
+              discLines.push(`  Remarks: ${disciplineRemarks[t.id].trim()}`);
+            }
+          }
+        });
+      });
+      if (discLines.length > 0) {
+        sections.push(`=== ${disc.name.toUpperCase()} ===\n${discLines.join("\n")}`);
+      }
+    });
 
     if (testResults.trim()) {
       sections.push(`=== LAB TECHNICIAN REMARKS ===\n${testResults.trim()}`);
@@ -925,92 +1347,119 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
               {selectedTicket.currentDepartment === "laboratory" ? (
                 /* MAIN LABORATORY TESTING SUITE */
                 <div className="space-y-4">
-                  {/* Tab Navigation for Testing Modules */}
-                  <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-100 rounded-2xl border border-slate-200/80">
-                    <button
-                      type="button"
-                      onClick={() => setActiveLabTab("urinalysis")}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activeLabTab === "urinalysis"
-                          ? "bg-amber-500 text-white shadow-xs"
-                          : "text-slate-700 hover:bg-white/80"
-                      }`}
-                    >
-                      <FlaskConical className="w-3.5 h-3.5" />
-                      <span>1. Urinalysis Worksheet</span>
-                      <span className="px-1.5 py-0.2 bg-black/20 rounded text-[10px]">Std</span>
-                    </button>
+                  {/* Modern Tab Navigation: 9 Core International Disciplines & Specialized Workstations */}
+                  <div className="space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-gradient-to-r from-slate-900 to-blue-950 text-white rounded-2xl shadow-sm">
+                      <div className="flex items-center gap-2 pl-2">
+                        <Microscope className="w-4 h-4 text-blue-400" />
+                        <div>
+                          <span className="text-xs font-bold tracking-wide uppercase">Core Laboratory Disciplines</span>
+                          <span className="text-[10px] text-blue-300 ml-2 font-medium">Standardized International Hospital Test Families</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsLabDirModalOpen(true)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Browse Global Test Catalog (All 9 Disciplines)</span>
+                      </button>
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setActiveLabTab("haemogram")}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activeLabTab === "haemogram"
-                          ? "bg-rose-600 text-white shadow-xs"
-                          : "text-slate-700 hover:bg-white/80"
-                      }`}
-                    >
-                      <Droplets className="w-3.5 h-3.5" />
-                      <span>2. Full Haemogram (CBC)</span>
-                      <span className="px-1.5 py-0.2 bg-black/20 rounded text-[10px]">Std</span>
-                    </button>
+                    {/* 9 Core Disciplines Strip */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto p-1.5 bg-slate-100 rounded-2xl border border-slate-200/80 scrollbar-thin">
+                      {LAB_DISCIPLINES.map((disc, idx) => {
+                        const isActive = activeLabTab === disc.id;
+                        const totalTests = disc.testFamilies.reduce((acc, f) => acc + f.tests.length, 0);
+                        return (
+                          <button
+                            key={disc.id}
+                            type="button"
+                            onClick={() => setActiveLabTab(disc.id)}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                              isActive
+                                ? "bg-blue-700 text-white shadow-xs"
+                                : "text-slate-700 hover:bg-white/90 hover:text-blue-950"
+                            }`}
+                          >
+                            <span className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-black ${
+                              isActive ? "bg-white text-blue-800" : "bg-slate-200 text-slate-700"
+                            }`}>
+                              {idx + 1}
+                            </span>
+                            <span>{disc.name.split("&")[0].trim()}</span>
+                            <span className={`px-1.5 py-0.2 rounded text-[10px] ${
+                              isActive ? "bg-blue-900/50 text-blue-100" : "bg-slate-200 text-slate-600"
+                            }`}>
+                              {totalTests}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setActiveLabTab("blood_group")}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activeLabTab === "blood_group"
-                          ? "bg-indigo-600 text-white shadow-xs"
-                          : "text-slate-700 hover:bg-white/80"
-                      }`}
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>3. Blood Grouping</span>
-                    </button>
+                    {/* Specialized Direct Workstations Bar */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto p-1 bg-slate-50 rounded-xl border border-slate-200/60 text-xs">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-2 pr-1">Specialized Analyzers:</span>
+                      
+                      <button
+                        type="button"
+                        onClick={() => setActiveLabTab("haemogram")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          activeLabTab === "haemogram"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "text-slate-600 hover:bg-white"
+                        }`}
+                      >
+                        <Droplets className="w-3 h-3 text-rose-300" />
+                        <span>Sysmex/Mindray Haemogram & PBF</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setActiveLabTab("biochem")}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activeLabTab === "biochem"
-                          ? "bg-emerald-600 text-white shadow-xs"
-                          : "text-slate-700 hover:bg-white/80"
-                      }`}
-                    >
-                      <Activity className="w-3.5 h-3.5" />
-                      <span>4. Biochemistry & Organ Profiles</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveLabTab("urinalysis")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          activeLabTab === "urinalysis"
+                            ? "bg-amber-500 text-white shadow-xs"
+                            : "text-slate-600 hover:bg-white"
+                        }`}
+                      >
+                        <FlaskConical className="w-3 h-3 text-amber-300" />
+                        <span>Dipstick & Micro Urinalysis</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setActiveLabTab("serology")}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activeLabTab === "serology"
-                          ? "bg-purple-600 text-white shadow-xs"
-                          : "text-slate-700 hover:bg-white/80"
-                      }`}
-                    >
-                      <FlaskRound className="w-3.5 h-3.5" />
-                      <span>5. Stool & Serology</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveLabTab("blood_group")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          activeLabTab === "blood_group"
+                            ? "bg-indigo-600 text-white shadow-xs"
+                            : "text-slate-600 hover:bg-white"
+                        }`}
+                      >
+                        <ShieldCheck className="w-3 h-3 text-indigo-300" />
+                        <span>ABO & Rh Crossmatch</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setActiveLabTab("custom")}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activeLabTab === "custom"
-                          ? "bg-slate-900 text-white shadow-xs"
-                          : "text-slate-700 hover:bg-white/80"
-                      }`}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>+ Custom / Any Other Test</span>
-                      {customTests.length > 0 && (
-                        <span className="px-1.5 py-0.2 bg-blue-500 text-white rounded text-[10px]">
-                          {customTests.length}
-                        </span>
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveLabTab("custom")}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          activeLabTab === "custom"
+                            ? "bg-slate-900 text-white shadow-xs"
+                            : "text-slate-600 hover:bg-white"
+                        }`}
+                      >
+                        <Plus className="w-3 h-3 text-slate-300" />
+                        <span>+ Custom / Ad-Hoc Test</span>
+                        {customTests.length > 0 && (
+                          <span className="px-1.5 py-0.2 bg-blue-500 text-white rounded text-[9px]">
+                            {customTests.length}
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* ======================================================== */}
@@ -1373,304 +1822,908 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
                   {/* ======================================================== */}
                   {/* 2. COMPLETE FULL HAEMOGRAM (CBC) WORKSHEET */}
                   {/* ======================================================== */}
-                  {activeLabTab === "haemogram" && (
-                    <div className="p-5 border-2 border-rose-200/90 rounded-2xl bg-rose-50/15 space-y-5 shadow-xs">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-rose-200/70">
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-2 bg-rose-600 text-white rounded-xl shadow-xs">
-                            <Droplets className="w-5 h-5" />
+                  {activeLabTab === "haemogram" && (() => {
+                    const effectiveAge = haemogramData.customAge || matchedPatient?.age || selectedTicket?.age || 30;
+                    const effectiveGender = haemogramData.customGender || matchedPatient?.gender || selectedTicket?.gender || "Male";
+                    const { cohort, label: activeCohortLabel } = determineAgeCohort(effectiveAge, effectiveGender);
+
+                    // Helper to get reference range for current active cohort
+                    const getFieldRef = (paramKey: string) => getReferenceRange(paramKey, effectiveAge, effectiveGender);
+
+                    // Helper to render flag styling
+                    const getFlagBadge = (paramKey: string, value: string | number) => {
+                      const ref = getFieldRef(paramKey);
+                      const flag = evaluateFlag(value, ref);
+                      if (flag === "CRITICAL") {
+                        return <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-1 rounded animate-pulse">CRIT</span>;
+                      }
+                      if (flag === "HIGH") {
+                        return <span className="text-[9px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1 rounded">▲ HI</span>;
+                      }
+                      if (flag === "LOW") {
+                        return <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 rounded">▼ LO</span>;
+                      }
+                      return <span className="text-[9px] text-emerald-700 font-semibold font-mono">OK</span>;
+                    };
+
+                    const totalDiffPct = (
+                      (parseFloat(haemogramData.neutrophils) || 0) +
+                      (parseFloat(haemogramData.lymphocytes) || 0) +
+                      (parseFloat(haemogramData.monocytes) || 0) +
+                      (parseFloat(haemogramData.eosinophils) || 0) +
+                      (parseFloat(haemogramData.basophils) || 0)
+                    );
+
+                    return (
+                      <div className="p-5 border-2 border-rose-200/90 rounded-2xl bg-rose-50/15 space-y-5 shadow-xs">
+                        
+                        {/* Header & Biological Cohort Determination Banner */}
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-rose-200/70">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 bg-rose-600 text-white rounded-xl shadow-xs">
+                              <Droplets className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-sm font-black text-rose-950">
+                                  Full Haemogram (Complete Blood Count & Advanced Differential)
+                                </h4>
+                                <span className="px-2 py-0.5 bg-rose-200 text-rose-900 rounded-md text-[10px] font-black tracking-wide">
+                                  36+ Analytes
+                                </span>
+                              </div>
+                              <p className="text-xs text-rose-800/80">
+                                Comprehensive evaluation: Erythron, Leukon & Thrombocyte panels with age/gender calibrated biological intervals
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-rose-950 flex items-center gap-1.5">
-                              <span>Full Haemogram (CBC, 5-Part Differential & Blood Film)</span>
-                            </h4>
-                            <p className="text-xs text-rose-800/80">
-                              Complete hematology indices, leukocyte differential distribution, ESR and blood film morphology
-                            </p>
+
+                          {/* Quick Presets & Preview */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setShowHaemogramDocModal(true)}
+                              className="px-2.5 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-[11px] font-black flex items-center gap-1 cursor-pointer shadow-xs mr-1"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>View Official A4 Document</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleAutoCalculateHematologyIndices}
+                              className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-black flex items-center gap-1 cursor-pointer shadow-xs"
+                              title="Auto-compute MCV, MCH, MCHC, Absolute Differentials, Retic #, NRBC # and Platelet Indices"
+                            >
+                              <Zap className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Auto-Calculate Indices</span>
+                            </button>
                           </div>
                         </div>
 
-                        {/* Quick 1-Click CBC Presets & Document Preview */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => setShowHaemogramDocModal(true)}
-                            className="px-2.5 py-1 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-[10px] font-black flex items-center gap-1 cursor-pointer shadow-xs mr-1"
-                          >
-                            <FileText className="w-3 h-3" />
-                            <span>Preview Document (A4)</span>
-                          </button>
-                          <span className="text-[10px] font-bold text-rose-900 uppercase">Presets:</span>
+                        {/* AGE & GENDER BIOLOGICAL STRATIFICATION STRIP */}
+                        <div className="p-3 bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1 bg-white/10 rounded-lg">
+                              <Sparkles className="w-4 h-4 text-rose-300" />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-rose-200 uppercase font-bold tracking-wider block">
+                                Dynamic Reference Interval Calibration:
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black text-white">
+                                  {activeCohortLabel}
+                                </span>
+                                <span className="text-[10px] bg-rose-500/30 text-rose-200 px-1.5 py-0.2 rounded border border-rose-400/30">
+                                  Age: {effectiveAge}y • Gender: {effectiveGender}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-end">
+                            <span className="text-[10px] text-rose-200/80">Cohort Override:</span>
+                            <input
+                              type="text"
+                              placeholder={`Age (${effectiveAge})`}
+                              value={haemogramData.customAge}
+                              onChange={(e) => setHaemogramData({ ...haemogramData, customAge: e.target.value })}
+                              className="w-16 px-2 py-1 bg-white/10 border border-rose-400/40 rounded-lg text-white text-xs font-mono placeholder:text-rose-300/50"
+                              title="Override patient age to evaluate neonatal/pediatric or geriatric reference intervals"
+                            />
+                            <select
+                              value={haemogramData.customGender || effectiveGender}
+                              onChange={(e) => setHaemogramData({ ...haemogramData, customGender: e.target.value })}
+                              className="px-2 py-1 bg-white/10 border border-rose-400/40 rounded-lg text-white text-xs font-medium"
+                            >
+                              <option value="Male" className="text-slate-900">Male</option>
+                              <option value="Female" className="text-slate-900">Female</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Presets Bar */}
+                        <div className="flex items-center gap-1.5 flex-wrap bg-white/80 p-2 rounded-xl border border-rose-200">
+                          <span className="text-[10px] font-bold text-rose-950 uppercase mr-1">Quick Clinical Profiles:</span>
                           <button
                             type="button"
                             onClick={() => applyHaemogramPreset("normal")}
-                            className="px-2 py-1 bg-white hover:bg-rose-100 text-rose-900 border border-rose-300 rounded-lg text-[10px] font-bold cursor-pointer"
+                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-lg text-[10px] font-bold cursor-pointer"
                           >
-                            ✓ Normal CBC
+                            ✓ Normal Adult
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyHaemogramPreset("pediatric")}
+                            className="px-2 py-1 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-300 rounded-lg text-[10px] font-bold cursor-pointer"
+                          >
+                            ✓ Pediatric (3y) Normal
                           </button>
                           <button
                             type="button"
                             onClick={() => applyHaemogramPreset("anemia")}
                             className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold cursor-pointer"
                           >
-                            + Microcytic Anemia
+                            + Microcytic Anemia (IDA)
                           </button>
                           <button
                             type="button"
                             onClick={() => applyHaemogramPreset("infection")}
                             className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300 rounded-lg text-[10px] font-bold cursor-pointer"
                           >
-                            + Leukocytosis
+                            + Acute Sepsis / Left Shift
                           </button>
                           <button
                             type="button"
                             onClick={() => applyHaemogramPreset("malaria_thrombocytopenia")}
                             className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 rounded-lg text-[10px] font-bold cursor-pointer"
                           >
-                            + Malaria + Low Plt
+                            + Malaria + Thrombocytopenia
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyHaemogramPreset("sickle_cell")}
+                            className="px-2 py-1 bg-rose-100 hover:bg-rose-200 text-rose-950 border border-rose-300 rounded-lg text-[10px] font-black cursor-pointer"
+                          >
+                            + Sickle Cell Crisis (HbSS)
                           </button>
                         </div>
-                      </div>
 
-                      {/* Primary Hematology Indices */}
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-black text-rose-900 uppercase tracking-wider block">
-                          A. Primary Red Cell, White Cell & Platelet Counts
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Hemoglobin (Hb)</label>
-                              <span className="text-[9px] text-gray-400 font-mono">12.0 - 17.5 g/dL</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.hb}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, hb: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold text-rose-950"
-                            />
+                        {/* ======================================================== */}
+                        {/* 1. RED BLOOD CELL (RBC) & HEMOGLOBIN PARAMETERS (13 items) */}
+                        {/* ======================================================== */}
+                        <div className="space-y-3 p-4 bg-white rounded-xl border border-rose-200/90 shadow-2xs">
+                          <div className="flex justify-between items-center border-b border-rose-100 pb-2">
+                            <label className="text-[11px] font-black text-rose-950 uppercase tracking-wider flex items-center gap-1.5">
+                              <Droplets className="w-3.5 h-3.5 text-rose-600" />
+                              <span>1. Red Blood Cell (RBC) & Hemoglobin Parameters (13 Parameters)</span>
+                            </label>
+                            <span className="text-[10px] text-rose-700 font-mono font-bold">
+                              Calibrated for: {activeCohortLabel}
+                            </span>
                           </div>
 
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Total WBC Count</label>
-                              <span className="text-[9px] text-gray-400 font-mono">4.0 - 11.0 x10^9/L</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.wbc}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, wbc: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold text-rose-950"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Platelet Count</label>
-                              <span className="text-[9px] text-gray-400 font-mono">150 - 450 x10^9/L</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.platelets}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, platelets: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold text-rose-950"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">RBC Count</label>
-                              <span className="text-[9px] text-gray-400 font-mono">4.50 - 5.90 x10^12/L</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.rbc}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, rbc: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Hematocrit (PCV / HCT)</label>
-                              <span className="text-[9px] text-gray-400 font-mono">36.0 - 52.0%</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.hct}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, hct: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">MCV (Mean Cell Vol)</label>
-                              <span className="text-[9px] text-gray-400 font-mono">80.0 - 100.0 fl</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.mcv}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, mcv: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">MCH / MCHC</label>
-                              <span className="text-[9px] text-gray-400 font-mono">27-33 pg / 32-36 g/dL</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-1">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2.5 text-xs">
+                            {/* RBC */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">RBC Count</label>
+                                {getFlagBadge("rbc", haemogramData.rbc)}
+                              </div>
                               <input
                                 type="text"
-                                placeholder="MCH"
+                                value={haemogramData.rbc}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, rbc: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold text-slate-900"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("rbc").displayRange} x10¹²/L</span>
+                            </div>
+
+                            {/* Hb */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Hemoglobin (Hb)</label>
+                                {getFlagBadge("hb", haemogramData.hb)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.hb}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, hb: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-black text-rose-950"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("hb").displayRange} g/dL</span>
+                            </div>
+
+                            {/* HCT / PCV */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">HCT / PCV</label>
+                                {getFlagBadge("hct", haemogramData.hct)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.hct}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, hct: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold text-slate-900"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("hct").displayRange} %</span>
+                            </div>
+
+                            {/* MCV */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">MCV (Volume)</label>
+                                {getFlagBadge("mcv", haemogramData.mcv)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.mcv}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, mcv: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold text-slate-900"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("mcv").displayRange} fL</span>
+                            </div>
+
+                            {/* MCH */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">MCH (Weight)</label>
+                                {getFlagBadge("mch", haemogramData.mch)}
+                              </div>
+                              <input
+                                type="text"
                                 value={haemogramData.mch}
                                 onChange={(e) => setHaemogramData({ ...haemogramData, mch: e.target.value })}
-                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono text-[11px]"
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
                               />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("mch").displayRange} pg</span>
+                            </div>
+
+                            {/* MCHC */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">MCHC (Conc.)</label>
+                                {getFlagBadge("mchc", haemogramData.mchc)}
+                              </div>
                               <input
                                 type="text"
-                                placeholder="MCHC"
                                 value={haemogramData.mchc}
                                 onChange={(e) => setHaemogramData({ ...haemogramData, mchc: e.target.value })}
-                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono text-[11px]"
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
                               />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("mchc").displayRange} g/dL</span>
+                            </div>
+
+                            {/* RDW-CV */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">RDW-CV</label>
+                                {getFlagBadge("rdw_cv", haemogramData.rdw)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.rdw}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, rdw: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("rdw_cv").displayRange} %</span>
+                            </div>
+
+                            {/* RDW-SD */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">RDW-SD</label>
+                                {getFlagBadge("rdw_sd", haemogramData.rdw_sd)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.rdw_sd}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, rdw_sd: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("rdw_sd").displayRange} fL</span>
+                            </div>
+
+                            {/* Reticulocyte % */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Reticulocyte %</label>
+                                {getFlagBadge("retic_pct", haemogramData.retic_pct)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.retic_pct}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, retic_pct: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("retic_pct").displayRange} %</span>
+                            </div>
+
+                            {/* Reticulocyte # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Reticulocyte #</label>
+                                {getFlagBadge("retic_abs", haemogramData.retic_abs)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.retic_abs}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, retic_abs: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("retic_abs").displayRange} x10⁹/L</span>
+                            </div>
+
+                            {/* IRF */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">IRF (Immature Retic)</label>
+                                {getFlagBadge("irf", haemogramData.irf)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.irf}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, irf: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("irf").displayRange} %</span>
+                            </div>
+
+                            {/* NRBC % & # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">NRBC % / #</label>
+                                {getFlagBadge("nrbc_pct", haemogramData.nrbc_pct)}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="%"
+                                  value={haemogramData.nrbc_pct}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, nrbc_pct: e.target.value })}
+                                  className="w-full px-1.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono text-[11px]"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="#"
+                                  value={haemogramData.nrbc_abs}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, nrbc_abs: e.target.value })}
+                                  className="w-full px-1.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono text-[11px]"
+                                />
+                              </div>
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: 0.0 - 0.1 %</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ======================================================== */}
+                        {/* 2. WHITE BLOOD CELL (WBC) PARAMETERS (15 items) */}
+                        {/* ======================================================== */}
+                        <div className="space-y-3 p-4 bg-white rounded-xl border border-blue-200/90 shadow-2xs">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-blue-100 pb-2">
+                            <label className="text-[11px] font-black text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
+                              <FlaskConical className="w-3.5 h-3.5 text-blue-600" />
+                              <span>2. White Blood Cell (WBC) Parameters & 5-Part Differential with Absolutes (15 Parameters)</span>
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
+                                Math.abs(totalDiffPct - 100) < 0.5 ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"
+                              }`}>
+                                Relative Sum: {totalDiffPct.toFixed(1)}%
+                              </span>
                             </div>
                           </div>
 
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">RDW-CV (Anisocytosis)</label>
-                              <span className="text-[9px] text-gray-400 font-mono">11.5 - 14.5%</span>
+                          {/* Total WBC & Primary Differentials */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+                            {/* Total WBC */}
+                            <div className="sm:col-span-1 bg-blue-50/60 p-2 rounded-xl border border-blue-200">
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-black text-blue-950">Total WBC Count</label>
+                                {getFlagBadge("wbc", haemogramData.wbc)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.wbc}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, wbc: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-blue-300 rounded-lg font-mono font-black text-blue-950 text-sm"
+                              />
+                              <span className="text-[9px] text-blue-700 block mt-0.5 font-mono font-bold">Ref: {getFieldRef("wbc").displayRange} x10⁹/L</span>
                             </div>
-                            <input
-                              type="text"
-                              value={haemogramData.rdw}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, rdw: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
+
+                            {/* Neutrophils % & # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Neutrophils (% / ANC)</label>
+                                {getFlagBadge("neut_pct", haemogramData.neutrophils)}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="%"
+                                  value={haemogramData.neutrophils}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, neutrophils: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono font-bold text-[11px]"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="ANC"
+                                  value={haemogramData.neut_abs}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, neut_abs: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                              </div>
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("neut_pct").displayRange}% (ANC: {getFieldRef("neut_abs").displayRange})</span>
+                            </div>
+
+                            {/* Lymphocytes % & # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Lymphocytes (% / ALC)</label>
+                                {getFlagBadge("lymph_pct", haemogramData.lymphocytes)}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="%"
+                                  value={haemogramData.lymphocytes}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, lymphocytes: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono font-bold text-[11px]"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="ALC"
+                                  value={haemogramData.lymph_abs}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, lymph_abs: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                              </div>
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("lymph_pct").displayRange}% (ALC: {getFieldRef("lymph_abs").displayRange})</span>
+                            </div>
+
+                            {/* Monocytes % & # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Monocytes (% / AMC)</label>
+                                {getFlagBadge("mono_pct", haemogramData.monocytes)}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="%"
+                                  value={haemogramData.monocytes}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, monocytes: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="AMC"
+                                  value={haemogramData.mono_abs}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, mono_abs: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                              </div>
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("mono_pct").displayRange}%</span>
+                            </div>
+
+                            {/* Eosinophils % & # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Eosinophils (% / AEC)</label>
+                                {getFlagBadge("eos_pct", haemogramData.eosinophils)}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="%"
+                                  value={haemogramData.eosinophils}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, eosinophils: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="AEC"
+                                  value={haemogramData.eos_abs}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, eos_abs: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                              </div>
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("eos_pct").displayRange}%</span>
+                            </div>
+
+                            {/* Basophils % & # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Basophils (% / ABC)</label>
+                                {getFlagBadge("baso_pct", haemogramData.basophils)}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="%"
+                                  value={haemogramData.basophils}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, basophils: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="ABC"
+                                  value={haemogramData.baso_abs}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, baso_abs: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                              </div>
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("baso_pct").displayRange}%</span>
+                            </div>
+
+                            {/* Immature Granulocytes (IG) % & # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Immature Granulocytes (IG)</label>
+                                {getFlagBadge("ig_pct", haemogramData.ig_pct)}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="%"
+                                  value={haemogramData.ig_pct}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, ig_pct: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="#"
+                                  value={haemogramData.ig_abs}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, ig_abs: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                              </div>
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("ig_pct").displayRange}%</span>
+                            </div>
+
+                            {/* Bands (Stab Forms) % & # */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Band Neutrophils (Bands)</label>
+                                {getFlagBadge("bands_pct", haemogramData.bands)}
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="%"
+                                  value={haemogramData.bands}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, bands: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="#"
+                                  value={haemogramData.bands_abs}
+                                  onChange={(e) => setHaemogramData({ ...haemogramData, bands_abs: e.target.value })}
+                                  className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg font-mono text-[11px]"
+                                />
+                              </div>
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("bands_pct").displayRange}%</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ======================================================== */}
+                        {/* 3. PLATELET (PLT) PARAMETERS & INDICES (6 items) */}
+                        {/* ======================================================== */}
+                        <div className="space-y-3 p-4 bg-white rounded-xl border border-purple-200/90 shadow-2xs">
+                          <div className="flex justify-between items-center border-b border-purple-100 pb-2">
+                            <label className="text-[11px] font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                              <Activity className="w-3.5 h-3.5 text-purple-600" />
+                              <span>3. Platelet (PLT) Parameters & Thrombocyte Indices (6 Parameters)</span>
+                            </label>
+                            <span className="text-[10px] text-purple-700 font-mono font-bold">
+                              Thrombopoiesis & Aggregation Profile
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+                            {/* Platelet Count */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Platelet Count (PLT)</label>
+                                {getFlagBadge("plt", haemogramData.platelets)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.platelets}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, platelets: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-purple-300 rounded-lg font-mono font-black text-purple-950 text-sm"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("plt").displayRange} x10⁹/L</span>
+                            </div>
+
+                            {/* MPV */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">MPV (Mean Vol)</label>
+                                {getFlagBadge("mpv", haemogramData.mpv)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.mpv}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, mpv: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-purple-200 rounded-lg font-mono"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("mpv").displayRange} fL</span>
+                            </div>
+
+                            {/* PDW */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">PDW (Dist. Width)</label>
+                                {getFlagBadge("pdw", haemogramData.pdw)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.pdw}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, pdw: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-purple-200 rounded-lg font-mono"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("pdw").displayRange} fL</span>
+                            </div>
+
+                            {/* Plateletcrit (PCT) */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">Plateletcrit (PCT)</label>
+                                {getFlagBadge("pct", haemogramData.pct)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.pct}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, pct: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-purple-200 rounded-lg font-mono"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("pct").displayRange} %</span>
+                            </div>
+
+                            {/* P-LCR */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">P-LCR (Large Ratio)</label>
+                                {getFlagBadge("p_lcr", haemogramData.p_lcr)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.p_lcr}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, p_lcr: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-purple-200 rounded-lg font-mono"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("p_lcr").displayRange} %</span>
+                            </div>
+
+                            {/* P-LCC */}
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">P-LCC (Large Count)</label>
+                                {getFlagBadge("p_lcc", haemogramData.p_lcc)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.p_lcc}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, p_lcc: e.target.value })}
+                                className="w-full px-2 py-1.5 bg-white border border-purple-200 rounded-lg font-mono"
+                              />
+                              <span className="text-[9px] text-gray-400 block mt-0.5 font-mono">Ref: {getFieldRef("p_lcc").displayRange} x10⁹/L</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ======================================================== */}
+                        {/* 4. INFLAMMATION (ESR) & STRUCTURED PBF MICROSCOPIC REVIEW */}
+                        {/* ======================================================== */}
+                        <div className="space-y-3 p-4 bg-white rounded-xl border border-emerald-200/90 shadow-2xs">
+                          <div className="flex justify-between items-center border-b border-emerald-100 pb-2">
+                            <label className="text-[11px] font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                              <Microscope className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>4. Systemic Inflammation (ESR) & Peripheral Blood Film (PBF) Morphology</span>
+                            </label>
+                            <span className="text-[10px] text-emerald-800 font-mono font-bold">
+                              Wright-Giemsa Smear Examination
+                            </span>
+                          </div>
+
+                          {/* ESR & Malaria */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <div className="flex justify-between items-center mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-700">ESR (Westergren mm/1hr)</label>
+                                {getFlagBadge("esr", haemogramData.esr)}
+                              </div>
+                              <input
+                                type="text"
+                                value={haemogramData.esr}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, esr: e.target.value })}
+                                className="w-full px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg font-mono font-bold text-slate-900"
+                              />
+                              <span className="text-[9px] text-emerald-700 block mt-0.5 font-mono font-semibold">Ref (Age/Gender Calibrated): {getFieldRef("esr").displayRange} mm/1hr</span>
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-700 block mb-1">Malaria Parasites (Giemsa Film / RDT)</label>
+                              <select
+                                value={haemogramData.malaria}
+                                onChange={(e) => setHaemogramData({ ...haemogramData, malaria: e.target.value })}
+                                className="w-full px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg font-bold text-slate-800"
+                              >
+                                <option>Negative</option>
+                                <option>Positive (Plasmodium Falciparum Ring Forms +)</option>
+                                <option>Positive (Plasmodium Falciparum Ring Forms ++ / High Density)</option>
+                                <option>Positive (Plasmodium Vivax)</option>
+                                <option>Borderline / Repeat Advised</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Structured Morphology Checkboxes */}
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                            <span className="text-[10px] font-bold text-slate-700 uppercase block">Structured Morphology Findings:</span>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              {/* RBC Morphology */}
+                              <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-slate-200">
+                                <span className="text-[10px] font-bold text-rose-900 uppercase block">RBC Features:</span>
+                                <div className="space-y-1 text-[11px] text-slate-800">
+                                  <div className="flex items-center justify-between">
+                                    <span>Anisocytosis:</span>
+                                    <select
+                                      value={haemogramData.anisocytosis}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, anisocytosis: e.target.value as any })}
+                                      className="px-1.5 py-0.5 border border-slate-200 rounded text-[10px]"
+                                    >
+                                      <option>None</option>
+                                      <option>Mild (+)</option>
+                                      <option>Moderate (++)</option>
+                                      <option>Marked (+++)</option>
+                                    </select>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span>Poikilocytosis:</span>
+                                    <select
+                                      value={haemogramData.poikilocytosis}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, poikilocytosis: e.target.value as any })}
+                                      className="px-1.5 py-0.5 border border-slate-200 rounded text-[10px]"
+                                    >
+                                      <option>None</option>
+                                      <option>Mild (+)</option>
+                                      <option>Moderate (++)</option>
+                                      <option>Marked (+++)</option>
+                                    </select>
+                                  </div>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.hypochromia}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, hypochromia: e.target.checked })}
+                                      className="rounded text-rose-600"
+                                    />
+                                    <span>Hypochromia (Pale Cells)</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.targetCells}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, targetCells: e.target.checked })}
+                                      className="rounded text-rose-600"
+                                    />
+                                    <span>Target Cells Present</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.sickleCells}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, sickleCells: e.target.checked })}
+                                      className="rounded text-rose-600"
+                                    />
+                                    <span>Sickle Cells (Drepanocytes)</span>
+                                  </label>
+                                </div>
+                              </div>
+
+                              {/* WBC Morphology */}
+                              <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-slate-200">
+                                <span className="text-[10px] font-bold text-blue-900 uppercase block">WBC Features:</span>
+                                <div className="space-y-1 text-[11px] text-slate-800">
+                                  <div className="flex items-center justify-between">
+                                    <span>Toxic Granulation:</span>
+                                    <select
+                                      value={haemogramData.toxicGranulation}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, toxicGranulation: e.target.value as any })}
+                                      className="px-1.5 py-0.5 border border-slate-200 rounded text-[10px]"
+                                    >
+                                      <option>Absent</option>
+                                      <option>Mild (+)</option>
+                                      <option>Moderate (++)</option>
+                                      <option>Severe (+++)</option>
+                                    </select>
+                                  </div>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.leftShift}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, leftShift: e.target.checked })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>Left Shift (Bandemia)</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.vacuolation}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, vacuolation: e.target.checked })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>Cytoplasmic Vacuolation</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.reactiveLymphocytes}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, reactiveLymphocytes: e.target.checked })}
+                                      className="rounded text-blue-600"
+                                    />
+                                    <span>Atypical / Reactive Lymphocytes</span>
+                                  </label>
+                                </div>
+                              </div>
+
+                              {/* Platelet Morphology */}
+                              <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-slate-200">
+                                <span className="text-[10px] font-bold text-purple-900 uppercase block">Platelet Features:</span>
+                                <div className="space-y-1 text-[11px] text-slate-800">
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.giantPlatelets}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, giantPlatelets: e.target.checked })}
+                                      className="rounded text-purple-600"
+                                    />
+                                    <span>Giant Platelets (Megathrombocytes)</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.plateletClumping}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, plateletClumping: e.target.checked })}
+                                      className="rounded text-purple-600"
+                                    />
+                                    <span>Platelet Clumping (EDTA effect)</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={haemogramData.adequateSmear}
+                                      onChange={(e) => setHaemogramData({ ...haemogramData, adequateSmear: e.target.checked })}
+                                      className="rounded text-purple-600"
+                                    />
+                                    <span>Adequate Platelet Count on Smear</span>
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Film Morphology Narrative Text */}
+                          <div>
+                            <label className="text-[10px] font-bold text-gray-700 block mb-1">Comprehensive Blood Film (PBF) Narrative & Clinical Impression</label>
+                            <textarea
+                              rows={2}
+                              value={haemogramData.pbf}
+                              onChange={(e) => setHaemogramData({ ...haemogramData, pbf: e.target.value })}
+                              className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-medium text-slate-900"
                             />
                           </div>
                         </div>
+
                       </div>
-
-                      {/* Differential Leucocyte Count (5-Part %) */}
-                      <div className="space-y-2 pt-2 border-t border-rose-200/50">
-                        <label className="text-[11px] font-black text-rose-900 uppercase tracking-wider block">
-                          B. 5-Part Differential Leucocyte Count (%)
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Neutrophils</label>
-                              <span className="text-[9px] text-gray-400">40 - 75%</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.neutrophils}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, neutrophils: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Lymphocytes</label>
-                              <span className="text-[9px] text-gray-400">20 - 45%</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.lymphocytes}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, lymphocytes: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono font-bold"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Monocytes</label>
-                              <span className="text-[9px] text-gray-400">2 - 10%</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.monocytes}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, monocytes: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Eosinophils</label>
-                              <span className="text-[9px] text-gray-400">1 - 6%</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.eosinophils}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, eosinophils: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] font-bold text-gray-600">Basophils</label>
-                              <span className="text-[9px] text-gray-400">0 - 2%</span>
-                            </div>
-                            <input
-                              type="text"
-                              value={haemogramData.basophils}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, basophils: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Special Parasitology & Peripheral Blood Film (PBF) */}
-                      <div className="space-y-3 pt-2 border-t border-rose-200/50">
-                        <label className="text-[11px] font-black text-rose-900 uppercase tracking-wider block">
-                          C. ESR, Malaria Parasites (MPS) & Peripheral Blood Film
-                        </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                          <div>
-                            <label className="text-[10px] font-bold text-gray-600 block mb-1">ESR (Westergren mm/1hr)</label>
-                            <input
-                              type="text"
-                              value={haemogramData.esr}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, esr: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-mono"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-[10px] font-bold text-gray-600 block mb-1">Malaria Parasites (Giemsa Film / RDT)</label>
-                            <select
-                              value={haemogramData.malaria}
-                              onChange={(e) => setHaemogramData({ ...haemogramData, malaria: e.target.value })}
-                              className="w-full px-2.5 py-1.5 bg-white border border-rose-200 rounded-lg font-bold text-slate-800"
-                            >
-                              <option>Negative</option>
-                              <option>Positive (Plasmodium Falciparum Ring Forms +)</option>
-                              <option>Positive (Plasmodium Falciparum Ring Forms ++ / High Density)</option>
-                              <option>Positive (Plasmodium Vivax)</option>
-                              <option>Borderline / Repeat Advised</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-bold text-gray-600 block mb-1">Peripheral Blood Film (PBF) Morphology</label>
-                          <textarea
-                            rows={2}
-                            value={haemogramData.pbf}
-                            onChange={(e) => setHaemogramData({ ...haemogramData, pbf: e.target.value })}
-                            className="w-full px-3 py-2 bg-white border border-rose-200 rounded-xl text-xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* ======================================================== */}
                   {/* 3. BLOOD GROUPING & IMMUNOHEMATOLOGY */}
@@ -2167,6 +3220,47 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
                       )}
                     </div>
                   )}
+
+                  {/* ======================================================== */}
+                  {/* 7. 9 CORE INTERNATIONAL DISCIPLINES WORKSHEETS */}
+                  {/* ======================================================== */}
+                  {LAB_DISCIPLINES.some((d) => d.id === activeLabTab) && (
+                    <LabDisciplineWorksheet
+                      disciplineId={activeLabTab}
+                      patientData={{
+                        fullName: matchedPatient?.patientName || selectedTicket?.patientName,
+                        mrn: matchedPatient?.patientNumber || matchedPatient?.nationalId || selectedTicket?.patientId,
+                        gender: matchedPatient?.gender || selectedTicket?.gender,
+                        ageYears: Number(matchedPatient?.age || selectedTicket?.age || 30),
+                        requestedTests: selectedTicket?.requestedTests || selectedTicket?.labTestsOrdered || []
+                      }}
+                      resultsState={disciplineResults}
+                      onParameterChange={(paramKey, val) => {
+                        setDisciplineResults((prev) => ({ ...prev, [paramKey]: val }));
+                      }}
+                      onApplyTestDefaults={(test) => {
+                        setDisciplineResults((prev) => {
+                          const next = { ...prev };
+                          test.parameters.forEach((p) => {
+                            const key = `${test.id}_${p.id}`;
+                            if (p.defaultValue) next[key] = p.defaultValue;
+                          });
+                          return next;
+                        });
+                        if (test.defaultRemarks) {
+                          setDisciplineRemarks((prev) => ({
+                            ...prev,
+                            [test.id]: test.defaultRemarks || ""
+                          }));
+                        }
+                        toast.success(`Standard Normal Values loaded for ${test.name}`);
+                      }}
+                      remarksState={disciplineRemarks}
+                      onRemarksChange={(testId, remarks) => {
+                        setDisciplineRemarks((prev) => ({ ...prev, [testId]: remarks }));
+                      }}
+                    />
+                  )}
                 </div>
               ) : (
                 /* RADIOLOGY DICOM / PACS WORK SHEET */
@@ -2238,11 +3332,40 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
           mode="modal"
           isOpen={showHaemogramDocModal}
           onClose={() => setShowHaemogramDocModal(false)}
-          data={{ ...haemogramData, bloodGroup: exactBloodType, crossmatchStatus }}
+          data={{
+            ...haemogramData,
+            bloodGroup: exactBloodType,
+            crossmatchStatus,
+            pbfDetails: {
+              rbc: {
+                anisocytosis: haemogramData.anisocytosis,
+                poikilocytosis: haemogramData.poikilocytosis,
+                hypochromia: haemogramData.hypochromia,
+                polychromasia: haemogramData.polychromasia,
+                targetCells: haemogramData.targetCells,
+                sickleCells: haemogramData.sickleCells,
+                spherocytes: haemogramData.spherocytes,
+                schistocytes: haemogramData.schistocytes,
+                rouleaux: haemogramData.rouleaux
+              },
+              wbc: {
+                toxicGranulation: haemogramData.toxicGranulation,
+                vacuolation: haemogramData.vacuolation,
+                reactiveLymphocytes: haemogramData.reactiveLymphocytes,
+                leftShift: haemogramData.leftShift
+              },
+              platelets: {
+                clumping: haemogramData.plateletClumping,
+                giantPlatelets: haemogramData.giantPlatelets,
+                adequateSmear: haemogramData.adequateSmear
+              },
+              summary: haemogramData.pbf
+            }
+          }}
           patientMeta={{
             name: matchedPatient?.patientName || selectedTicket?.patientName || "Walk-in Patient",
-            age: matchedPatient?.age || 30,
-            gender: matchedPatient?.gender || "Adult",
+            age: haemogramData.customAge || matchedPatient?.age || selectedTicket?.age || 30,
+            gender: haemogramData.customGender || matchedPatient?.gender || selectedTicket?.gender || "Male",
             patientNo: matchedPatient?.nationalId || matchedPatient?.patientNumber || selectedTicket?.ticketNo || "LAB-OPD-99",
             facilityName: "The Tassia Hill Hospital Diagnostic & Laboratory Center",
             doctor: "Attending Medical Officer",
@@ -2250,6 +3373,18 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
           }}
         />
       )}
+
+      {/* Global Laboratory Directory & Reference Catalog Modal */}
+      <LabDirectoryModal
+        isOpen={isLabDirModalOpen}
+        onClose={() => setIsLabDirModalOpen(false)}
+        onSelectTest={(test) => {
+          setActiveLabTab(test.disciplineId);
+          toast.info(`Worksheet activated: ${test.disciplineName} -> ${test.name}`);
+        }}
+        title="Global Hospital Laboratory Test Directory (9 Core Disciplines)"
+        actionButtonLabel="Open Worksheet"
+      />
     </div>
   );
 }

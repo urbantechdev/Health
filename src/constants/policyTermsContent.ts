@@ -8,184 +8,124 @@ export interface PolicyClause {
   tags: string[];
 }
 
-export const TERMS_OF_USE_CLAUSES: PolicyClause[] = [
-  {
-    id: "TOU-01",
-    section: "1. System Authorization & Permitted Purpose",
-    title: "Authorized Practitioner & Staff Access Only",
-    summary: "Access to this Hospital Management Information System (HMIS) is restricted to credentialed healthcare workers and authorized administrative personnel.",
-    fullText: `1.1. This Hospital Management Information System (The Tassia Hill Hospital HMIS) is licensed exclusively for legitimate healthcare administration, patient triage, clinical consultation, diagnostic ordering, pharmacy dispensing, inpatient bed management, and revenue cycle reconciliation.
-1.2. Users must only access patient data for individuals directly under their active clinical care or administrative responsibility ("Need-to-Know Principle").
-1.3. Sharing of login credentials, PINs, smartcard tokens, or biometric override codes is strictly prohibited and constitutes a direct breach of employment contract and professional licensure rules.`,
-    legalReference: "Health Act No. 21 of 2017 (Sec 10-14); KMPDC Code of Professional Conduct",
-    tags: ["access", "authorization", "credentials", "need-to-know"]
-  },
-  {
-    id: "TOU-02",
-    section: "2. Clinical Decision Support & Professional Responsibility",
-    title: "Practitioner Prerogative & Clinical Responsibility",
-    summary: "AI clinical suggestions, triage scores, drug interaction alerts, and automated triage priority calculators are advisory tools and do not substitute independent medical judgment.",
-    fullText: `2.1. The AI Diagnostic Assistant, triage priority calculators, automatic ICD-10 coders, and drug-drug interaction warning systems embedded within this application serve exclusively as clinical decision-support aids.
-2.2. The licensed medical officer, clinical officer, nurse, or pharmacist retains sole, non-delegable legal and ethical responsibility for all diagnoses, prescriptions, surgical referrals, and discharge decisions.
-2.3. Practitioners must independently cross-examine all suggested dosages, contraindications, and laboratory interpretations against accepted Kenya National Clinical Guidelines.`,
-    legalReference: "Medical Practitioners and Dentists Act (Cap 253); Clinical Officers Act 2017",
-    tags: ["clinical-decision", "ai", "responsibility", "prescriptions"]
-  },
-  {
-    id: "TOU-03",
-    section: "3. Patient Confidentiality & Non-Disclosure",
-    title: "Absolute Duty of Medical Confidentiality",
-    summary: "All health records, diagnoses, biometric tokens, financial statements, and identifiers are confidential medical communications.",
-    fullText: `3.1. Every clinical interaction recorded within this platform is protected under statutory doctor-patient privilege and medical confidentiality rules.
-3.2. Users must never photograph, screen-capture, print, export, or transmit patient records, imaging scans, or identifiers to unauthorized personal devices, messaging apps, or public networks.
-3.3. Any authorized disclosure for referral, statutory reporting (e.g., MOH 705/711 surveillance), or insurance claim verification (SHA) must occur strictly through designated system channels.`,
-    legalReference: "Kenya Constitution 2010 Art. 31; Data Protection Act 2019 Sec. 44",
-    tags: ["confidentiality", "privacy", "disclosure", "patient-records"]
-  },
-  {
-    id: "TOU-04",
-    section: "4. Prohibited System Activities",
-    title: "Strictly Prohibited Actions & Security Violations",
-    summary: "Tampering with clinical audit logs, fraudulent billing entries, and unauthorized modifications carry immediate disciplinary and criminal penalties.",
-    fullText: `4.1. The following activities are strictly prohibited:
-  a) Attempting to modify, alter, or back-date finalized clinical notes, prescriptions, or laboratory results without formal addendum procedures;
-  b) Fabricating ghost services, inflated tariffs, or duplicate SHA/e-Claims submissions;
-  c) Bypassing biometric authentication, eTIMS fiscal signing, or role-based privilege guardrails;
-  d) Introducing unauthorized scripts, reverse-engineering client bundles, or probing system endpoints.
-4.2. Violations will be escalated immediately to Hospital Management, the Directorate of Criminal Investigations (DCI Cybercrime Unit), and relevant licensing councils.`,
-    legalReference: "Computer Misuse and Cybercrimes Act No. 5 of 2018 (Sec 14-21)",
-    tags: ["prohibited", "fraud", "cybercrime", "audit-tampering"]
-  },
-  {
-    id: "TOU-05",
-    section: "5. Availability, Uptime & Downtime Contingency",
-    title: "System Availability & Offline Clinical Continuity",
-    summary: "The platform operates with offline queue caching and automated sync, requiring staff to maintain standard paper downtime protocols during extended outages.",
-    fullText: `5.1. While this HMIS targets 99.9% operational availability across outpatient and inpatient departments, scheduled maintenance and infrastructure outages may occur.
-5.2. In the event of network disruption, staff must switch to the built-in offline caching queue and, if necessary, activate the facility's approved Physical Downtime Procedure (Manual MOH Triage and Consultation Forms) until connectivity is verified.
-5.3. All paper encounters generated during downtime must be retrospectively reconciled and transcribed into the system within 12 hours of system restoration.`,
-    legalReference: "Digital Health Act 2023 Sec. 38 (Health System Resilience)",
-    tags: ["uptime", "offline", "downtime", "contingency"]
-  }
-];
+export const REGULATORY_DIRECTORY = {
+  effectiveDate: "01-Jan-2026",
+  hospitalName: "The Tassia Hill Hospital",
+  odpcRegistrationNumber: "ODPC/CR/2026/00482",
+  dpoName: "Dr. Evans Kiprotich (Chief Medical Compliance Officer)",
+  dpoEmail: "dpo@tassiahillhospital.co.ke",
+  postalAddress: "P.O. Box 48201-00100, Fedha-Tassia Road, Embakasi East, Nairobi",
+  dpoHotline: "+254 722 000 482 / Ext 104",
+  odpcNationalOffice: "Britam Tower, 12th Floor, Upper Hill, Nairobi, Kenya",
+  odpcWebsite: "https://www.odpc.go.ke",
+  dhaFacilityCode: "DHA-FAC-NRB-08842",
+  kmhflCode: "KMHFL-22814"
+};
 
 export const DATA_PROTECTION_CLAUSES: PolicyClause[] = [
   {
-    id: "DPA-01",
-    section: "1. Lawful Basis for Processing Health Data",
-    title: "Processing Sensitive Personal Health Data",
-    summary: "Health data is categorized as Sensitive Personal Data under Section 44 of the Kenya Data Protection Act (KDPA) 2019.",
-    fullText: `1.1. In compliance with the Kenya Data Protection Act 2019 and the Digital Health Act 2023, health data (including medical histories, diagnostic tests, prescriptions, and biometrics) is processed strictly on the following lawful grounds:
-  a) Vital interests and direct provision of medical treatment, diagnosis, and emergency healthcare (Section 45);
-  b) Explicit statutory obligations under the Social Health Insurance Act 2023 and Public Health Act (Cap 242);
-  c) Written or biometrically authenticated patient consent obtained at registration/triage.
-1.2. Data processing is bounded by the principles of Lawfulness, Fairness, Transparency, Purpose Limitation, and Data Minimization.`,
-    legalReference: "Kenya Data Protection Act 2019 Sec. 29, 44 & 45; ODPC Health Guidelines 2023",
-    tags: ["kdpa", "lawful-basis", "sensitive-data", "consent"]
+    id: "kdpa-sec44-sensitive",
+    section: "KDPA SECTION 44 & 45",
+    title: "Processing of Health & Biometric Data as Sensitive Personal Data",
+    summary: "Mandatory statutory conditions for processing patient records, lab results, and biometric hashes.",
+    fullText: `1. In accordance with Section 44 and 45 of the Kenya Data Protection Act 2019, patient health data, clinical observations, diagnostic findings, prescriptions, and biometric templates constitute 'Sensitive Personal Data'.
+2. Such data shall only be processed by or under the responsibility of a health care provider subject to statutory professional confidentiality (KMPDC, NCK, PPB, COC, KMLTTB).
+3. Biometric identifiers captured at Tassia Hill Hospital (fingerprint templates, facial geometry) are encrypted using one-way SHA-256 salted hashes and stored strictly for patient identification and SHA/KDHA fraud prevention. Raw biometric images are never retained on unencrypted local storage.`,
+    legalReference: "Kenya Data Protection Act 2019, Section 44, 45 & 46",
+    tags: ["kdpa", "sensitive data", "biometrics", "kmpdc", "privacy"]
   },
   {
-    id: "DPA-02",
-    section: "2. Rights of the Data Subject (Patient Rights)",
-    title: "Patient Data Subject Entitlements & Execution",
-    summary: "Patients possess statutory rights to access, rectify, restrict, and receive a copy of their health records.",
-    fullText: `2.1. Every patient registered on this platform possesses the following enforceable statutory rights:
-  a) Right of Access: To obtain confirmation and a legible electronic or printed copy of their health records;
-  b) Right to Rectification: To request correction of inaccurate demographic, emergency contact, or insurance information without undue delay;
-  c) Right to Data Portability: To have their summary medical record exported in standardized HL7 FHIR R4 JSON format for transmission to another accredited healthcare facility;
-  d) Right to Object: To object to non-clinical secondary uses (e.g., anonymized medical research or institutional audits).
-2.2. Requests must be addressed to the Hospital Data Protection Officer (DPO) and resolved within 21 calendar days.`,
-    legalReference: "Kenya Data Protection Act 2019 Part IV (Sec 25-40)",
-    tags: ["data-subject-rights", "patient-rights", "access", "portability", "fhir"]
+    id: "kdpa-sec25-principles",
+    section: "KDPA SECTION 25 & 26",
+    title: "Principles of Data Protection & Patient Rights",
+    summary: "Lawful, fair, and transparent data processing, purpose limitation, data accuracy, and patient access rights.",
+    fullText: `1. All electronic medical records (EMR) created within this HMIS must be processed lawfully, fairly, and in a transparent manner in relation to the data subject.
+2. Patients have the right to be informed of the collection and use of their data, request access to their health records, request correction of inaccurate clinical entries (subject to medical audit approval), and object to commercial profiling.
+3. Clinical data is stored for statutory medical-legal retention periods (minimum 7 years for adults, 21 years for pediatric files from birth) as dictated by Kenya Medical Practitioners and Dentists Council (KMPDC) guidelines.`,
+    legalReference: "Kenya Data Protection Act 2019, Section 25, 26, 30",
+    tags: ["principles", "retention", "patient rights", "access"]
   },
   {
-    id: "DPA-03",
-    section: "3. Biometric Verification & National Data Exchange",
-    title: "Biometric Protection & Digital Health Agency (DHA) Exchange",
-    summary: "Biometric templates are hashed, encrypted, and processed strictly for patient identity validation and SHA pre-authorization.",
-    fullText: `3.1. Biometric minutiae captured via optical scanners or WebAuthn modules are never stored as raw unencrypted image files; they are converted into irreversible SHA-256 cryptographic audit tokens.
-3.2. Transmission of clinical summaries to the National Shared Health Record (SHR) via HL7 FHIR R4 is governed by the Digital Health Act 2023 and authenticated through OAuth2 Mutual TLS certificates.
-3.3. Cross-border transmission of patient clinical records is strictly prohibited unless authorized by the Cabinet Secretary and Data Protection Commissioner under Section 48 of the Act.`,
-    legalReference: "Digital Health Act 2023 Sec. 21-27; KDPA 2019 Sec. 48 & 49",
-    tags: ["biometrics", "sha", "dha", "shr", "cross-border"]
+    id: "kdpa-sec43-breach",
+    section: "KDPA SECTION 43",
+    title: "Data Breach Notification & Security Governance",
+    summary: "72-hour mandatory reporting protocol to the Data Protection Commissioner in the event of an incident.",
+    fullText: `1. In the event of an unauthorized access, exfiltration, or tampering with patient health data, the Data Protection Officer (DPO) and IT Administrator shall notify the Office of the Data Protection Commissioner (ODPC) within seventy-two (72) hours of becoming aware of the breach.
+2. Affected data subjects shall be communicated to in writing without undue delay where the breach poses a high risk to their rights and freedoms.
+3. Every staff terminal maintains immutable audit logs recording timestamp, user role, patient national ID, and specific field accessed.`,
+    legalReference: "Kenya Data Protection Act 2019, Section 43 & Guidance Note on Breach Notification",
+    tags: ["breach", "odpc", "audit", "security incident"]
+  }
+];
+
+export const TERMS_OF_USE_CLAUSES: PolicyClause[] = [
+  {
+    id: "hmis-tou-access",
+    section: "ROLE-BASED ACCESS & AUTHENTICATION",
+    title: "Authorized System Usage & Staff Credential Confidentiality",
+    summary: "Strict prohibition on sharing logins, PINs, or leaving terminals unlocked in patient consultation areas.",
+    fullText: `1. Access to the Tassia Hill Hospital Management Information System (HMIS) is restricted to authenticated clinical, nursing, administrative, and finance personnel.
+2. Each user is assigned a role-based authorization level (Admin, Doctor, Nurse, Laboratory, Pharmacy, Billing, Reception, HR, Procurement, Security). Sharing credentials, passwords, or RFID smartcards is a gross disciplinary offense and violation of hospital medical records protocol.
+3. Terminals automatically lock after 5 minutes of idle time. Clinical personnel must manually lock screens when leaving desks.`,
+    legalReference: "Digital Health Act 2023 & Hospital Standard Operating Procedure HR-IT-004",
+    tags: ["authentication", "passwords", "rbac", "clean desk"]
   },
   {
-    id: "DPA-04",
-    section: "4. Data Retention & Archival Schedules",
-    title: "Statutory Medical Record Retention & Disposal",
-    summary: "In accordance with Kenyan medical law, clinical records are retained for mandatory legal timeframes prior to secure cryptographic destruction.",
-    fullText: `4.1. Adult Patient Records: Retained for a minimum of 20 years from the date of the last clinical visit.
-4.2. Paediatric / Minor Records: Retained until the patient reaches 25 years of age (7 years past the age of legal majority in Kenya).
-4.3. Maternity & Obstetric Records: Retained for 25 years in compliance with national obstetric audit regulations.
-4.4. Financial & eTIMS Invoices: Retained for 7 years as mandated by the Tax Procedures Act No. 29 of 2015.
-4.5. Following expiration of statutory retention, records are purged using DoD 5220.22-M cryptographic sanitization standards.`,
-    legalReference: "Public Archives and Documentation Service Act (Cap 19); KMPDC Medical Records Code",
-    tags: ["retention", "archival", "disposal", "etims"]
+    id: "hmis-tou-clinical",
+    section: "CLINICAL ACCURACY & LEGAL RECORD",
+    title: "Electronic Clinical Notes, E-Prescriptions & Audit Integrity",
+    summary: "Notes entered into this HMIS constitute legal medical records admissible in Kenyan courts of law.",
+    fullText: `1. Every diagnosis, procedure code, prescription, and triage score logged by a doctor or clinician represents an official medical chart entry.
+2. Prescriptions dispatched to the pharmacy POS automatically deduct from live batch stock. Off-label or contraindicated orders flagged by the AI pharmacologist require conscious clinician confirmation.
+3. Tampering with or retroactively altering signed consultation notes without leaving an audit trail is strictly prohibited under KMPDC rules.`,
+    legalReference: "Evidence Act Cap 80 (Electronic Evidence) & KMPDC Code of Ethics",
+    tags: ["clinical notes", "prescriptions", "legal evidence", "audit"]
   },
   {
-    id: "DPA-05",
-    section: "5. Security Safeguards & 72-Hour Breach Reporting",
-    title: "Incident Response & Mandatory Breach Notification",
-    summary: "Any unauthorized access, loss, or leakage of sensitive health data triggers an immediate internal containment procedure and notification to the ODPC within 72 hours.",
-    fullText: `5.1. The hospital maintains administrative, technical, and physical security measures including AES-256 database encryption, role-scoped API tokens, and tamper-evident audit logs.
-5.2. In the event of a detected data breach involving personal or sensitive health data:
-  a) The Security Desk and DPO must be alerted within 1 hour;
-  b) Containment and forensic snapshotting must initiate immediately;
-  c) The Office of the Data Protection Commissioner (ODPC) must be formally notified in writing within 72 hours of becoming aware of the breach;
-  d) Affected data subjects will be notified promptly if the breach poses high risk to their rights and freedoms.`,
-    legalReference: "Kenya Data Protection Act 2019 Sec. 43; ODPC Breach Notification Guidelines",
-    tags: ["security", "breach-notification", "odpc", "encryption"]
+    id: "hmis-tou-billing",
+    section: "FINANCIAL FIDUCIARY & INVOICING",
+    title: "Paperless Billing, KRA eTIMS & M-PESA Reconciliation",
+    summary: "Real-time automated billing, fiscal signature compliance, and instant payment validation.",
+    fullText: `1. All cashier stations and automated department charges must be settled prior to patient exit or managed through approved corporate/SHA credit agreements.
+2. Generated electronic invoices are signed with fiscal QR codes and transmitted to Kenya Revenue Authority (KRA eTIMS) endpoints.
+3. Receipts issued upon Safaricom M-PESA STK confirmation cannot be modified except through authorized Credit Note / Void procedures with dual manager authorization.`,
+    legalReference: "Tax Procedures Act (eTIMS Regulations 2023) & Public Finance Management Act",
+    tags: ["etims", "mpesa", "billing", "audit"]
   }
 ];
 
 export const INFOSEC_STANDARDS: PolicyClause[] = [
   {
-    id: "SEC-01",
-    section: "1. Authentication & Credential Hygiene",
-    title: "Multi-Factor Authentication & Password Standards",
-    summary: "Mandatory complexity rules, session timeout locks, and multi-factor authorization for clinical roles.",
-    fullText: `1.1. Passwords must contain a minimum of 10 characters with mixed uppercase, lowercase, numbers, and symbols.
-1.2. Clinical workstations automatically lock after 5 minutes of inactivity to prevent unauthorized bystander viewing in examination rooms and triage cubicles.
-1.3. Emergency override accounts ("Break-Glass Access") are strictly monitored and trigger immediate automated SMS and email notifications to the Hospital Administrator and Chief Medical Officer.`,
-    legalReference: "ISO/IEC 27001:2022 Controls 5.15, 8.5; Health Information Security Standard",
-    tags: ["passwords", "timeout", "break-glass", "mfa"]
+    id: "sec-std-encryption",
+    section: "CRYPTOGRAPHY & TRANSPORT",
+    title: "TLS 1.3 Transmission & AES-256 Data-at-Rest Encryption",
+    summary: "All communications between hospital terminals, local PWA cache, and cloud databases are encrypted.",
+    fullText: `1. All HTTP traffic is strictly routed over TLS 1.3 with HSTS enforced.
+2. Database records stored in Cloud Firestore and indexed in IndexedDB offline cache are encrypted at rest using AES-256.
+3. Sensitive patient identification keys (National ID, Phone, SHA Policy Number) are masked in front-facing customer display kiosks.`,
+    legalReference: "ISO/IEC 27001:2022 Annex A.8.24 & NIST SP 800-52r2",
+    tags: ["encryption", "tls", "aes-256", "infosec"]
   },
   {
-    id: "SEC-02",
-    section: "2. Workstation & Device Security (Clean Desk Standard)",
-    title: "Workstation Protocol in Clinical & Public Areas",
-    summary: "Rules governing physical computers, receipt printers, barcode readers, and mobile ward tablets.",
-    fullText: `2.1. Monitors in reception, billing, and nursing stations must be angled away from public waiting areas or fitted with privacy privacy filters.
-2.2. Unattended printouts containing patient summaries, discharge sheets, or lab results must not remain on communal printers.
-2.3. Staff must physically lock their workstation (Windows Key + L or System Logout) whenever leaving their desk, even for brief consultations.`,
-    legalReference: "Kenya National e-Health Policy 2016-2030; ODPC Physical Security Guidelines",
-    tags: ["clean-desk", "workstation", "physical-security", "printers"]
+    id: "sec-std-pwa",
+    section: "OFFLINE RESILIENCE & CACHE ISOLATION",
+    title: "Service Worker PWA Offline Governance & Synchronization",
+    summary: "Strict sandboxing of offline IndexedDB queue cache to prevent data leaks during network disruptions.",
+    fullText: `1. When the hospital local area network (LAN) suffers fiber connectivity failure, the HMIS operates in offline resilience mode via Service Worker Workbox caches.
+2. Queued patient visits and offline emergency triage records are committed to local browser IndexedDB and automatically synchronized once connectivity is restored.
+3. Private session storage is cleared upon explicit staff sign-out to prevent session hijacking on shared ward tablets.`,
+    legalReference: "W3C Service Worker Security Model & OWASP Mobile/PWA Guidelines",
+    tags: ["pwa", "offline", "indexeddb", "workbox", "sync"]
   },
   {
-    id: "SEC-03",
-    section: "3. Immutable Audit Trails & System Telemetry",
-    title: "Continuous Forensic Logging & Non-Repudiation",
-    summary: "Every view, modification, printout, and deletion of a patient record is permanently stamped with practitioner ID, IP address, and microsecond timestamp.",
-    fullText: `3.1. The platform maintains an immutable audit ledger recording every query, record creation, prescription issuance, eTIMS invoice generation, and SHA pre-authorization request.
-3.2. Audit logs are cryptographically sealed and cannot be altered or deleted by system users, including system administrators.
-3.3. Log records are reviewed on a weekly basis by the Data Governance Committee to identify anomalous access patterns or unauthorized chart reviews.`,
-    legalReference: "Evidence Act (Cap 80) Sec. 106B (Electronic Records Admissibility)",
-    tags: ["audit-trail", "forensics", "non-repudiation", "logging"]
+    id: "sec-std-ai",
+    section: "AI ASSISTANT SAFETY & ETHICAL USE",
+    title: "Gemini Clinical Pharmacology & Prescription Safeguards",
+    summary: "AI generated recommendations are advisory only; clinician holds full diagnostic responsibility.",
+    fullText: `1. The Gemini AI integration assists with alternative medication suggestions, drug-drug interaction warnings, and automated clinical summaries.
+2. All AI suggestions must be reviewed and countersigned by a registered medical doctor or clinical officer. The AI system does not execute autonomous prescriptions.
+3. De-identified symptom strings are sanitized before server-side API calls; patient national identifiers and names are never transmitted to LLM training endpoints.`,
+    legalReference: "WHO Guidance on Ethics & Governance of AI for Health (2021) & MOH AI Policy",
+    tags: ["gemini", "ai ethics", "clinical safety", "pharmacology"]
   }
 ];
-
-export const REGULATORY_DIRECTORY = {
-  hospitalName: "The Tassia Hill Hospital",
-  registrationNumber: "024866",
-  postalAddress: "P.O. Box 1834-00100 Nairobi",
-  hospitalEmail: "tassiahillhospital@gmail.com",
-  odpcRegistrationNumber: "024866",
-  dhaFacilityCode: "DHA-FAC-NRB-04281",
-  kmhflCode: "KMHFL-24019",
-  dpoName: "Dr. Emmanuel Mutua, LL.M, CIPP/E",
-  dpoEmail: "tassiahillhospital@gmail.com",
-  dpoHotline: "+254 (020) 794-2000 / Ext 404",
-  odpcNationalOffice: "Office of the Data Protection Commissioner, Britam Tower, 13th Floor, Hospital Rd, Nairobi",
-  odpcWebsite: "https://www.odpc.go.ke",
-  effectiveDate: "2026-01-01",
-  lastReviewedDate: "2026-08-30"
-};

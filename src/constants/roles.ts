@@ -1,373 +1,17 @@
 import { SystemRole } from "../types";
+
 export type { SystemRole };
 
-export interface RoleDefinition {
-  id: SystemRole;
+export interface SystemRoleConfig {
   role: SystemRole;
   title: string;
-  category: "Leadership" | "Clinical" | "Administrative" | "Financial & Logistics";
-  description: string;
-  allowedTabs: string[];
-  allowedModules: string[];
   department: string;
-  colorClass: {
-    bg: string;
-    text: string;
-    border: string;
-    badge: string;
-  };
-  canManageUsers: boolean;
-  canManageInventory: boolean;
-  canPerformClinicalActions: boolean;
-  canDispenseAndCheckout: boolean;
-  canProcessPayroll: boolean;
-  canApproveProcurement: boolean;
+  description: string;
+  allowedModules: string[];
+  badgeColor?: string;
+  canPerformClinicalActions?: boolean;
+  canDispenseAndCheckout?: boolean;
 }
-
-export const SYSTEM_ROLES_MAP: Record<SystemRole, RoleDefinition> = {
-  "Super Admin": {
-    id: "Super Admin",
-    role: "Super Admin",
-    title: "Super Admin (Master Control)",
-    category: "Leadership",
-    description: "Exclusive master authority. Authorized to create, assign, and manage all system users, permissions, master configurations, and cross-departmental operations.",
-    allowedTabs: [
-      "dashboard",
-      "admin",
-      "admissions",
-      "reception",
-      "triage",
-      "queue",
-      "doctor",
-      "transfers",
-      "pharmacy",
-      "diagnostics",
-      "billing",
-      "finance",
-      "hr",
-      "payroll",
-      "procurement",
-      "tickets",
-      "journey",
-      "security",
-    ],
-    allowedModules: [
-      "dashboard",
-      "admin",
-      "admissions",
-      "reception",
-      "triage",
-      "queue",
-      "doctor",
-      "transfers",
-      "pharmacy",
-      "diagnostics",
-      "billing",
-      "finance",
-      "hr",
-      "payroll",
-      "procurement",
-      "tickets",
-      "journey",
-      "security",
-    ],
-    department: "administration",
-    colorClass: {
-      bg: "bg-purple-50",
-      text: "text-purple-900",
-      border: "border-purple-300",
-      badge: "bg-purple-700 text-white",
-    },
-    canManageUsers: true,
-    canManageInventory: true,
-    canPerformClinicalActions: true,
-    canDispenseAndCheckout: true,
-    canProcessPayroll: true,
-    canApproveProcurement: true,
-  },
-  "Admin": {
-    id: "Admin",
-    role: "Admin",
-    title: "Admin (Operational Management)",
-    category: "Leadership",
-    description: "Supervises day-to-day hospital operations, inter-departmental queues, and facility operational metrics.",
-    allowedTabs: [
-      "dashboard",
-      "admin",
-      "admissions",
-      "reception",
-      "triage",
-      "queue",
-      "doctor",
-      "transfers",
-      "pharmacy",
-      "diagnostics",
-      "billing",
-      "finance",
-      "hr",
-      "payroll",
-      "procurement",
-      "tickets",
-      "journey",
-      "security",
-    ],
-    allowedModules: [
-      "dashboard",
-      "admin",
-      "admissions",
-      "reception",
-      "triage",
-      "queue",
-      "doctor",
-      "transfers",
-      "pharmacy",
-      "diagnostics",
-      "billing",
-      "finance",
-      "hr",
-      "payroll",
-      "procurement",
-      "tickets",
-      "journey",
-      "security",
-    ],
-    department: "administration",
-    colorClass: {
-      bg: "bg-indigo-50",
-      text: "text-indigo-900",
-      border: "border-indigo-300",
-      badge: "bg-indigo-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: true,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: true,
-    canApproveProcurement: true,
-  },
-  "Reception": {
-    id: "Reception",
-    role: "Reception",
-    title: "Reception (Front Desk & Patient Registration)",
-    category: "Administrative",
-    description: "Registers incoming patients, verifies SHA/NHIF eligibility, issues digital queue tickets, and assigns patients to specialist clinics or nurse triage.",
-    allowedTabs: ["reception", "triage", "admissions", "queue", "journey", "tickets", "transfers", "dashboard"],
-    allowedModules: ["reception", "triage", "admissions", "queue", "journey", "tickets", "transfers", "dashboard"],
-    department: "reception",
-    colorClass: {
-      bg: "bg-emerald-50",
-      text: "text-emerald-900",
-      border: "border-emerald-300",
-      badge: "bg-emerald-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: false,
-    canApproveProcurement: false,
-  },
-  "Nurse": {
-    id: "Nurse",
-    role: "Nurse",
-    title: "Nurse / Triage Officer (Clinical Intake & Vitals)",
-    category: "Clinical",
-    description: "Performs patient triage assessment (TEWS / Kenya Triage Score), records complete vital signs (BP, Pulse, Temp, SpO2, RBS, Weight/Height/BMI), and manages nursing care plans.",
-    allowedTabs: ["triage", "admissions", "doctor", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
-    allowedModules: ["triage", "admissions", "doctor", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
-    department: "nursing",
-    colorClass: {
-      bg: "bg-rose-50",
-      text: "text-rose-900",
-      border: "border-rose-300",
-      badge: "bg-rose-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: true,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: false,
-    canApproveProcurement: false,
-  },
-  "Doctor": {
-    id: "Doctor",
-    role: "Doctor",
-    title: "Doctor (Clinical Consultation)",
-    category: "Clinical",
-    description: "Conducts outpatient and inpatient clinical consultations, reviews nurse triage vitals, creates digital prescriptions, and triggers automated diagnostic routing.",
-    allowedTabs: ["doctor", "triage", "admissions", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
-    allowedModules: ["doctor", "triage", "admissions", "transfers", "queue", "journey", "diagnostics", "pharmacy", "tickets", "dashboard"],
-    department: "medical",
-    colorClass: {
-      bg: "bg-cyan-50",
-      text: "text-cyan-900",
-      border: "border-cyan-300",
-      badge: "bg-cyan-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: true,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: false,
-    canApproveProcurement: false,
-  },
-  "Pharmacy": {
-    id: "Pharmacy",
-    role: "Pharmacy",
-    title: "Pharmacy (Dispensing & POS)",
-    category: "Clinical",
-    description: "Receives doctor digital prescriptions, verifies medicine availability, executes POS checkout with M-Pesa/Cash, and holds exclusive authority over drug inventory.",
-    allowedTabs: ["pharmacy", "transfers", "queue", "billing", "procurement", "dashboard"],
-    allowedModules: ["pharmacy", "transfers", "queue", "billing", "procurement", "dashboard"],
-    department: "pharmacy",
-    colorClass: {
-      bg: "bg-teal-50",
-      text: "text-teal-900",
-      border: "border-teal-300",
-      badge: "bg-teal-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: true,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: true,
-    canProcessPayroll: false,
-    canApproveProcurement: false,
-  },
-  "Lab": {
-    id: "Lab",
-    role: "Lab",
-    title: "Lab (Laboratory Diagnostics)",
-    category: "Clinical",
-    description: "Processes lab and diagnostic test orders generated from doctor consultations, records specimen findings, and uploads lab diagnostic reports.",
-    allowedTabs: ["diagnostics", "transfers", "queue", "procurement", "dashboard"],
-    allowedModules: ["diagnostics", "transfers", "queue", "procurement", "dashboard"],
-    department: "laboratory",
-    colorClass: {
-      bg: "bg-amber-50",
-      text: "text-amber-900",
-      border: "border-amber-300",
-      badge: "bg-amber-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: false,
-    canApproveProcurement: false,
-  },
-  "HR": {
-    id: "HR",
-    role: "HR",
-    title: "HR (Human Resources)",
-    category: "Administrative",
-    description: "Maintains hospital employee profiles, contracts, credentialing, department placements, and staff attendance.",
-    allowedTabs: ["hr", "payroll", "dashboard"],
-    allowedModules: ["hr", "payroll", "dashboard"],
-    department: "hr",
-    colorClass: {
-      bg: "bg-rose-50",
-      text: "text-rose-900",
-      border: "border-rose-300",
-      badge: "bg-rose-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: false,
-    canApproveProcurement: false,
-  },
-  "Payroll": {
-    id: "Payroll",
-    role: "Payroll",
-    title: "Payroll (Salary & Compensation Management)",
-    category: "Financial & Logistics",
-    description: "Computes monthly employee compensation, calculates statutory deductions (SHIF, PAYE, Housing Levy, NSSF), and disburses payslips.",
-    allowedTabs: ["payroll", "finance", "hr", "dashboard"],
-    allowedModules: ["payroll", "finance", "hr", "dashboard"],
-    department: "finance",
-    colorClass: {
-      bg: "bg-orange-50",
-      text: "text-orange-900",
-      border: "border-orange-300",
-      badge: "bg-orange-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: true,
-    canApproveProcurement: false,
-  },
-  "Finance": {
-    id: "Finance",
-    role: "Finance",
-    title: "Finance (Financial Reporting & Oversight)",
-    category: "Financial & Logistics",
-    description: "Tracks hospital revenues, operational expenses, department profit & loss, cash flows, and KRA eTIMS regulatory compliance.",
-    allowedTabs: ["finance", "billing", "procurement", "payroll", "dashboard"],
-    allowedModules: ["finance", "billing", "procurement", "payroll", "dashboard"],
-    department: "finance",
-    colorClass: {
-      bg: "bg-blue-50",
-      text: "text-blue-900",
-      border: "border-blue-300",
-      badge: "bg-blue-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: true,
-    canApproveProcurement: true,
-  },
-  "Procurement": {
-    id: "Procurement",
-    role: "Procurement",
-    title: "Procurement (Purchasing & Supply Chain)",
-    category: "Financial & Logistics",
-    description: "Manages purchase requisitions, generates official Local Purchase Orders (LPO), inspects Goods Received Notes (GRN), and manages supplier registries.",
-    allowedTabs: ["procurement", "finance", "pharmacy", "dashboard"],
-    allowedModules: ["procurement", "finance", "pharmacy", "dashboard"],
-    department: "procurement",
-    colorClass: {
-      bg: "bg-stone-50",
-      text: "text-stone-900",
-      border: "border-stone-300",
-      badge: "bg-stone-700 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: false,
-    canProcessPayroll: false,
-    canApproveProcurement: true,
-  },
-  "Billing & Accounts": {
-    id: "Billing & Accounts",
-    role: "Billing & Accounts",
-    title: "Billing & Accounts (Invoicing & Revenue Management)",
-    category: "Financial & Logistics",
-    description: "Generates consolidated patient invoices, handles split billing for SHA/Insurance/Cash, collects M-Pesa payments, and reconciles patient accounts.",
-    allowedTabs: ["billing", "transfers", "finance", "queue", "dashboard"],
-    allowedModules: ["billing", "transfers", "finance", "queue", "dashboard"],
-    department: "billing",
-    colorClass: {
-      bg: "bg-emerald-50",
-      text: "text-emerald-900",
-      border: "border-emerald-300",
-      badge: "bg-emerald-800 text-white",
-    },
-    canManageUsers: false,
-    canManageInventory: false,
-    canPerformClinicalActions: false,
-    canDispenseAndCheckout: true,
-    canProcessPayroll: false,
-    canApproveProcurement: false,
-  },
-};
-
-export const SYSTEM_ROLES_DIRECTORY: RoleDefinition[] = Object.values(SYSTEM_ROLES_MAP);
 
 export const ALL_SYSTEM_ROLES: SystemRole[] = [
   "Super Admin",
@@ -381,32 +25,158 @@ export const ALL_SYSTEM_ROLES: SystemRole[] = [
   "Payroll",
   "Finance",
   "Procurement",
-  "Billing & Accounts",
+  "Billing & Accounts"
 ];
 
-export function getRoleConfig(roleName?: string): RoleDefinition {
-  if (!roleName) return SYSTEM_ROLES_MAP["Super Admin"];
-  const trimmed = roleName.trim();
-  if (trimmed in SYSTEM_ROLES_MAP) {
-    return SYSTEM_ROLES_MAP[trimmed as SystemRole];
+export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
+  {
+    role: "Super Admin",
+    title: "Chief Executive / Master Admin",
+    department: "Executive & System Administration",
+    description: "Full master administrative authorization across all clinics, wards, billing, and system configurations.",
+    allowedModules: [
+      "dashboard",
+      "reception",
+      "triage",
+      "queue",
+      "doctor",
+      "pharmacy",
+      "laboratory",
+      "radiology",
+      "billing",
+      "finance",
+      "hr",
+      "payroll",
+      "procurement",
+      "transfers",
+      "admissions",
+      "forms",
+      "admin"
+    ],
+    badgeColor: "purple"
+  },
+  {
+    role: "Admin",
+    title: "Hospital Administrator",
+    department: "Hospital Administration",
+    description: "Operational hospital management, patient flow monitoring, compliance, and department reporting.",
+    allowedModules: [
+      "dashboard",
+      "reception",
+      "triage",
+      "queue",
+      "doctor",
+      "pharmacy",
+      "laboratory",
+      "radiology",
+      "billing",
+      "finance",
+      "hr",
+      "payroll",
+      "procurement",
+      "transfers",
+      "admissions",
+      "forms"
+    ],
+    badgeColor: "indigo"
+  },
+  {
+    role: "Reception",
+    title: "Front Desk & Patient Registrar",
+    department: "Front Desk & Registration",
+    description: "Patient registration, biometric check-in, queue ticketing, and appointment management.",
+    allowedModules: ["dashboard", "reception", "queue", "forms"],
+    badgeColor: "blue"
+  },
+  {
+    role: "Nurse",
+    title: "Triage & Inpatient Nurse",
+    department: "Nursing & Outpatient Triage",
+    description: "Vital signs capture, acuity assessment, fast-track triage, patient queueing, and medication administration.",
+    allowedModules: ["dashboard", "triage", "queue", "transfers", "admissions", "forms"],
+    badgeColor: "rose"
+  },
+  {
+    role: "Doctor",
+    title: "Medical Officer / Consultant",
+    department: "Clinical Consultations & OPD",
+    description: "Clinical examinations, ICD-10 diagnostic coding, electronic prescription ordering, and lab work orders.",
+    allowedModules: ["dashboard", "doctor", "laboratory", "radiology", "pharmacy", "transfers", "admissions", "forms"],
+    badgeColor: "emerald"
+  },
+  {
+    role: "Pharmacy",
+    title: "Chief Pharmacist / Dispenser",
+    department: "Pharmacy & Dispensary",
+    description: "Prescription fulfillment, inventory stock deduction, batch/expiry alerts, and patient POS dispensaries.",
+    allowedModules: ["dashboard", "pharmacy", "procurement", "billing"],
+    badgeColor: "amber"
+  },
+  {
+    role: "Lab",
+    title: "Medical Laboratory Scientist",
+    department: "Diagnostic Laboratory Services",
+    description: "Diagnostic specimen testing, automated analyzer results entry, reference verification, and pathology reports.",
+    allowedModules: ["dashboard", "laboratory", "transfers"],
+    badgeColor: "cyan"
+  },
+  {
+    role: "HR",
+    title: "Human Resources Officer",
+    department: "Human Resources & Personnel",
+    description: "Staff onboarding, shift rosters, medical licensing tracking, leave requests, and performance management.",
+    allowedModules: ["dashboard", "hr", "payroll"],
+    badgeColor: "teal"
+  },
+  {
+    role: "Payroll",
+    title: "Payroll & Compensation Officer",
+    department: "Compensation & Benefits",
+    description: "Monthly salary schedules, statutory PAYE, SHIF/NHIF, NSSF deductions, and payslip distribution.",
+    allowedModules: ["dashboard", "payroll", "finance"],
+    badgeColor: "green"
+  },
+  {
+    role: "Finance",
+    title: "Finance & Accounting Officer",
+    department: "Finance & Accounts",
+    description: "Hospital general ledger, bank reconciliations, revenue accounting, and M-Pesa statements.",
+    allowedModules: ["dashboard", "finance", "billing", "payroll"],
+    badgeColor: "yellow"
+  },
+  {
+    role: "Procurement",
+    title: "Procurement & Stores Manager",
+    department: "Supply Chain & Procurement",
+    description: "Purchase orders, supplier contracts, tender reviews, and bulk pharmaceutical requisitions.",
+    allowedModules: ["dashboard", "procurement", "pharmacy"],
+    badgeColor: "orange"
+  },
+  {
+    role: "Billing & Accounts",
+    title: "Cashier & Billing Specialist",
+    department: "Cashier & Patient Billing",
+    description: "M-Pesa payment validation, cash settlements, SHA/NHIF invoice processing, and clearance receipts.",
+    allowedModules: ["dashboard", "billing", "finance", "forms"],
+    badgeColor: "violet"
   }
-  // Loose matching for legacy strings
-  const lower = trimmed.toLowerCase();
-  if (lower.includes("super admin")) return SYSTEM_ROLES_MAP["Super Admin"];
-  if (lower.includes("admin")) return SYSTEM_ROLES_MAP["Admin"];
-  if (lower.includes("nurse") || lower.includes("triage") || lower.includes("matron") || lower.includes("nursing")) return SYSTEM_ROLES_MAP["Nurse"];
-  if (lower.includes("reception")) return SYSTEM_ROLES_MAP["Reception"];
-  if (lower.includes("reception")) return SYSTEM_ROLES_MAP["Reception"];
-  if (lower.includes("doc") || lower.includes("physician") || lower.includes("surgeon") || lower.includes("med") || lower.includes("cardiologist") || lower.includes("pulmonologist")) return SYSTEM_ROLES_MAP["Doctor"];
-  if (lower.includes("pharm")) return SYSTEM_ROLES_MAP["Pharmacy"];
-  if (lower.includes("lab")) return SYSTEM_ROLES_MAP["Lab"];
-  if (lower.includes("pay")) return SYSTEM_ROLES_MAP["Payroll"];
-  if (lower.includes("hr") || lower.includes("human")) return SYSTEM_ROLES_MAP["HR"];
-  if (lower.includes("procure") || lower.includes("supply")) return SYSTEM_ROLES_MAP["Procurement"];
-  if (lower.includes("bill") || lower.includes("account")) return SYSTEM_ROLES_MAP["Billing & Accounts"];
-  if (lower.includes("finan")) return SYSTEM_ROLES_MAP["Finance"];
-  
-  return SYSTEM_ROLES_MAP["Super Admin"];
-}
+];
 
-export const getRoleDefinition = getRoleConfig;
+export function getRoleConfig(role?: SystemRole | string): SystemRoleConfig {
+  if (!role) {
+    return SYSTEM_ROLES_DIRECTORY[2]; // Reception default
+  }
+  const match = SYSTEM_ROLES_DIRECTORY.find(
+    (r) => r.role.toLowerCase() === role.toLowerCase() || r.department.toLowerCase() === role.toLowerCase()
+  );
+  if (match) return match;
+
+  // Fallback config for unlisted role
+  return {
+    role: role as SystemRole,
+    title: `${role} Officer`,
+    department: `${role} Unit`,
+    description: `Standard access configuration for ${role}.`,
+    allowedModules: ["dashboard", "forms"]
+  };
+}

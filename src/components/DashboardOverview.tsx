@@ -905,8 +905,8 @@ export default function DashboardOverview({
 
   const recentTickets = [...(tickets || [])]
     .sort((a, b) => {
-      const timeA = typeof a?.timestamp === "string" ? a.timestamp : a?.timestamp?.toDate ? a.timestamp.toDate().toISOString() : String(a?.timestamp || "");
-      const timeB = typeof b?.timestamp === "string" ? b.timestamp : b?.timestamp?.toDate ? b.timestamp.toDate().toISOString() : String(b?.timestamp || "");
+      const timeA = typeof a?.timestamp === "string" ? a.timestamp : (a?.timestamp as any)?.toDate ? (a.timestamp as any).toDate().toISOString() : String(a?.timestamp || "");
+      const timeB = typeof b?.timestamp === "string" ? b.timestamp : (b?.timestamp as any)?.toDate ? (b.timestamp as any).toDate().toISOString() : String(b?.timestamp || "");
       return timeB.localeCompare(timeA);
     })
     .slice(0, 5);

@@ -63,7 +63,7 @@ export default function IncomingMessagePromptListener({
 
   const markAsRead = async (msgId: string) => {
     try {
-      const identifier = currentUser.email || currentUser.id || currentUser.name;
+      const identifier = currentUser.email || currentUser.id || (currentUser as any).name;
       if (identifier) {
         await updateDoc(doc(db, "internal_messages", msgId), {
           readBy: arrayUnion(identifier)

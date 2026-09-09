@@ -43,7 +43,7 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
   const [medications, setMedications] = useState<Medication[]>([]);
   const [activePrescriptions, setActivePrescriptions] = useState<any[]>([]);
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
-  const [cart, setCart] = useState<{ med: Medication; qty: number }[]>([]);
+  const [cart, setCart] = useState<{ med: Medication; qty: number; pricedBy?: "doctor" | "pharmacist" | "default" }[]>([]);
   
   // Modals
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
