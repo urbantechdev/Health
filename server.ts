@@ -3,9 +3,11 @@ import "./src/clean-env.ts";
 import express from "express";
 import http from "http";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import webpush from "web-push";
 
 dotenv.config();
 
@@ -761,6 +763,360 @@ app.post("/api/integrations/slade/preauth", (req, res) => {
     biometricsVerified: true,
     message: "Biometrics matched via Smart App Card Reader. Authorization signed."
   });
+});
+
+// 8. NATIVE WEB PUSH NOTIFICATIONS (VAPID ARCHITECTURE - ZERO ONESIGNAL)
+interface StoredSubscription {
+  id: string;
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  user?: {
+    uid?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+    department?: string;
+  };
+  platform?: string;
+  userAgent?: string;
+  subscribedAt: string;
+  lastActiveAt?: string;
+}
+
+const VAPID_STORAGE_FILE = path.join(process.cwd(), ".vapid-keys.json");
+const SUBSCRIPTIONS_STORAGE_FILE = path.join(process.cwd(), ".push-subscriptions.json");
+
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || "";
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || "";
+const vapidSubject = process.env.VAPID_SUBJECT || "mailto:admin@tassiahillhospital.co.ke";
+
+// Initialize persistent VAPID keys on startup
+function initVapidKeys() {
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    if (fs.existsSync(VAPID_STORAGE_FILE)) {
+      try {
+        const stored = JSON.parse(fs.readFileSync(VAPID_STORAGE_FILE, "utf-8"));
+        if (stored.publicKey && stored.privateKey) {
+          vapidPublicKey = stored.publicKey;
+          vapidPrivateKey = stored.privateKey;
+          console.log("[Native Web Push] Loaded persistent VAPID keys from disk.");
+        }
+      } catch (err: any) {
+        console.warn("[Native Web Push] Could not read stored keys:", err.message);
+      }
+    }
+  }
+
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    try {
+      const generated = webpush.generateVAPIDKeys();
+      vapidPublicKey = generated.publicKey;
+      vapidPrivateKey = generated.privateKey;
+      fs.writeFileSync(VAPID_STORAGE_FILE, JSON.stringify(generated, null, 2), "utf-8");
+      console.log("[Native Web Push] Generated fresh VAPID keypair and persisted to .vapid-keys.json.");
+    } catch (err: any) {
+      console.error("[Native Web Push] Failed to generate VAPID keys:", err);
+    }
+  }
+
+  if (vapidPublicKey && vapidPrivateKey) {
+    try {
+      webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+      console.log("[Native Web Push] VAPID configuration successfully activated.");
+    } catch (err: any) {
+      console.error("[Native Web Push] Error configuring VAPID details:", err.message);
+    }
+  }
+}
+
+initVapidKeys();
+
+// Load stored push subscriptions
+let pushSubscriptions: StoredSubscription[] = [];
+
+function loadStoredSubscriptions() {
+  if (fs.existsSync(SUBSCRIPTIONS_STORAGE_FILE)) {
+    try {
+      const fileData = fs.readFileSync(SUBSCRIPTIONS_STORAGE_FILE, "utf-8");
+      pushSubscriptions = JSON.parse(fileData);
+      console.log(`[Native Web Push] Loaded ${pushSubscriptions.length} active device subscriptions.`);
+    } catch (err: any) {
+      console.warn("[Native Web Push] Could not parse stored subscriptions:", err.message);
+      pushSubscriptions = [];
+    }
+  }
+}
+
+function saveStoredSubscriptions() {
+  try {
+    fs.writeFileSync(SUBSCRIPTIONS_STORAGE_FILE, JSON.stringify(pushSubscriptions, null, 2), "utf-8");
+  } catch (err: any) {
+    console.warn("[Native Web Push] Could not write subscriptions to disk:", err.message);
+  }
+}
+
+loadStoredSubscriptions();
+
+// 8a. Get Public VAPID Key for client-side registration
+app.get("/api/push/vapid-public-key", (req, res) => {
+  res.json({
+    publicKey: vapidPublicKey,
+    subject: vapidSubject,
+    configured: !!(vapidPublicKey && vapidPrivateKey),
+    totalSubscribers: pushSubscriptions.length,
+  });
+});
+
+// 8b. Register new or updated browser subscription
+app.post("/api/push/subscribe", (req, res) => {
+  const { subscription, user, platform, userAgent } = req.body;
+  if (!subscription || !subscription.endpoint || !subscription.keys) {
+    return res.status(400).json({ error: "Invalid Web Push subscription payload" });
+  }
+
+  const existingIdx = pushSubscriptions.findIndex(s => s.endpoint === subscription.endpoint);
+  const now = new Date().toISOString();
+  const subRecord: StoredSubscription = {
+    id: existingIdx >= 0 ? pushSubscriptions[existingIdx].id : `sub_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+    endpoint: subscription.endpoint,
+    keys: subscription.keys,
+    user: user || {},
+    platform: platform || "Browser",
+    userAgent: userAgent || req.headers["user-agent"] || "",
+    subscribedAt: existingIdx >= 0 ? pushSubscriptions[existingIdx].subscribedAt : now,
+    lastActiveAt: now,
+  };
+
+  if (existingIdx >= 0) {
+    pushSubscriptions[existingIdx] = subRecord;
+  } else {
+    pushSubscriptions.push(subRecord);
+  }
+
+  saveStoredSubscriptions();
+  console.log(`[Native Web Push] Subscribed: ${subRecord.user?.name || "Staff"} [${subRecord.platform} - ${subRecord.user?.role || "Staff"}] Total: ${pushSubscriptions.length}`);
+
+  res.json({
+    success: true,
+    message: "Push subscription successfully registered",
+    subscriberCount: pushSubscriptions.length,
+    id: subRecord.id
+  });
+});
+
+// 8c. Unregister subscription
+app.post("/api/push/unsubscribe", (req, res) => {
+  const { endpoint } = req.body;
+  if (!endpoint) {
+    return res.status(400).json({ error: "Endpoint required to unsubscribe" });
+  }
+
+  const initialCount = pushSubscriptions.length;
+  pushSubscriptions = pushSubscriptions.filter(s => s.endpoint !== endpoint);
+  saveStoredSubscriptions();
+
+  res.json({
+    success: true,
+    removed: initialCount - pushSubscriptions.length,
+    remaining: pushSubscriptions.length
+  });
+});
+
+// 8d. Inspect active subscriptions (for Admin Panel Diagnostic)
+app.get("/api/push/subscriptions", (req, res) => {
+  const sanitized = pushSubscriptions.map(s => ({
+    id: s.id,
+    endpointHost: s.endpoint.replace(/^(https?:\/\/[^/]+)\/.*$/, "$1"),
+    platform: s.platform,
+    user: s.user,
+    subscribedAt: s.subscribedAt,
+    lastActiveAt: s.lastActiveAt,
+  }));
+
+  res.json({
+    success: true,
+    count: pushSubscriptions.length,
+    subscriptions: sanitized,
+    vapidConfigured: !!(vapidPublicKey && vapidPrivateKey),
+    publicKeySnippet: vapidPublicKey ? `${vapidPublicKey.substring(0, 10)}...${vapidPublicKey.substring(vapidPublicKey.length - 6)}` : null,
+  });
+});
+
+// 8e. Trigger Push Notification to targeted staff or broadcast
+app.post("/api/push/send", async (req, res) => {
+  const {
+    title = "HMIS Clinical Alert",
+    body = "Hospital management update received.",
+    icon = "/pwa-192x192.png",
+    badge = "/apple-touch-icon.png",
+    url = "/",
+    type = "alert",
+    targetRole,
+    targetDepartment,
+    targetUserId,
+    vibrate = [200, 100, 200, 100, 300],
+    requireInteraction = true,
+    actions = [
+      { action: "open_hmis", title: "Open HMIS" },
+      { action: "dismiss_hmis", title: "Dismiss" }
+    ]
+  } = req.body;
+
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    return res.status(500).json({ error: "VAPID keys not configured on server" });
+  }
+
+  let targets = pushSubscriptions;
+
+  if (targetUserId) {
+    targets = targets.filter(s => s.user?.uid === targetUserId);
+  }
+  if (targetRole && targetRole !== "All") {
+    targets = targets.filter(s => 
+      s.user?.role?.toLowerCase() === targetRole.toLowerCase() || 
+      s.user?.role?.toLowerCase() === "super admin"
+    );
+  }
+  if (targetDepartment && targetDepartment !== "All") {
+    targets = targets.filter(s => 
+      s.user?.department?.toLowerCase() === targetDepartment.toLowerCase() || 
+      s.user?.role?.toLowerCase() === "super admin"
+    );
+  }
+
+  if (targets.length === 0) {
+    return res.json({
+      success: true,
+      message: "No active subscriber devices matching targeting criteria",
+      sent: 0,
+      totalSubscribers: pushSubscriptions.length
+    });
+  }
+
+  const payload = JSON.stringify({
+    title,
+    body,
+    icon,
+    badge,
+    url,
+    type,
+    vibrate,
+    requireInteraction,
+    actions,
+    tag: `hmis-${type}-${Date.now()}`,
+    timestamp: Date.now()
+  });
+
+  let sentCount = 0;
+  let failCount = 0;
+  const deadEndpoints: string[] = [];
+
+  await Promise.allSettled(
+    targets.map(async (target) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: target.endpoint,
+            keys: target.keys,
+          },
+          payload,
+          {
+            TTL: 60 * 60 * 24, // 24 hours
+            urgency: "high",
+          }
+        );
+        sentCount++;
+      } catch (err: any) {
+        failCount++;
+        // Prune stale or expired browser tokens (e.g. Chrome FCM 404/410, Apple APNs expired)
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          deadEndpoints.push(target.endpoint);
+        }
+        console.warn(`[Native Web Push] Delivery notice for ${target.platform}:`, err.statusCode || err.message);
+      }
+    })
+  );
+
+  if (deadEndpoints.length > 0) {
+    pushSubscriptions = pushSubscriptions.filter(s => !deadEndpoints.includes(s.endpoint));
+    saveStoredSubscriptions();
+    console.log(`[Native Web Push] Automatically pruned ${deadEndpoints.length} expired device subscriptions.`);
+  }
+
+  res.json({
+    success: true,
+    sent: sentCount,
+    failed: failCount,
+    pruned: deadEndpoints.length,
+    totalSubscribers: pushSubscriptions.length,
+  });
+});
+
+// 8f. Direct Test Push to current device
+app.post("/api/push/test", async (req, res) => {
+  const { endpoint, keys, platform = "Device", userName = "Staff Member" } = req.body;
+
+  let targets: { endpoint: string; keys: { p256dh: string; auth: string } }[] = [];
+
+  if (endpoint && keys) {
+    targets = [{ endpoint, keys }];
+  } else if (endpoint) {
+    const matched = pushSubscriptions.filter(s => s.endpoint === endpoint);
+    if (matched.length > 0) {
+      targets = matched.map(m => ({ endpoint: m.endpoint, keys: m.keys }));
+    }
+  }
+
+  if (targets.length === 0) {
+    targets = pushSubscriptions.map(s => ({ endpoint: s.endpoint, keys: s.keys }));
+  }
+
+  if (targets.length === 0) {
+    return res.status(404).json({
+      error: "No active device subscriptions found. Please enable Push Notifications in HMIS first."
+    });
+  }
+
+  const testPayload = JSON.stringify({
+    title: "🔔 HMIS Native Web Push Verified",
+    body: `Live notification triggered natively via standard VAPID Push API to ${platform}! Zero OneSignal or third-party dependencies required.`,
+    icon: "/pwa-192x192.png",
+    badge: "/apple-touch-icon.png",
+    url: "/?tab=dashboard",
+    type: "test",
+    vibrate: [200, 100, 200, 100, 300],
+    requireInteraction: true,
+    actions: [
+      { action: "open_hmis", title: "Open HMIS" },
+      { action: "dismiss_hmis", title: "Dismiss" }
+    ],
+    tag: `hmis-test-${Date.now()}`
+  });
+
+  let delivered = 0;
+  for (const t of targets) {
+    try {
+      await webpush.sendNotification(t, testPayload, { urgency: "high", TTL: 300 });
+      delivered++;
+    } catch (err: any) {
+      console.warn("[Native Web Push Test] Delivery notice:", err.message);
+    }
+  }
+
+  if (delivered > 0) {
+    res.json({
+      success: true,
+      delivered,
+      message: `Test push sent successfully to ${delivered} device(s).`
+    });
+  } else {
+    res.status(500).json({
+      error: "Could not deliver push notification. Ensure browser permissions are granted."
+    });
+  }
 });
 
 // --- VITE MIDDLEWARE SETUP ---

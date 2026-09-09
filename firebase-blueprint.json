@@ -179,6 +179,20 @@
         "updatedAt": { "type": "string" },
         "updatedBy": { "type": "string" }
       }
+    },
+    "push_subscriptions": {
+      "title": "Native Web Push Subscriptions",
+      "description": "Standard VAPID browser push subscriptions registered by medical staff devices across Android, iPhone, and desktop",
+      "type": "object",
+      "properties": {
+        "endpoint": { "type": "string" },
+        "keys": { "type": "object" },
+        "platform": { "type": "string" },
+        "user": { "type": "object" },
+        "subscribedAt": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["endpoint"]
     }
   }
 }

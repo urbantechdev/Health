@@ -4,7 +4,7 @@ import { TASSIAHILL_README_MARKDOWN } from "../src/constants/readmeContent";
 import { ALL_SYSTEM_ROLES, SYSTEM_ROLES_DIRECTORY, getRoleConfig } from "../src/constants/roles";
 import { HOSPITAL_SPECIALISTS_DIRECTORY, SPECIALIST_CATEGORIES, getSpecialistByName } from "../src/constants/specialists";
 import { cleanFirestoreData } from "../src/lib/firebase";
-import { isHaemogramReport, parseHaemogramData } from "../src/lib/haemogramParser";
+import { isHaemogramReport, parseHaemogramData, determineAgeCohort, getReferenceRange } from "../src/lib/haemogramParser";
 import { 
   KENYA_ICD10_CATALOG,
   MASTER_SHA_TARIFF_CATALOG,
@@ -138,8 +138,8 @@ async function runStepByStepAudit() {
     }
   });
 
-  // 6. Haemogram Parser
-  test("Haemogram Parser: parses mock clinical report text", () => {
+  // 6. Haemogram Parser & Age/Gender Dynamic Stratification
+  test("Haemogram Parser: parses mock clinical report text & determines age/gender reference ranges", () => {
     const isReport = isHaemogramReport("Full Blood Count FBC Haemogram");
     if (!isReport) {
       throw new Error("isHaemogramReport returned false for FBC");
@@ -154,6 +154,49 @@ async function runStepByStepAudit() {
     const result = parseHaemogramData(sample);
     if (!result || typeof result !== "object") {
       throw new Error("parseHaemogramData returned invalid result");
+    }
+
+    // Dynamic Age & Gender Cohort Tests
+    const neonateCohort = determineAgeCohort(0.05, "Male");
+    if (neonateCohort.cohort !== "neonate") {
+      throw new Error(`Expected neonate cohort for 0.05 years, got ${neonateCohort.cohort}`);
+    }
+
+    const childCohort = determineAgeCohort(5, "Female");
+    if (childCohort.cohort !== "child") {
+      throw new Error(`Expected child cohort for 5 years, got ${childCohort.cohort}`);
+    }
+
+    const adultMaleCohort = determineAgeCohort(35, "Male");
+    if (adultMaleCohort.cohort !== "adult_male") {
+      throw new Error(`Expected adult_male cohort for 35 years male, got ${adultMaleCohort.cohort}`);
+    }
+
+    const adultFemaleCohort = determineAgeCohort(30, "Female");
+    if (adultFemaleCohort.cohort !== "adult_female") {
+      throw new Error(`Expected adult_female cohort for 30 years female, got ${adultFemaleCohort.cohort}`);
+    }
+
+    // Dynamic Reference Range Tests based on Age & Gender
+    const hbMaleRef = getReferenceRange("hb", 30, "Male");
+    const hbFemaleRef = getReferenceRange("hb", 30, "Female");
+    const hbNeonateRef = getReferenceRange("hb", 0.02, "Male");
+
+    if (hbMaleRef.min < hbFemaleRef.min) {
+      throw new Error("Adult Male Hb lower limit should be higher than adult female");
+    }
+
+    if (hbNeonateRef.min < 14.0) {
+      throw new Error("Neonatal Hb reference range lower limit should be elevated (>=14.0 g/dL)");
+    }
+
+    // Check comprehensive parameter coverage (RBC, WBC, Platelets, Precursors, ESR)
+    const params = ["rbc", "hb", "hct", "mcv", "mch", "mchc", "rdw_cv", "rdw_sd", "retic_pct", "retic_abs", "irf", "nrbc_pct", "wbc", "neut_pct", "neut_abs", "lymph_pct", "lymph_abs", "mono_pct", "mono_abs", "eos_pct", "eos_abs", "baso_pct", "baso_abs", "ig_pct", "ig_abs", "bands_pct", "bands_abs", "plt", "mpv", "pdw", "pct", "p_lcr", "p_lcc", "esr"];
+    for (const p of params) {
+      const ref = getReferenceRange(p, 28, "Female");
+      if (!ref || !ref.displayRange) {
+        throw new Error(`Missing reference range for parameter: ${p}`);
+      }
     }
   });
 

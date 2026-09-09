@@ -1,13 +1,25 @@
 {
   "id": "/",
   "name": "HMIS - Hospital Management Information System",
-  "short_name": "HMIS",
-  "description": "The Tassia Hill Hospital Multi-Tenant Hospital Management Information System (HMIS) with offline resilience.",
+  "short_name": "HMIS App",
+  "description": "The Tassia Hill Hospital Multi-Tenant Hospital Management Information System (HMIS) with offline resilience, installable on iPhone, Android, and all web browsers.",
   "theme_color": "#047857",
-  "background_color": "#f3f4f6",
+  "background_color": "#047857",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
   "start_url": "/",
   "scope": "/",
+  "categories": [
+    "medical",
+    "health",
+    "productivity",
+    "business"
+  ],
   "icons": [
     {
       "src": "/pwa-192x192.png",
@@ -26,6 +38,42 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Outpatient Triage",
+      "short_name": "Triage",
+      "description": "Emergency triage & patient vital signs queue",
+      "url": "/?tab=triage",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Doctor's Desk",
+      "short_name": "Doctor",
+      "description": "Clinical consultation & electronic prescriptions",
+      "url": "/?tab=doctor",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pharmacy POS",
+      "short_name": "Pharmacy",
+      "description": "Drug dispensing & point-of-sale billing",
+      "url": "/?tab=pharmacy",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ancillary Labs",
+      "short_name": "Labs",
+      "description": "Clinical diagnostics & test result verification",
+      "url": "/?tab=laboratory",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
     }
   ]
 }
