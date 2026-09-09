@@ -91,6 +91,9 @@ export interface UnifiedPatientInput {
   id?: string;
   patientName: string;
   nationalId: string;
+  passportNumber?: string;
+  birthCertificateNumber?: string;
+  dob?: string;
   phone?: string;
   age?: number | string;
   gender?: string;
@@ -102,6 +105,9 @@ export interface UnifiedPatientInput {
   insurancePolicyNo?: string;
   shaEligible?: "eligible" | "not_eligible" | "unchecked";
   shaId?: string;
+  problemList?: any[];
+  familyHistory?: any[];
+  allergiesList?: any[];
   vitals?: {
     temp?: string;
     bp?: string;
@@ -242,6 +248,9 @@ export const upsertUnifiedPatientRecord = async (
       };
 
       if (cleanNationalId) updatedFields.nationalId = cleanNationalId;
+      if (input.passportNumber) updatedFields.passportNumber = input.passportNumber.trim();
+      if (input.birthCertificateNumber) updatedFields.birthCertificateNumber = input.birthCertificateNumber.trim();
+      if (input.dob) updatedFields.dob = input.dob;
       if (cleanPhone) updatedFields.phone = cleanPhone;
       if (numericAge) updatedFields.age = numericAge;
       if (input.gender) updatedFields.gender = input.gender;
@@ -250,6 +259,10 @@ export const upsertUnifiedPatientRecord = async (
       if (input.shaId) updatedFields.shaId = input.shaId;
       if (input.currentDepartment) updatedFields.currentDepartment = input.currentDepartment;
       if (input.activeTicketNo) updatedFields.activeTicketNo = input.activeTicketNo;
+      if (input.problemList) updatedFields.problemList = input.problemList;
+      if (input.familyHistory) updatedFields.familyHistory = input.familyHistory;
+      if (input.allergiesList) updatedFields.allergiesList = input.allergiesList;
+      if (input.allergies) updatedFields.allergies = input.allergies;
 
       if (input.vitals) {
         updatedFields.latestVitals = {
@@ -304,12 +317,19 @@ export const upsertUnifiedPatientRecord = async (
       const newPatientDoc: any = {
         patientName: cleanName,
         nationalId: cleanNationalId || `GEN-${Math.floor(10000000 + Math.random() * 90000000)}`,
+        passportNumber: input.passportNumber?.trim() || "",
+        birthCertificateNumber: input.birthCertificateNumber?.trim() || "",
+        dob: input.dob || "",
         phone: cleanPhone || "N/A",
         age: numericAge,
         gender: input.gender || "Male",
         bloodType: input.bloodType || "Not Sure",
         shaEligible: input.shaEligible || "not_eligible",
         shaId: input.shaId || "",
+        problemList: input.problemList || [],
+        familyHistory: input.familyHistory || [],
+        allergiesList: input.allergiesList || [],
+        allergies: input.allergies || "",
         visits: newVisit ? [newVisit] : [{
           id: `vst-${Date.now()}`,
           date: todayDate,

@@ -50,6 +50,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
       "procurement",
       "transfers",
       "admissions",
+      "surveillance",
       "forms",
       "admin"
     ],
@@ -76,6 +77,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
       "procurement",
       "transfers",
       "admissions",
+      "surveillance",
       "forms"
     ],
     badgeColor: "indigo"
@@ -85,7 +87,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
     title: "Front Desk & Patient Registrar",
     department: "Front Desk & Registration",
     description: "Patient registration, biometric check-in, queue ticketing, and appointment management.",
-    allowedModules: ["dashboard", "reception", "queue", "forms"],
+    allowedModules: ["dashboard", "reception", "queue", "surveillance", "forms"],
     badgeColor: "blue"
   },
   {
@@ -93,7 +95,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
     title: "Triage & Inpatient Nurse",
     department: "Nursing & Outpatient Triage",
     description: "Vital signs capture, acuity assessment, fast-track triage, patient queueing, and medication administration.",
-    allowedModules: ["dashboard", "triage", "queue", "transfers", "admissions", "forms"],
+    allowedModules: ["dashboard", "triage", "queue", "transfers", "admissions", "surveillance", "forms"],
     badgeColor: "rose"
   },
   {
@@ -101,7 +103,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
     title: "Medical Officer / Consultant",
     department: "Clinical Consultations & OPD",
     description: "Clinical examinations, ICD-10 diagnostic coding, electronic prescription ordering, and lab work orders.",
-    allowedModules: ["dashboard", "doctor", "laboratory", "radiology", "pharmacy", "transfers", "admissions", "forms"],
+    allowedModules: ["dashboard", "doctor", "laboratory", "radiology", "pharmacy", "transfers", "admissions", "surveillance", "forms"],
     badgeColor: "emerald"
   },
   {
@@ -117,7 +119,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
     title: "Medical Laboratory Scientist",
     department: "Diagnostic Laboratory Services",
     description: "Diagnostic specimen testing, automated analyzer results entry, reference verification, and pathology reports.",
-    allowedModules: ["dashboard", "laboratory", "transfers"],
+    allowedModules: ["dashboard", "laboratory", "transfers", "surveillance"],
     badgeColor: "cyan"
   },
   {

@@ -43,6 +43,7 @@ import { GoogleAuthModal } from "./components/GoogleAuthModal";
 import { ModernPromptHost } from "./components/ModernPromptHost";
 import { VoiceAnnouncementHUD } from "./components/VoiceAnnouncementHUD";
 import SplashScreenLoader from "./components/SplashScreenLoader";
+import PublicHealthSurveillance from "./components/PublicHealthSurveillance";
 import UserGuide from "./components/UserGuide";
 import { OfflineManagerModal } from "./components/OfflineManagerModal";
 import { PWAInstallButton } from "./components/PWAInstallButton";
@@ -114,7 +115,8 @@ import {
   Download,
   BookMarked,
   Receipt,
-  Fingerprint
+  Fingerprint,
+  Radio
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -704,7 +706,7 @@ export default function App() {
           // Strictly reject unauthorized Google users
           setUser(null);
           setAuthError(
-            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (urbaninteriorkenya@gmail.com, tassiahillhospital@gmail.com, or moraasdorcah@gmail.com) to onboard you and generate your credentials.`
+            `Access Denied: Google Account '${firebaseUser.email}' is not registered in the hospital staff directory. Please contact the Super Admin (tassiahillhospital@gmail.com or moraasdorcah@gmail.com) to onboard you and generate your credentials.`
           );
           signOut(auth).catch(() => {});
         }
@@ -962,6 +964,7 @@ export default function App() {
           "j": "journey",
           "k": "tickets",
           "q": "queue",
+          "s": "surveillance",
         };
 
         const targetTab = keyMap[normalizedKey];
@@ -1000,13 +1003,13 @@ export default function App() {
         const host = window.location.hostname;
         console.info(`Domain ${host} is unauthorized in Firebase Auth. Activating default Super Admin workspace mode.`);
         setSimulatedUser({
-          email: "urbaninteriorkenya@gmail.com",
-          displayName: "System Administrator (Master Admin)",
+          email: "tassiahillhospital@gmail.com",
+          displayName: "HALIMA ISAQ YAKUB (Hospital Admin)",
           isSimulated: true,
           photoURL: "https://lh3.googleusercontent.com/a/default-user=s96-c"
         });
         setAuthError(
-          `Domain Authorization Note: Domain (${host}) is not registered in Firebase Auth Authorized Domains. Logged in as Master Super Admin (urbaninteriorkenya@gmail.com). To enable real Google Sign-In popups, add '${host}' in Firebase Console → Authentication → Settings → Authorized domains.`
+          `Domain Authorization Note: Domain (${host}) is not registered in Firebase Auth Authorized Domains. Logged in as Hospital Admin (tassiahillhospital@gmail.com). To enable real Google Sign-In popups, add '${host}' in Firebase Console → Authentication → Settings → Authorized domains.`
         );
         return;
       } else if (errorCode === "auth/popup-blocked") {
@@ -1359,6 +1362,7 @@ export default function App() {
     { id: "admissions", label: "Admission & Wards", icon: Bed, enabled: true },
     { id: "doctor", label: "Doctor Station", icon: Stethoscope, enabled: toggles.doctor },
     { id: "transfers", label: "Transfers & Referrals", icon: ArrowRightLeft, enabled: true },
+    { id: "surveillance", label: "Public Health & IDSR", icon: Radio, enabled: true },
     { id: "diagnostics", label: "Lab / Radiology", icon: FlaskRound, enabled: toggles.laboratory || toggles.radiology },
     { id: "billing", label: "Split Billing", icon: CreditCard, enabled: toggles.billing },
     { id: "finance", label: "Finance & Accounts", icon: Landmark, enabled: true },
@@ -1412,6 +1416,7 @@ export default function App() {
           currentUserRole="Reception"
           currentUserName="Staff Member"
           defaultTab={policyTermsDefaultTab}
+          employees={employees}
         />
         <GoogleAuthModal
           isOpen={showGoogleAuthModal}
@@ -1591,6 +1596,7 @@ export default function App() {
 
               {/* Mobile Web Push Notification Button */}
               <PushNotificationHeaderButton
+                variant="header-mobile"
                 currentUser={{
                   name: activeUser?.displayName || loggedInEmployee?.name || "Medical Staff",
                   role: loggedInEmployee?.role || "Staff",
@@ -1944,8 +1950,8 @@ export default function App() {
 
         {/* Clean Plain Left Sidebar Navigation with Bright Grey Background - Fixed / Independent Scroll */}
         <aside className="hidden md:flex w-72 bg-slate-100 text-slate-700 flex-col justify-between shrink-0 shadow-sm overflow-y-auto z-20 border-r border-slate-200/80 relative group/sidebar">
-          <div className="p-5 relative z-10">
-            <div className="flex items-center justify-between mb-4 px-1">
+          <div className="p-3.5 relative z-10">
+            <div className="flex items-center justify-between mb-2 px-1">
               <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">FACILITY DEPARTMENTS</p>
               {totalSystemActiveNotifications > 0 ? (
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 border border-rose-200 text-rose-700 text-[10px] font-extrabold shadow-xs animate-pulse">
@@ -1964,7 +1970,7 @@ export default function App() {
             </div>
  
             {/* Navigation Menu (Strictly Filtered by role permissions: unauthorized features are completely hidden) */}
-            <nav className="space-y-1.5 relative">
+            <nav className="space-y-0.5 relative">
               {navItems
                 .filter((item) => item.enabled && checkTabPermission(item.id).allowed)
                 .map((item) => {
@@ -1977,9 +1983,9 @@ export default function App() {
                       key={item.id}
                       id={`sidebar-nav-${item.id}`}
                       onClick={() => setActiveTab(item.id)}
-                      whileHover={{ x: 4 }}
+                      whileHover={{ x: 3 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
+                      className={`group relative w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
                         isActive
                           ? "text-white font-bold"
                           : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/70"
@@ -1989,7 +1995,7 @@ export default function App() {
                       {isActive && (
                         <motion.div
                           layoutId="activeSideNavPill"
-                          className="absolute inset-0 bg-emerald-600 rounded-xl shadow-md shadow-emerald-600/20 border border-emerald-500/30"
+                          className="absolute inset-0 bg-emerald-600 rounded-lg shadow-md shadow-emerald-600/20 border border-emerald-500/30"
                           transition={{ type: "spring", stiffness: 450, damping: 35 }}
                         />
                       )}
@@ -1998,16 +2004,16 @@ export default function App() {
                       {isActive && (
                         <motion.div
                           layoutId="activeSideNavStrip"
-                          className="absolute left-0 top-2 bottom-2 w-1 bg-emerald-200 rounded-r-full"
+                          className="absolute left-0 top-2 bottom-2 w-1.5 bg-emerald-200 rounded-r-full"
                           transition={{ type: "spring", stiffness: 450, damping: 35 }}
                         />
                       )}
 
                       <div className="flex items-center gap-3 relative z-10 min-w-0">
-                        <div className={`p-1 rounded-lg transition-transform duration-200 shrink-0 ${isActive ? "scale-105" : "group-hover:scale-110 group-hover:rotate-3"}`}>
-                          <Icon className={`w-4.5 h-4.5 transition-colors ${isActive ? "text-white" : "text-slate-500 group-hover:text-emerald-700"}`} />
+                        <div className={`w-10 h-10 flex items-center justify-center rounded-lg transition-transform duration-200 shrink-0 ${isActive ? "scale-105" : "group-hover:scale-110"}`}>
+                          <Icon className={`w-10 h-10 transition-colors ${isActive ? "text-white" : "text-slate-500 group-hover:text-emerald-700"}`} />
                         </div>
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate leading-tight">{item.label}</span>
                       </div>
 
                       <div className="relative z-10 flex items-center gap-1.5 shrink-0 ml-2">
@@ -2015,7 +2021,7 @@ export default function App() {
                         {notifCount > 0 && (
                           <span
                             id={`sidebar-badge-${item.id}`}
-                            className="px-2 py-0.5 text-[10px] font-black rounded-full bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-sm shadow-rose-500/40 ring-1 ring-white/60 animate-pulse flex items-center gap-1 shrink-0"
+                            className="px-1.5 py-0.5 text-[9px] font-black rounded-full bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-sm shadow-rose-500/40 ring-1 ring-white/60 animate-pulse flex items-center gap-1 shrink-0"
                             title={`${notifCount} active / pending notification(s)`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping shrink-0" />
@@ -2298,7 +2304,7 @@ export default function App() {
                               <div className={`p-2 rounded-xl shrink-0 ${
                                 isActive ? "bg-emerald-600 text-white" : "bg-slate-800 text-emerald-400"
                               }`}>
-                                <Icon className="w-4 h-4" />
+                                <Icon className="w-8 h-8" />
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
@@ -2741,6 +2747,16 @@ export default function App() {
                       />
                     )}
 
+                    {activeTab === "surveillance" && (
+                      <PublicHealthSurveillance
+                        currentUser={currentUserIdentity}
+                        onNavigateToPatient={(pId) => {
+                          setSelectedBillingPatientId(pId);
+                          setActiveTab("doctor");
+                        }}
+                      />
+                    )}
+
                     {activeTab === "diagnostics" && (toggles.laboratory || toggles.radiology) && (
                       <AncillaryLabs toggles={toggles} onActionCompleted={() => setActiveTab("queue")} />
                     )}
@@ -3122,6 +3138,7 @@ export default function App() {
       currentUserRole={currentSystemRole}
       currentUserName={activeUser?.displayName || loggedInEmployee?.name || "Healthcare Staff"}
       defaultTab={policyTermsDefaultTab}
+      employees={employees}
     />
 
     {/* Offline Resilience, Cache Diagnostic & PWA Installation Modal */}

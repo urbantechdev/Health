@@ -15,11 +15,14 @@ export interface CleanSystemReport {
 export async function ensureSuperAdminsExist(): Promise<boolean> {
   let seeded = false;
   try {
+    const empSnap = await getDocs(collection(db, "employees"));
+    const existingEmails = new Set(empSnap.docs.map(d => d.data().email?.toLowerCase().trim()));
+
     for (const admin of MASTER_SUPER_ADMIN_SEEDS) {
-      const docId = `superadmin-${admin.email.replace(/[^a-zA-Z0-9]/g, "_")}`;
-      const ref = doc(db, "employees", docId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
+      const cleanEmail = admin.email.toLowerCase().trim();
+      if (!existingEmails.has(cleanEmail)) {
+        const docId = `superadmin-${cleanEmail.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const ref = doc(db, "employees", docId);
         await setDoc(
           ref,
           {
@@ -27,7 +30,10 @@ export async function ensureSuperAdminsExist(): Promise<boolean> {
             name: admin.name,
             email: admin.email,
             role: admin.role,
+            systemRole: admin.role,
             department: admin.department,
+            employmentType: admin.adminType === "developer" ? "developer" : "employee",
+            isEmployee: admin.adminType !== "developer",
             status: "active",
             createdAt: new Date().toISOString(),
             isSuperAdmin: true,
@@ -45,18 +51,33 @@ export async function ensureSuperAdminsExist(): Promise<boolean> {
 
 const APP_COLLECTIONS = [
   "patients",
-  "queue_tickets",
-  "clinical_encounters",
   "invoices",
-  "medications",
+  "queue",
+  "queue_tickets",
+  "system_tickets",
+  "encounters",
+  "clinical_encounters",
+  "patient_carts",
+  "patient_transfers",
+  "payroll",
+  "expenses",
+  "cashier_shifts",
+  "payment_vouchers",
+  "supplier_invoices",
+  "debtor_claims",
+  "remittance_batches",
+  "general_ledger",
+  "goods_received",
+  "procurement_grns",
+  "procurement_orders",
+  "procurement_requisitions",
+  "purchase_orders",
+  "purchase_requisitions",
   "lab_requests",
   "lab_results",
   "chat_messages",
   "chat_tickets",
   "transfers",
-  "purchase_orders",
-  "purchase_requisitions",
-  "suppliers",
   "security_logs",
   "audit_logs",
   "settings_audit_logs",
@@ -94,6 +115,20 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
       const snap = await getDocs(collection(db, colName));
       let colDeleted = 0;
       for (const d of snap.docs) {
+        // If encounters, also clean subcollections
+        if (colName === "encounters") {
+          const subcols = ["bill_items", "lab_requests", "prescriptions", "nursing_notes", "vitals"];
+          for (const s of subcols) {
+            try {
+              const subSnap = await getDocs(collection(db, "encounters", d.id, s));
+              for (const subDoc of subSnap.docs) {
+                await deleteDoc(subDoc.ref);
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
         await deleteDoc(d.ref);
         colDeleted++;
         totalDeleted++;
@@ -104,13 +139,20 @@ export async function cleanSystemAndPurgeTestData(): Promise<CleanSystemReport> 
     }
   }
 
-  // Handle employees - preserve super admins
+  // Handle employees - preserve only legitimate Super Admins (Moraa: Developer Admin, Halima: Hospital Admin)
   try {
     const empSnap = await getDocs(collection(db, "employees"));
     let empDeleted = 0;
     for (const d of empSnap.docs) {
       const data = d.data();
-      if (isSuperAdminEmail(data.email) || data.isSuperAdmin) {
+      const email = data.email?.toLowerCase().trim();
+      const name = (data.name || "").toLowerCase().trim();
+      
+      // Specifically remove Colins Gaucho or old developer admins
+      const isColinsGaucho = name.includes("gaucho") || email?.includes("gaucho");
+      const isAuthorizedSuperAdmin = isSuperAdminEmail(email) && !isColinsGaucho;
+
+      if (isAuthorizedSuperAdmin) {
         retainedAdmins.push(data.email || data.name);
       } else {
         await deleteDoc(d.ref);

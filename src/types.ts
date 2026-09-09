@@ -863,3 +863,121 @@ export interface BillItemDraft {
   addedAt?: string;
   [key: string]: any;
 }
+
+export interface ProblemItem {
+  id: string;
+  patientId?: string;
+  code: string; // KNHTS / ICD-10 Code
+  name: string;
+  category?: string;
+  onsetDate?: string;
+  status: "active" | "chronic" | "resolved" | "inactive";
+  severity?: "mild" | "moderate" | "severe";
+  notes?: string;
+  recordedBy?: string;
+  recordedAt?: string;
+  resolvedAt?: string;
+  updatedAt?: string;
+}
+
+export interface AllergyRecord {
+  id: string;
+  patientId?: string;
+  allergen: string;
+  category: "drug" | "food" | "environmental" | "other";
+  reaction: string;
+  severity: "mild" | "moderate" | "severe_anaphylaxis";
+  hptDrugClass?: string; // e.g. Penicillins, Sulphonamides, NSAIDs, Cephalosporins
+  onsetDate?: string;
+  recordedAt?: string;
+  recordedBy?: string;
+  status?: "active" | "resolved";
+}
+
+export interface FamilyHistoryRecord {
+  id: string;
+  patientId?: string;
+  relationship: "Father" | "Mother" | "Sibling" | "Grandparent" | "Other";
+  condition: string;
+  icd10Code?: string;
+  notes?: string;
+  ageAtOnset?: number;
+  recordedAt?: string;
+}
+
+export interface CpoeMultidisciplinaryOrder {
+  id: string;
+  patientId: string;
+  ticketNo?: string;
+  patientName?: string;
+  discipline: "physiotherapy" | "occupational_therapy" | "nutrition_dietetics" | "social_work" | "counselling" | "radiology" | "laboratory";
+  targetService: string;
+  frequencyOrSessions?: string;
+  clinicalIndication: string;
+  therapeuticGoals?: string;
+  dietType?: string; // for nutrition/dietetics
+  mobilityOrAffectedArea?: string; // for physio & occupational therapy
+  orderedBy: string;
+  orderedAt: string;
+  status: "ordered" | "in_progress" | "completed" | "cancelled";
+  completedAt?: string;
+  notes?: string;
+}
+
+export interface MchEncounterRecord {
+  id: string;
+  patientId: string;
+  patientName?: string;
+  encounterType: "ANC" | "PNC" | "CWC_Immunization";
+  visitNumber: number;
+  gestationWeeks?: number;
+  gravida?: number;
+  parity?: number;
+  fundalHeightCm?: number;
+  fetalHeartRateBpm?: number;
+  fetalPresentation?: string;
+  tetanusToxoidDose?: string;
+  ifasSupplementsGiven?: boolean;
+  childWeightKg?: number;
+  childHeightCm?: number;
+  immunizationGiven?: string[]; // e.g., BCG, OPV, Pentavalent, PCV10, Rota, Measles-Rubella
+  dewormingGiven?: boolean;
+  vitaminAGiven?: boolean;
+  counselingTopics?: string[];
+  nextAppointmentDate?: string;
+  doctorOrNurseName?: string;
+  notes?: string;
+  date: string;
+}
+
+export interface QualityMeasureRecord {
+  id: string;
+  measureId: string; // e.g. QM-HYP-01, QM-MAL-02, QM-MCH-03, QM-IMM-04, QM-DM-05
+  name: string;
+  category: "Maternal & Child Health" | "Communicable Diseases" | "Non-Communicable Diseases" | "Clinical Safety";
+  mohCode: string; // e.g. MOH 705 / 711
+  numerator: number;
+  denominator: number;
+  ratePercentage: number;
+  targetThreshold: number;
+  period: string; // e.g. 2026-Q3
+  status: "compliant" | "sub-optimal" | "critical";
+  calculatedAt: string;
+  exportFormat?: "DHIS2-JSON" | "MOH-CSV" | "FHIR-MeasureReport";
+  dhis2DataElementId?: string;
+}
+
+export interface GrowthChartMeasurement {
+  ageMonths: number;
+  weightKg: number;
+  heightCm: number;
+  gender: "Male" | "Female" | string;
+  wfaZScore?: number; // Weight-for-Age Z-score
+  wfaPercentile?: number;
+  hfaZScore?: number; // Height-for-Age Z-score
+  hfaPercentile?: number;
+  bmiZScore?: number; // BMI-for-Age Z-score
+  bmiPercentile?: number;
+  classification: "Severely Wasted" | "Underweight" | "Normal / Healthy" | "Overweight" | "Obese";
+}
+

@@ -388,6 +388,247 @@ export function generateFhirShrBundle(patient: any, visit: any): any {
   const bundleId = `bundle-shr-${patient?.nationalId || "gen"}-${Date.now()}`;
   const nowIso = new Date().toISOString();
 
+  const entries: any[] = [
+    {
+      resource: {
+        resourceType: "Patient",
+        id: patient?.id || "pat-default",
+        identifier: [
+          {
+            system: "https://health.go.ke/identifiers/national-id",
+            value: patient?.nationalId || ""
+          },
+          ...(patient?.passportNumber ? [{
+            system: "https://health.go.ke/identifiers/passport-number",
+            value: patient.passportNumber
+          }] : []),
+          ...(patient?.birthCertificateNumber ? [{
+            system: "https://health.go.ke/identifiers/birth-certificate",
+            value: patient.birthCertificateNumber
+          }] : []),
+          {
+            system: "https://sha.go.ke/identifiers/member-no",
+            value: `SHA-${patient?.nationalId || "MEMBER"}`
+          }
+        ],
+        name: [{ text: patient?.patientName || patient?.name || "Anonymous Patient" }],
+        telecom: [{ system: "phone", value: patient?.phone || "" }],
+        gender: (patient?.gender || "unknown").toLowerCase(),
+        birthDate: patient?.dob || patient?.dateOfBirth || "1990-01-01",
+        address: [{ text: patient?.residence || "Nairobi, Kenya" }]
+      }
+    },
+    {
+      resource: {
+        resourceType: "Encounter",
+        id: visit?.id || "enc-default",
+        status: "finished",
+        class: {
+          system: "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          code: "AMB",
+          display: "ambulatory"
+        },
+        subject: {
+          reference: `Patient/${patient?.id || "pat-default"}`
+        },
+        period: {
+          start: visit?.date || nowIso
+        },
+        reasonCode: [
+          {
+            coding: [
+              {
+                system: "https://knhts.health.go.ke/concept",
+                code: visit?.icd10Code || "J06.9",
+                display: visit?.diagnosis || visit?.icd10Title || "General Clinical Encounter"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ];
+
+  // 1. Condition (Problem List / Diagnosis)
+  if (visit?.diagnosis || visit?.icd10Code) {
+    entries.push({
+      resource: {
+        resourceType: "Condition",
+        id: `cond-${visit?.id || Date.now()}`,
+        clinicalStatus: {
+          coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" }]
+        },
+        verificationStatus: {
+          coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-ver-status", code: "confirmed" }]
+        },
+        category: [
+          {
+            coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-category", code: "encounter-diagnosis", display: "Encounter Diagnosis" }]
+          }
+        ],
+        code: {
+          coding: [
+            {
+              system: "https://knhts.health.go.ke/concept",
+              code: visit?.icd10Code || "J06.9",
+              display: visit?.diagnosis || "Clinical Diagnosis"
+            }
+          ]
+        },
+        subject: { reference: `Patient/${patient?.id || "pat-default"}` },
+        recordedDate: visit?.date || nowIso
+      }
+    });
+  }
+
+  // Active Problem List entries if present
+  if (Array.isArray(patient?.problemList)) {
+    patient.problemList.forEach((prob: any, idx: number) => {
+      entries.push({
+        resource: {
+          resourceType: "Condition",
+          id: `problem-${prob.id || idx}`,
+          clinicalStatus: {
+            coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: prob.status || "active" }]
+          },
+          category: [
+            {
+              coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-category", code: "problem-list-item", display: "Problem List Item" }]
+            }
+          ],
+          code: {
+            coding: [{ system: "https://knhts.health.go.ke/concept", code: prob.code, display: prob.name }]
+          },
+          subject: { reference: `Patient/${patient?.id || "pat-default"}` },
+          onsetDateTime: prob.onsetDate || nowIso
+        }
+      });
+    });
+  }
+
+  // 2. AllergyIntolerance
+  const allergies = patient?.allergies || visit?.allergies;
+  if (allergies) {
+    const allergyItems = Array.isArray(allergies) ? allergies : String(allergies).split(/[,;]+/);
+    allergyItems.forEach((alg: string, idx: number) => {
+      const cleanAlg = String(alg).trim();
+      if (!cleanAlg) return;
+      entries.push({
+        resource: {
+          resourceType: "AllergyIntolerance",
+          id: `alg-${idx}-${Date.now()}`,
+          clinicalStatus: {
+            coding: [{ system: "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical", code: "active" }]
+          },
+          category: ["medication"],
+          criticality: "high",
+          code: { text: cleanAlg },
+          patient: { reference: `Patient/${patient?.id || "pat-default"}` }
+        }
+      });
+    });
+  }
+
+  // 3. Observations (Vitals Signs & Pediatric Growth)
+  if (visit?.vitals) {
+    const v = visit.vitals;
+    if (v.bp) {
+      entries.push({
+        resource: {
+          resourceType: "Observation",
+          id: `obs-bp-${Date.now()}`,
+          status: "final",
+          code: { coding: [{ system: "http://loinc.org", code: "85354-9", display: "Blood pressure panel with all children optional" }] },
+          subject: { reference: `Patient/${patient?.id || "pat-default"}` },
+          valueString: String(v.bp)
+        }
+      });
+    }
+    if (v.pulse || v.heartRate) {
+      entries.push({
+        resource: {
+          resourceType: "Observation",
+          id: `obs-hr-${Date.now()}`,
+          status: "final",
+          code: { coding: [{ system: "http://loinc.org", code: "8867-4", display: "Heart rate" }] },
+          subject: { reference: `Patient/${patient?.id || "pat-default"}` },
+          valueQuantity: { value: Number(v.pulse || v.heartRate), unit: "beats/min" }
+        }
+      });
+    }
+    if (v.temperature || v.temp) {
+      entries.push({
+        resource: {
+          resourceType: "Observation",
+          id: `obs-temp-${Date.now()}`,
+          status: "final",
+          code: { coding: [{ system: "http://loinc.org", code: "8310-5", display: "Body temperature" }] },
+          subject: { reference: `Patient/${patient?.id || "pat-default"}` },
+          valueQuantity: { value: Number(v.temperature || v.temp), unit: "Cel" }
+        }
+      });
+    }
+    if (v.bmi) {
+      entries.push({
+        resource: {
+          resourceType: "Observation",
+          id: `obs-bmi-${Date.now()}`,
+          status: "final",
+          code: { coding: [{ system: "http://loinc.org", code: "39156-5", display: "Body mass index (BMI)" }] },
+          subject: { reference: `Patient/${patient?.id || "pat-default"}` },
+          valueString: String(v.bmi)
+        }
+      });
+    }
+  }
+
+  // 4. MedicationRequest (Prescriptions)
+  if (Array.isArray(visit?.prescriptions)) {
+    visit.prescriptions.forEach((rx: any, idx: number) => {
+      entries.push({
+        resource: {
+          resourceType: "MedicationRequest",
+          id: `medrx-${idx}-${Date.now()}`,
+          status: "active",
+          intent: "order",
+          medicationCodeableConcept: {
+            coding: [{ system: "https://hpt.health.go.ke/registry", code: rx.drugName, display: rx.drugName }],
+            text: `${rx.drugName} (${rx.formulation || "Oral"} ${rx.strength || ""})`
+          },
+          subject: { reference: `Patient/${patient?.id || "pat-default"}` },
+          dosageInstruction: [{ text: `${rx.dosage || "As directed"} • ${rx.instructions || "Take as directed"}` }],
+          dispenseRequest: { quantity: { value: rx.quantity || 1 } }
+        }
+      });
+    });
+  }
+
+  // 5. CarePlan (Treatment Plan & Follow-up)
+  entries.push({
+    resource: {
+      resourceType: "CarePlan",
+      id: `careplan-${visit?.id || Date.now()}`,
+      status: "active",
+      intent: "order",
+      title: "Interdisciplinary Clinical Outpatient Care Plan",
+      description: visit?.clinicalNotes || "Standard clinical care protocol, medication reconciliation, and follow-up review.",
+      subject: { reference: `Patient/${patient?.id || "pat-default"}` },
+      period: {
+        start: visit?.date || nowIso,
+        end: visit?.followUpDate ? `${visit.followUpDate}T09:00:00Z` : undefined
+      },
+      activity: [
+        {
+          detail: {
+            kind: "Appointment",
+            description: visit?.followUpDate ? `Scheduled clinical follow-up on ${visit.followUpDate}` : "Routine follow-up as clinically indicated",
+            status: "scheduled"
+          }
+        }
+      ]
+    }
+  });
+
   return {
     resourceType: "Bundle",
     id: bundleId,
@@ -397,56 +638,6 @@ export function generateFhirShrBundle(patient: any, visit: any): any {
       system: "https://health.go.ke/fhir/NamingSystem/shr-bundle",
       value: bundleId
     },
-    entry: [
-      {
-        resource: {
-          resourceType: "Patient",
-          id: patient?.id || "pat-default",
-          identifier: [
-            {
-              system: "https://health.go.ke/identifiers/national-id",
-              value: patient?.nationalId || ""
-            },
-            {
-              system: "https://sha.go.ke/identifiers/member-no",
-              value: `SHA-${patient?.nationalId || "MEMBER"}`
-            }
-          ],
-          name: [{ text: patient?.patientName || patient?.name || "Anonymous Patient" }],
-          telecom: [{ system: "phone", value: patient?.phone || "" }],
-          gender: (patient?.gender || "unknown").toLowerCase(),
-          birthDate: patient?.dateOfBirth || "1990-01-01"
-        }
-      },
-      {
-        resource: {
-          resourceType: "Encounter",
-          id: visit?.id || "enc-default",
-          status: "finished",
-          class: {
-            system: "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-            code: "AMB",
-            display: "ambulatory"
-          },
-          subject: {
-            reference: `Patient/${patient?.id || "pat-default"}`
-          },
-          period: {
-            start: visit?.date || nowIso
-          },
-          reasonCode: [
-            {
-              coding: [
-                {
-                  system: "http://hl7.org/fhir/sid/icd-10",
-                  code: visit?.icd10Code || "J06.9",
-                  display: visit?.diagnosis || visit?.icd10Title || "General Clinical Encounter"
-                }
-              ]
-            }
-          ]
-        }
-      }
-    ]
+    entry: entries
   };
 }
