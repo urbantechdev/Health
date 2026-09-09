@@ -11,8 +11,7 @@ service cloud.firestore {
     function isSuperAdmin() {
       return isAuthenticated() && (
         request.auth.token.email == "tassiahillhospital@gmail.com" ||
-        request.auth.token.email == "moraasdorcah@gmail.com" ||
-        request.auth.token.email == "urbaninteriorkenya@gmail.com"
+        request.auth.token.email == "moraasdorcah@gmail.com"
       );
     }
 
@@ -192,6 +191,20 @@ service cloud.firestore {
     
     // Native Web Push Subscriptions
     match /push_subscriptions/{subId} {
+      allow read, write: if true;
+    }
+
+    // Public Health & Disease Surveillance (eIDSR, MOH 505, IHR 2005)
+    match /surveillance_cases/{caseId} {
+      allow read, write: if true;
+    }
+    match /idsr_reports/{reportId} {
+      allow read, write: if true;
+    }
+    match /public_health_events/{eventId} {
+      allow read, write: if true;
+    }
+    match /ihr_notifications/{ihrId} {
       allow read, write: if true;
     }
     

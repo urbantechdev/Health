@@ -31,16 +31,91 @@ function suppressViteHmrLogsPlugin(): Plugin {
             attrs: { type: 'text/javascript' },
             children: `
 (function() {
+  var NativeWebSocket = window.WebSocket;
+  if (NativeWebSocket) {
+    function MockHmrSocket(url, protocols) {
+      this.url = String(url);
+      this.protocol = Array.isArray(protocols) ? protocols[0] : (protocols || 'vite-hmr');
+      this.readyState = 1;
+      this.bufferedAmount = 0;
+      this.extensions = '';
+      this.binaryType = 'blob';
+      this.CONNECTING = 0;
+      this.OPEN = 1;
+      this.CLOSING = 2;
+      this.CLOSED = 3;
+      this._listeners = {};
+      var self = this;
+      setTimeout(function() {
+        if (typeof self.onopen === 'function') {
+          try { self.onopen(new Event('open')); } catch (_) {}
+        }
+      }, 0);
+    }
+
+    MockHmrSocket.prototype = {
+      addEventListener: function(type, listener) {
+        if (!this._listeners[type]) this._listeners[type] = [];
+        this._listeners[type].push(listener);
+        if (type === 'open') {
+          var self = this;
+          setTimeout(function() {
+            try { listener.call(self, new Event('open')); } catch (_) {}
+          }, 0);
+        }
+      },
+      removeEventListener: function(type, listener) {
+        if (!this._listeners[type]) return;
+        this._listeners[type] = this._listeners[type].filter(function(l) { return l !== listener; });
+      },
+      dispatchEvent: function(event) {
+        var listeners = this._listeners[event.type] || [];
+        for (var i = 0; i < listeners.length; i++) {
+          try { listeners[i].call(this, event); } catch (_) {}
+        }
+        return true;
+      },
+      send: function() {},
+      close: function() {
+        this.readyState = 3;
+      }
+    };
+
+    window.WebSocket = function(url, protocols) {
+      var isHmr = false;
+      try {
+        var urlStr = String(url);
+        var protoStr = Array.isArray(protocols) ? protocols.join(' ') : String(protocols || '');
+        if (protoStr.includes('vite') || urlStr.includes('vite') || urlStr.includes('24678') || urlStr.includes('token=')) {
+          isHmr = true;
+        }
+      } catch (_) {}
+
+      if (isHmr) {
+        return new MockHmrSocket(url, protocols);
+      }
+      return new NativeWebSocket(url, protocols);
+    };
+
+    window.WebSocket.CONNECTING = 0;
+    window.WebSocket.OPEN = 1;
+    window.WebSocket.CLOSING = 2;
+    window.WebSocket.CLOSED = 3;
+    window.WebSocket.prototype = NativeWebSocket.prototype;
+  }
+
   function isViteNotice(arg) {
     if (!arg) return false;
     try {
       if (typeof arg === 'string') return /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(arg);
-      if (arg.message && /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(String(arg.message))) return true;
-      if (arg.reason && /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(String(arg.reason))) return true;
-      if (arg.stack && /\\[vite\\]|vite|websocket/i.test(String(arg.stack))) return true;
-      if (arg.filename && /vite|@vite/i.test(String(arg.filename))) return true;
-      if (arg.target && (arg.target instanceof WebSocket || (arg.target.url && /ws/i.test(arg.target.url)))) return true;
-      return /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(String(arg));
+      var text = (arg.message || '') + ' ' + (arg.reason || '') + ' ' + (arg.stack || '') + ' ' + (arg.name || '') + ' ' + (arg.filename || '');
+      if (/\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(text)) return true;
+      if (arg.target && (arg.target instanceof WebSocket || arg.target.url || arg.target.protocol)) {
+        if (/\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(String(arg.target.url || '') + ' ' + String(arg.target.protocol || ''))) return true;
+      }
+      var str = '';
+      try { str = JSON.stringify(arg); } catch (_) { str = String(arg); }
+      return /\\[vite\\]|vite|websocket|ws:\\/\\/|wss:\\/\\//i.test(str);
     } catch (_) {
       return false;
     }
