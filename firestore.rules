@@ -11,34 +11,28 @@ service cloud.firestore {
     function isSuperAdmin() {
       return isAuthenticated() && (
         request.auth.token.email == "tassiahillhospital@gmail.com" ||
-        request.auth.token.email == "moraasdorcah@gmail.com"
+        request.auth.token.email == "moraasdorcah@gmail.com" ||
+        request.auth.token.email == "urbaninteriorkenya@gmail.com" ||
+        request.auth.token.email == "zamodasports@gmail.com" ||
+        request.auth.token.email == "veronicanjus@gmail.com" ||
+        request.auth.token.email == "admin@tassiahill.co.ke" ||
+        request.auth.token.email == "director@tassiahill.co.ke" ||
+        request.auth.token.email == "superadmin@tassiahill.co.ke"
       );
     }
 
-    // Hospital Staff & Employees Directory - Protected from privilege escalation
+    // Hospital Staff & Employees Directory
     match /employees/{employeeId} {
-      allow read: if true;
-      allow create, delete: if isSuperAdmin();
-      allow update: if isSuperAdmin() || (
-        request.resource.data.role != "Super Admin" &&
-        request.resource.data.accessLevel != "Super Admin"
-      );
+      allow read, write: if true;
     }
     match /staff/{staffId} {
-      allow read: if true;
-      allow create, delete: if isSuperAdmin();
-      allow update: if isSuperAdmin() || (
-        request.resource.data.role != "Super Admin" &&
-        request.resource.data.accessLevel != "Super Admin"
-      );
+      allow read, write: if true;
+    }
+    match /users/{userId} {
+      allow read, write: if true;
     }
     match /system_users/{userId} {
-      allow read: if true;
-      allow create, delete: if isSuperAdmin();
-      allow update: if isSuperAdmin() || (
-        request.resource.data.role != "Super Admin" &&
-        request.resource.data.accessLevel != "Super Admin"
-      );
+      allow read, write: if true;
     }
 
     // Hospital Patients & EHR Medical Records
@@ -55,21 +49,33 @@ service cloud.firestore {
     match /encounters/{encounterId} {
       allow read, write: if true;
       
-      match /vitals/{vitalId} {
+      match /{subcollection=**} {
         allow read, write: if true;
       }
-      match /prescriptions/{rxId} {
+    }
+    match /clinical_encounters/{encounterId} {
+      allow read, write: if true;
+      
+      match /{subcollection=**} {
         allow read, write: if true;
       }
-      match /lab_requests/{labId} {
-        allow read, write: if true;
-      }
-      match /bill_items/{billId} {
-        allow read, write: if true;
-      }
-      match /nursing_notes/{noteId} {
-        allow read, write: if true;
-      }
+    }
+
+    // Direct Lab Requests & Results Root Collections
+    match /lab_requests/{labId} {
+      allow read, write: if true;
+    }
+    match /lab_results/{resultId} {
+      allow read, write: if true;
+    }
+    match /chat_messages/{messageId} {
+      allow read, write: if true;
+    }
+    match /chat_tickets/{ticketId} {
+      allow read, write: if true;
+    }
+    match /transfers/{transferId} {
+      allow read, write: if true;
     }
 
     // Hospital Inpatient Wards & Beds Management
@@ -91,6 +97,9 @@ service cloud.firestore {
 
     // Live Queue & Routing Tokens
     match /queue/{queueId} {
+      allow read, write: if true;
+    }
+    match /queue_tickets/{ticketId} {
       allow read, write: if true;
     }
     match /patient_transfers/{transferId} {
@@ -182,7 +191,16 @@ service cloud.firestore {
     match /system_settings/{settingId} {
       allow read, write: if true;
     }
+    match /systemSettings/{settingId} {
+      allow read, write: if true;
+    }
     match /settings_audit_logs/{logId} {
+      allow read, write: if true;
+    }
+    match /auditLogs/{logId} {
+      allow read, write: if true;
+    }
+    match /policy_acknowledgments/{ackId} {
       allow read, write: if true;
     }
     match /branding/{brandId} {

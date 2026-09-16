@@ -1,12 +1,12 @@
 {
-  "projectId": "gen-lang-client-0099458857",
-  "appId": "1:655379720198:web:82575b2dc3f1039de3bb87",
-  "apiKey": "AIzaSyC4Fm_9D1k0Cl4FGvUrxmQR430hkdWmBKo",
-  "authDomain": "gen-lang-client-0099458857.firebaseapp.com",
+  "projectId": "mystic-metric-xpthm",
+  "appId": "1:141983558802:web:cfed9f5a3cffcdf86e4a4b",
+  "apiKey": "AIzaSyCPaWR7NlT_5i4x2zf4aBbLVxQ05jZRXRo",
+  "authDomain": "mystic-metric-xpthm.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-nextgenhms-ce5c1ebf-4f57-48ce-a22a-a47f8f54c83a",
-  "storageBucket": "gen-lang-client-0099458857.firebasestorage.app",
-  "messagingSenderId": "655379720198",
+  "storageBucket": "mystic-metric-xpthm.firebasestorage.app",
+  "messagingSenderId": "141983558802",
   "measurementId": "",
-  "oAuthClientId": "655379720198-2c7gq4cpffta8djvme5e0rcu0pvnf89b.apps.googleusercontent.com",
+  "oAuthClientId": "141983558802-kkcj6n8omf313dioan9e0b21khc5f1sc.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }
