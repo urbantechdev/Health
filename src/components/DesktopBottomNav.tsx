@@ -6,17 +6,15 @@ import {
   Ticket,
   ArrowRightLeft,
   MessageSquare,
-  FileDown,
   Keyboard,
   Activity,
   X,
   ShoppingCart,
   Monitor,
-  Scale,
+  Tv,
   Receipt
 } from "lucide-react";
 import { SystemRole, getRoleConfig } from "../constants/roles";
-import { downloadReadmeFile } from "../lib/downloadReadme";
 import { onHotkeyAction } from "../lib/hotkeyService";
 
 interface DesktopBottomNavProps {
@@ -65,7 +63,6 @@ export default function DesktopBottomNav({
   unreadChatCount = 0,
   onOpenTransfer,
   pendingTransfersCount = 0,
-  onOpenPolicyTerms,
   checkTabPermission,
 }: DesktopBottomNavProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -130,12 +127,22 @@ export default function DesktopBottomNav({
     {
       id: "queue",
       label: "Live Queue",
-      subtitle: "Ticket Display & PA",
-      icon: Monitor,
+      subtitle: "Queue Board",
+      icon: Activity,
       count: queueCount,
       enabled: queueEnabled && checkTabPermission("queue").allowed,
       shortcut: "Alt + Q",
       badgeColor: "bg-gradient-to-r from-amber-500 to-orange-500",
+    },
+    {
+      id: "big-monitor",
+      label: "Big Monitor",
+      subtitle: "TV Signage & PA",
+      icon: Tv,
+      count: queueCount,
+      enabled: queueEnabled && checkTabPermission("big-monitor").allowed,
+      shortcut: "Alt + M",
+      badgeColor: "bg-gradient-to-r from-emerald-500 to-teal-500",
     },
   ];
 
@@ -157,6 +164,8 @@ export default function DesktopBottomNav({
     { key: "Alt + J", desc: "Patient Journey" },
     { key: "Alt + K", desc: "Patient Tickets" },
     { key: "Alt + Q", desc: "Live Queue Board" },
+    { key: "Alt + M", desc: "Big Monitor TV Signage & Voice PA" },
+    { key: "Alt + S", desc: "Public Health & IDSR Surveillance" },
   ];
 
   return (
@@ -415,42 +424,6 @@ export default function DesktopBottomNav({
                     <div className="flex flex-col text-left">
                       <span className="whitespace-nowrap leading-tight">Receipts</span>
                       <span className="text-[10px] text-emerald-700 font-mono font-medium">Invoices & Clearance</span>
-                    </div>
-                  </button>
-                </div>
-              )}
-
-              {/* Download System README.md Trigger */}
-              <div className="relative hidden lg:block group">
-                <div className="absolute -inset-1.5 rounded-2xl bg-emerald-500/30 pointer-events-none opacity-0 group-hover:opacity-80 blur-md transition-opacity duration-300 animate-green-smoke-aura" />
-                <button
-                  id="desktop-dock-readme-btn"
-                  onClick={() => downloadReadmeFile("The-Tassia-Hill-Hospital-HMS-Documentation.md")}
-                  className="relative z-10 flex items-center gap-2 px-3.5 lg:px-4 py-2.5 lg:py-3 rounded-2xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 text-xs lg:text-sm font-black border border-slate-300/90 hover:border-emerald-300 transition-all cursor-pointer hover:shadow-md active:scale-95 group min-h-[54px] lg:min-h-[62px]"
-                  title="Download complete system architecture & setup documentation (README.md)"
-                >
-                  <FileDown className="w-5 h-5 text-emerald-600 group-hover:scale-110 transition-transform" />
-                  <div className="flex flex-col text-left">
-                    <span className="whitespace-nowrap leading-tight">Docs</span>
-                    <span className="text-[10px] text-emerald-600 font-mono font-medium">README</span>
-                  </div>
-                </button>
-              </div>
-
-              {/* System Policy, Terms of Use & ODPC Data Protection Center */}
-              {onOpenPolicyTerms && (
-                <div className="relative hidden md:block group">
-                  <div className="absolute -inset-1.5 rounded-2xl bg-emerald-500/30 pointer-events-none opacity-0 group-hover:opacity-80 blur-md transition-opacity duration-300 animate-green-smoke-aura" />
-                  <button
-                    id="desktop-dock-policy-terms-btn"
-                    onClick={() => onOpenPolicyTerms("privacy")}
-                    className="relative z-10 flex items-center gap-2 px-3.5 lg:px-4 py-2.5 lg:py-3 rounded-2xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-900 text-xs lg:text-sm font-black border border-slate-300/90 hover:border-emerald-300 transition-all cursor-pointer hover:shadow-md active:scale-95 group min-h-[54px] lg:min-h-[62px]"
-                    title="View System Policy, Kenya Data Protection Act (KDPA 2019) & Terms of Use"
-                  >
-                    <Scale className="w-5 h-5 text-emerald-700 group-hover:scale-110 transition-transform" />
-                    <div className="flex flex-col text-left">
-                      <span className="whitespace-nowrap leading-tight">Policies</span>
-                      <span className="text-[10px] text-emerald-700 font-mono font-medium">ODPC / KDPA</span>
                     </div>
                   </button>
                 </div>

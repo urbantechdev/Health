@@ -1,7 +1,18 @@
 import React from 'react';
-import { Download, Check, Smartphone } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { PWAInstallGuideModal } from './PWAInstallGuideModal';
+
+export const WindowsLogo: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-label="Windows logo"
+  >
+    <path d="M0 3.449L9.75 2.1v9.451H0zM10.949 1.949L24 0v11.4H10.949zM0 12.6h9.75v9.451L0 20.699zM10.949 12.6H24V24l-13.051-1.899z" />
+  </svg>
+);
 
 export const PWAInstallButton: React.FC<{
   variant?: 'header' | 'compact' | 'full' | 'header-mobile' | 'sidebar';
@@ -49,14 +60,10 @@ export const PWAInstallButton: React.FC<{
         <button
           id="btn-pwa-install-mobile"
           onClick={handleAction}
-          title={isIOS ? "Install HMIS on iPhone / iPad" : "Install HMIS to device"}
+          title={isIOS ? "Install HMIS on iPhone / iPad" : "Install HMIS Windows / Mobile App"}
           className={`p-1 text-white hover:text-white/80 transition-all active:scale-90 cursor-pointer relative ${className}`}
         >
-          {isIOS ? (
-            <Smartphone className="w-5 h-5 text-emerald-200" />
-          ) : (
-            <Download className="w-5 h-5 text-emerald-200" />
-          )}
+          <WindowsLogo className="w-5 h-5 text-white" />
           <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
         </button>
       )}
@@ -65,15 +72,11 @@ export const PWAInstallButton: React.FC<{
         <button
           id="btn-pwa-install-header"
           onClick={handleAction}
-          title={isIOS ? "Install HMIS on iPhone Home Screen" : "Install HMIS Desktop/Mobile Application for offline access"}
-          className={`flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 active:scale-95 text-white text-xs font-semibold border border-emerald-400/40 shadow-xs transition duration-200 cursor-pointer ${className}`}
+          title={isIOS ? "Install HMIS on iPhone Home Screen" : "Install HMIS Windows Desktop App (Standalone Workstation)"}
+          className={`relative flex items-center justify-center p-1.5 text-white hover:text-white/80 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer ${className}`}
         >
-          {isIOS ? (
-            <Smartphone className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
-          ) : (
-            <Download className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
-          )}
-          <span>{isIPhone ? "Install on iPhone" : isIOS ? "Install on iPad" : "Install App"}</span>
+          <WindowsLogo className="w-6 h-6 lg:w-7 lg:h-7 text-white" />
+          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         </button>
       )}
 
@@ -82,8 +85,9 @@ export const PWAInstallButton: React.FC<{
           id="btn-pwa-install-compact"
           onClick={handleAction}
           className={`flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-semibold transition cursor-pointer ${className}`}
+          title="Install HMIS Windows / Desktop App"
         >
-          <Download className="w-3 h-3" />
+          <WindowsLogo className="w-3.5 h-3.5" />
           <span>Install</span>
         </button>
       )}
@@ -94,8 +98,8 @@ export const PWAInstallButton: React.FC<{
           onClick={handleAction}
           className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-md transition-all cursor-pointer ${className}`}
         >
-          {isIOS ? <Smartphone className="w-4 h-4" /> : <Download className="w-4 h-4" />}
-          <span>{isIOS ? "Install on iPhone / iPad (iOS)" : hasNativePrompt ? "Install HMIS Application Now" : "Install App on this Device"}</span>
+          <WindowsLogo className="w-4 h-4" />
+          <span>{isIOS ? "Install on iPhone / iPad (iOS)" : hasNativePrompt ? "Install HMIS Windows / Desktop Application Now" : "Install HMIS Windows App on this Workstation"}</span>
         </button>
       )}
 
@@ -105,10 +109,10 @@ export const PWAInstallButton: React.FC<{
           onClick={handleAction}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-600/30 text-emerald-100 text-xs font-medium transition cursor-pointer ${className}`}
         >
-          {isIOS ? <Smartphone className="w-4 h-4 text-emerald-400" /> : <Download className="w-4 h-4 text-emerald-400" />}
+          <WindowsLogo className="w-4 h-4 text-emerald-400" />
           <div className="text-left">
             <div className="font-semibold text-white">Install HMIS App</div>
-            <div className="text-[10px] text-emerald-300/80">{isIOS ? "Add to iPhone Home Screen" : "Works offline on all browsers"}</div>
+            <div className="text-[10px] text-emerald-300/80">{isIOS ? "Add to iPhone Home Screen" : "Windows & Desktop Standalone App"}</div>
           </div>
         </button>
       )}

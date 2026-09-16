@@ -52,7 +52,8 @@ import PatientCartPOSModal from "./PatientCartPOSModal";
 import HaemogramDocument from "./HaemogramDocument";
 import { isHaemogramReport } from "../lib/haemogramParser";
 import { syncDoctorConsultationToCart } from "../lib/patientCartService";
-import { DEFAULT_HOSPITAL_WARDS, createHospitalEncounter } from "../lib/encounterService";
+import { DEFAULT_HOSPITAL_WARDS, createHospitalEncounter, addEncounterPrescription, addEncounterLabRequest, addEncounterDoctorNote } from "../lib/encounterService";
+import { cleanFirestoreData } from "../lib/firebase";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 import { LabDirectoryModal } from "./LabDirectoryModal";
@@ -279,12 +280,18 @@ export default function DoctorsDesk({
         status: "serving",
       });
 
-      const matched = patsFromDbAndQueue(ticket.patientName);
+      const matched = patsFromDbAndQueue(ticket.patientId || ticket.nationalId || ticket.patientName);
       if (matched) {
         setSelectedPatientId(matched.id);
       }
       if (ticket.issue) {
         setSymptoms(ticket.issue);
+      }
+      if (ticket.vitals) {
+        if (ticket.vitals.bp) setBp(String(ticket.vitals.bp));
+        if (ticket.vitals.temp) setTemp(String(ticket.vitals.temp));
+        if (ticket.vitals.pulse) setPulse(String(ticket.vitals.pulse));
+        if (ticket.vitals.weight) setWeight(String(ticket.vitals.weight));
       }
       setIncomingPatientPrompt(null);
       
@@ -302,7 +309,7 @@ export default function DoctorsDesk({
     }
   };
 
-  // Auto-populate symptom fields from the queue ticket issue
+  // Auto-populate symptom fields and triage vitals from the queue ticket
   useEffect(() => {
     if (selectedPatientId && patients.length > 0) {
       const currentPat = patients.find(p => p.id === selectedPatientId);
@@ -312,11 +319,20 @@ export default function DoctorsDesk({
         getDocs(qSnap).then((snap) => {
           if (!snap.empty) {
             const activeTick = snap.docs.find(d => d.data().status !== "completed");
-            if (activeTick && activeTick.data().issue) {
-              setSymptoms(activeTick.data().issue);
+            if (activeTick) {
+              const data = activeTick.data();
+              if (data.issue && !symptoms) {
+                setSymptoms(data.issue);
+              }
+              if (data.vitals) {
+                if (data.vitals.bp && !bp) setBp(String(data.vitals.bp));
+                if (data.vitals.temp && !temp) setTemp(String(data.vitals.temp));
+                if (data.vitals.pulse && !pulse) setPulse(String(data.vitals.pulse));
+                if (data.vitals.weight && !weight) setWeight(String(data.vitals.weight));
+              }
             }
           }
-        }).catch(err => console.log("Error fetching active ticket issue:", err));
+        }).catch(err => console.log("Error fetching active ticket data:", err));
       }
     }
   }, [selectedPatientId, patients]);
@@ -614,21 +630,48 @@ export default function DoctorsDesk({
       const assignedTicketNo = `PHA-${baseNum}`;
       const instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Pharmacy`;
 
-      const pharmaPayload: any = {
+      // Active encounter linkage & persistence
+      const activeEncId = selectedPatient.activeEncounterId || (selectedPatient as any).encounterId || activeServingTicket?.encounterId || null;
+      if (activeEncId) {
+        addEncounterDoctorNote(activeEncId, {
+          doctorName,
+          symptoms,
+          diagnosis,
+          vitals: { temp, bp, pulse, weight },
+          timestamp: new Date().toISOString(),
+        }).catch(err => console.warn("Doctor note subcollection error:", err));
+
+        for (const rx of draftPrescriptions) {
+          addEncounterPrescription(activeEncId, {
+            drugName: rx.drugName,
+            quantity: rx.quantity,
+            dosage: rx.dosage,
+            instructions: rx.instructions,
+            unitPrice: rx.unitPrice !== undefined ? rx.unitPrice : (rx.price || 150),
+            formulation: rx.formulation || "Tablet",
+            strength: rx.strength || "",
+            prescribedBy: doctorName,
+          }).catch(err => console.warn("Prescription subcollection error:", err));
+        }
+      }
+
+      const pharmaPayload: any = cleanFirestoreData({
+        department: "pharmacy",
         currentDepartment: "pharmacy",
         ticketNo: assignedTicketNo,
         status: "pending",
         service: "Pharmacy Dispensing",
+        encounterId: activeEncId,
         notes: `Prescriptions ready (${draftPrescriptions.length} items): ${draftPrescriptions.map((p) => `${p.drugName} (x${p.quantity})`).join(", ")}${diagnosis ? ` | Dx: ${diagnosis}` : ""}`,
         prescriptions: draftPrescriptions,
         timestamp: new Date().toISOString(),
         originDoctorName: doctorName,
-      };
+      });
 
       if (ticketId) {
         await updateDoc(doc(db, "queue", ticketId), pharmaPayload);
       } else {
-        await addDoc(collection(db, "queue"), {
+        await addDoc(collection(db, "queue"), cleanFirestoreData({
           ...pharmaPayload,
           patientName: selectedPatient.patientName,
           patientId: selectedPatient.id,
@@ -637,7 +680,7 @@ export default function DoctorsDesk({
           age: selectedPatient.age || 0,
           gender: selectedPatient.gender || "Unknown",
           biometricStatus: "verified",
-        });
+        }));
       }
 
       // 4. Audio & Voice Broadcast
@@ -839,26 +882,41 @@ export default function DoctorsDesk({
       const instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Laboratory`;
       const routingDetails = `Instantly wired to Lab Dashboard Queue for: ${testsToOrder.join(" & ")}.`;
 
+      // Active encounter linkage & persistence
+      const activeEncId = selectedPatient.activeEncounterId || (selectedPatient as any).encounterId || activeServingTicket?.encounterId || null;
+      if (activeEncId) {
+        for (const test of testsToOrder) {
+          addEncounterLabRequest(activeEncId, {
+            testName: test,
+            department: "laboratory",
+            category: "Diagnostic",
+            requestedBy: currentDoctorName,
+          }).catch(err => console.warn("Lab request subcollection error:", err));
+        }
+      }
+
       if (!qSnap.empty) {
         const ticketDoc = qSnap.docs[0];
         const ticketData = ticketDoc.data();
         const existingNum = ticketData.ticketNo?.includes("-") ? ticketData.ticketNo.split("-")[1] : baseNum;
         assignedTicketNo = `LAB-${existingNum}`;
 
-        await updateDoc(doc(db, "queue", ticketDoc.id), {
+        await updateDoc(doc(db, "queue", ticketDoc.id), cleanFirestoreData({
+          department: "laboratory",
           currentDepartment: "laboratory",
           ticketNo: assignedTicketNo,
           status: "pending",
+          encounterId: activeEncId,
           service: "Laboratory Diagnostics",
           requestedTests: testsToOrder,
           labTestsOrdered: testsToOrder,
           notes: `Doctor Order: ${testsToOrder.join(", ")}${diagnosis ? ` (Dx: ${diagnosis})` : ""}`,
           timestamp: new Date().toISOString(),
           originDoctorName: currentDoctorName
-        });
+        }));
       } else {
         // Fallback: Create new queue ticket directly
-        await addDoc(collection(db, "queue"), {
+        await addDoc(collection(db, "queue"), cleanFirestoreData({
           ticketNo: assignedTicketNo,
           patientName: selectedPatient.patientName,
           patientId: selectedPatient.id,
@@ -867,15 +925,17 @@ export default function DoctorsDesk({
           age: selectedPatient.age || 0,
           gender: selectedPatient.gender || "Unknown",
           biometricStatus: "verified",
+          department: "laboratory",
           currentDepartment: "laboratory",
           status: "pending",
+          encounterId: activeEncId,
           service: "Laboratory Diagnostics",
           requestedTests: testsToOrder,
           labTestsOrdered: testsToOrder,
           notes: `Doctor Direct Cue: ${testsToOrder.join(", ")}${diagnosis ? ` (Dx: ${diagnosis})` : ""}`,
           timestamp: new Date().toISOString(),
           originDoctorName: currentDoctorName
-        });
+        }));
       }
 
       // Audio-visual cues & speech announcement
@@ -1008,6 +1068,18 @@ export default function DoctorsDesk({
 
       const labReferralTests = draftReferrals.filter(r => r.department === "laboratory").map(r => r.testName);
 
+      // Active encounter linkage & persistence
+      const activeEncId = selectedPatient.activeEncounterId || (selectedPatient as any).encounterId || activeServingTicket?.encounterId || null;
+      if (activeEncId) {
+        addEncounterDoctorNote(activeEncId, {
+          doctorName: currentDoctorName,
+          symptoms,
+          diagnosis,
+          vitals: { temp, bp, pulse, weight },
+          timestamp: new Date().toISOString(),
+        }).catch(err => console.warn("Doctor note subcollection error:", err));
+      }
+
       if (draftReferrals.length > 0) {
         // If e-referrals are present (e.g., Lab or Radiology), auto-route patient to that queue
         const nextDept = draftReferrals[0].department;
@@ -1037,22 +1109,36 @@ export default function DoctorsDesk({
         assignedTicketNo = `${nextPrefix}-${baseNum}`;
         instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to ${assignedStationName.split("(")[0].trim()}`;
 
-        const updatePayload: any = {
+        if (activeEncId) {
+          for (const ref of draftReferrals) {
+            addEncounterLabRequest(activeEncId, {
+              testName: ref.testName,
+              department: ref.department,
+              category: "Diagnostic",
+              notes: ref.notes,
+              requestedBy: currentDoctorName,
+            }).catch(err => console.warn("Lab referral subcollection error:", err));
+          }
+        }
+
+        const updatePayload: any = cleanFirestoreData({
+          department: nextDept,
           currentDepartment: nextDept,
           ticketNo: assignedTicketNo,
           status: "pending",
+          encounterId: activeEncId,
           service: nextDept === "laboratory" ? "Laboratory Diagnostics" : nextDept === "radiology" ? "Radiology Imaging" : "Specialist Referral",
           requestedTests: nextDept === "laboratory" ? labReferralTests : draftReferrals.map(r => r.testName),
           labTestsOrdered: labReferralTests,
           notes: `Referred by Doctor: ${diagnosis || "Diagnostic referral"}. Tests: ${draftReferrals.map(r => r.testName).join(", ")}`,
           timestamp: new Date().toISOString(),
           originDoctorName: currentDoctorName
-        };
+        });
 
         if (ticketId) {
           await updateDoc(doc(db, "queue", ticketId), updatePayload);
         } else {
-          await addDoc(collection(db, "queue"), {
+          await addDoc(collection(db, "queue"), cleanFirestoreData({
             ...updatePayload,
             patientName: selectedPatient.patientName,
             patientId: selectedPatient.id,
@@ -1061,7 +1147,7 @@ export default function DoctorsDesk({
             age: selectedPatient.age || 0,
             gender: selectedPatient.gender || "Unknown",
             biometricStatus: "verified",
-          });
+          }));
         }
       } else if (draftPrescriptions.length > 0) {
         // If only pharmacy prescription was given, route directly to Pharmacy counter
@@ -1071,22 +1157,39 @@ export default function DoctorsDesk({
         instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Pharmacy`;
         routingDetails = `Prescriptions queued for dispensing (${draftPrescriptions.length} items): ${draftPrescriptions.map(p => p.drugName).join(", ")}`;
 
+        if (activeEncId) {
+          for (const rx of draftPrescriptions) {
+            addEncounterPrescription(activeEncId, {
+              drugName: rx.drugName,
+              quantity: rx.quantity,
+              dosage: rx.dosage,
+              instructions: rx.instructions,
+              unitPrice: rx.unitPrice !== undefined ? rx.unitPrice : (rx.price || 150),
+              formulation: rx.formulation || "Tablet",
+              strength: rx.strength || "",
+              prescribedBy: currentDoctorName,
+            }).catch(err => console.warn("Prescription subcollection error:", err));
+          }
+        }
+
         const docName = currentDoctorName;
-        const pharmaPayload: any = {
+        const pharmaPayload: any = cleanFirestoreData({
+          department: "pharmacy",
           currentDepartment: "pharmacy",
           ticketNo: assignedTicketNo,
           status: "pending",
+          encounterId: activeEncId,
           service: "Pharmacy Dispensing",
           notes: `Prescriptions ready (${draftPrescriptions.length} items): ${draftPrescriptions.map(p => `${p.drugName} (x${p.quantity})`).join(", ")}`,
           prescriptions: draftPrescriptions,
           timestamp: new Date().toISOString(),
           originDoctorName: docName
-        };
+        });
 
         if (ticketId) {
           await updateDoc(doc(db, "queue", ticketId), pharmaPayload);
         } else {
-          await addDoc(collection(db, "queue"), {
+          await addDoc(collection(db, "queue"), cleanFirestoreData({
             ...pharmaPayload,
             patientName: selectedPatient.patientName,
             patientId: selectedPatient.id,
@@ -1095,7 +1198,7 @@ export default function DoctorsDesk({
             age: selectedPatient.age || 0,
             gender: selectedPatient.gender || "Unknown",
             biometricStatus: "verified",
-          });
+          }));
         }
       } else {
         // No referrals/prescriptions -> direct to Billing or discharge
@@ -1105,18 +1208,20 @@ export default function DoctorsDesk({
         instructionPhrase = `Ticket No. ${assignedTicketNo}: Go to Billing & Accounts`;
         routingDetails = "Clinical consultation concluded without medications. Proceed to Billing desk for clearance.";
 
-        const billPayload: any = {
+        const billPayload: any = cleanFirestoreData({
+          department: "billing",
           currentDepartment: "billing",
           ticketNo: assignedTicketNo,
           status: "pending",
+          encounterId: activeEncId,
           service: "Billing & Discharge Clearance",
           timestamp: new Date().toISOString()
-        };
+        });
 
         if (ticketId) {
           await updateDoc(doc(db, "queue", ticketId), billPayload);
         } else {
-          await addDoc(collection(db, "queue"), {
+          await addDoc(collection(db, "queue"), cleanFirestoreData({
             ...billPayload,
             patientName: selectedPatient.patientName,
             patientId: selectedPatient.id,
@@ -1125,7 +1230,7 @@ export default function DoctorsDesk({
             age: selectedPatient.age || 0,
             gender: selectedPatient.gender || "Unknown",
             biometricStatus: "verified",
-          });
+          }));
         }
       }
 

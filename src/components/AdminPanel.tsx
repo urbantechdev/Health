@@ -7,6 +7,8 @@ import StaffOnboardingModal from "./StaffOnboardingModal";
 import { runFullDatabaseDeduplication, checkDuplicateEmployee, DeduplicationReport } from "../lib/deduplicationService";
 import { SYSTEM_ROLES_DIRECTORY, SystemRole, getRoleConfig } from "../constants/roles";
 import { bootstrapCloudFirestore, cleanSystemAndPurgeTestData, CleanSystemReport, CollectionCounts } from "../lib/dbInit";
+import { saveUserToDatabase, importStaffFromRepo } from "../lib/userService";
+import { importPharmacyStockFromRepo } from "../services/drugInventorySync";
 import { SUPER_ADMIN_EMAILS, isSuperAdminEmail } from "../lib/superAdmins";
 import { toast, modernConfirm } from "../lib/promptService";
 import { logSettingsChange } from "../lib/auditService";
@@ -48,6 +50,7 @@ import {
   Crown,
   Award,
   Copy,
+  FileText,
   Globe,
   Printer,
   IdCard,
@@ -178,6 +181,8 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
   const DEFAULT_BRAND_LOGO = "https://i.pinimg.com/1200x/0d/21/0a/0d210ae7221bc218df223d59b16d2198.jpg";
   const [logoUrlInput, setLogoUrlInput] = React.useState(() => localStorage.getItem("platform_logo_url") || DEFAULT_BRAND_LOGO);
+  const [documentLogoUrlInput, setDocumentLogoUrlInput] = React.useState(() => localStorage.getItem("platform_document_logo_url") || "");
+  const [hospitalFacilityNameInput, setHospitalFacilityNameInput] = React.useState(() => localStorage.getItem("hospital_facility_name") || "The Tassia Hill Hospital");
   const [faviconUrlInput, setFaviconUrlInput] = React.useState(() => localStorage.getItem("platform_favicon_url") || "");
   const [customBrandNameInput, setCustomBrandNameInput] = React.useState(() => localStorage.getItem("platform_custom_brand_name") || "");
   const [selectedFont, setSelectedFont] = React.useState(() => localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
@@ -199,6 +204,37 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
   const [userSubmitting, setUserSubmitting] = React.useState(false);
   const [userCreationError, setUserCreationError] = React.useState("");
   const [showRbacMatrix, setShowRbacMatrix] = React.useState(false);
+  const [isImportingStaff, setIsImportingStaff] = React.useState(false);
+  const [isImportingPharmacy, setIsImportingPharmacy] = React.useState(false);
+
+  const handleImportRepoStaff = async () => {
+    setIsImportingStaff(true);
+    try {
+      const result = await importStaffFromRepo();
+      toast.success(
+        `Imported and synced ${result.importedCount} staff members from the repository into the database.`,
+        "Staff Import Complete"
+      );
+    } catch (err: any) {
+      console.error("Failed to import staff from repo:", err);
+      toast.error("Failed to import staff: " + (err?.message || "Unknown error"), "Import Error");
+    } finally {
+      setIsImportingStaff(false);
+    }
+  };
+
+  const handleImportRepoPharmacyStock = async () => {
+    setIsImportingPharmacy(true);
+    try {
+      const result = await importPharmacyStockFromRepo();
+      toast.success(result.message, "Pharmacy Stock Synchronized");
+    } catch (err: any) {
+      console.error("Failed to import pharmacy stock from repo:", err);
+      toast.error("Failed to import pharmacy stock: " + (err?.message || "Unknown error"), "Import Error");
+    } finally {
+      setIsImportingPharmacy(false);
+    }
+  };
 
   // Deduplication Scanner States
   const [isDeduplicating, setIsDeduplicating] = React.useState(false);
@@ -304,7 +340,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
   const handlePurgeAndCleanSystem = async () => {
     const confirmWipe = await modernConfirm(
-      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, pharmacy stocks, and test user accounts?\n\nThe Sovereign Super Admin (The Tassia Hill Hospital) & System Developer (Dorcah Moraa: tassiahillhospital@gmail.com, moraasdorcah@gmail.com) will be preserved to allow fresh onboarding of real hospital staff.",
+      "CONFIRM PRODUCTION DATA WIPE:\n\nAre you sure you want to remove all test patients, tickets, queue encounters, invoices, and financial records?\n\nThe Sovereign Hospital Admin (Halima: tassiahillhospital@gmail.com) & System Developer Admin (Dorcah Moraa: moraasdorcah@gmail.com) will be preserved to allow fresh onboarding of real hospital staff.",
       {
         title: "PURGE ALL TEST DATA",
         type: "error",
@@ -317,12 +353,12 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
     if (!confirmWipe) return;
 
     setIsPurgingSystem(true);
-    setDbSyncMessage("Cleaning system database: Purging all dummy test records and test user accounts...");
+    setDbSyncMessage("Cleaning system database: Purging all dummy test records, patients, and financial data...");
     try {
       const report = await cleanSystemAndPurgeTestData();
       setPurgeReport(report);
       setDbSyncMessage(
-        `System successfully cleaned! Purged ${report.totalDeleted} total test record(s). All test user accounts removed. The Sovereign Super Admin (The Tassia Hill Hospital) & System Developer (Dorcah Moraa) are preserved and active for fresh staff onboarding.`
+        `System successfully cleaned! Purged ${report.totalDeleted} total record(s). The Sovereign Hospital Admin (Halima: tassiahillhospital@gmail.com) & System Developer Admin (Dorcah Moraa: moraasdorcah@gmail.com) are preserved and active for fresh staff onboarding.`
       );
       toast.success(`Purged ${report.totalDeleted} test records across collections.`, "System Cleaned");
     } catch (err) {
@@ -419,11 +455,13 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
 
       const roleConfig = getRoleConfig(selectedSystemRole);
 
-      await addDoc(collection(db, "employees"), {
+      // Save user into database (both system_users and employees collections)
+      await saveUserToDatabase({
         name: cleanName,
         email: cleanEmail,
         department: roleConfig.department,
         role: selectedSystemRole,
+        systemRole: selectedSystemRole,
         accessLevel: userAccessLevel,
         status: "active",
         salary: 100000,
@@ -528,6 +566,8 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
     };
     const handleBrandingSync = () => {
       setLogoUrlInput(localStorage.getItem("platform_logo_url") || "");
+      setDocumentLogoUrlInput(localStorage.getItem("platform_document_logo_url") || "");
+      setHospitalFacilityNameInput(localStorage.getItem("hospital_facility_name") || "The Tassia Hill Hospital");
       setFaviconUrlInput(localStorage.getItem("platform_favicon_url") || "");
       setCustomBrandNameInput(localStorage.getItem("platform_custom_brand_name") || "");
       setSelectedFont(localStorage.getItem("platform_font_id") || "Plus Jakarta Sans");
@@ -953,6 +993,30 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
             >
               <Eye className="w-3.5 h-3.5 text-slate-600" />
               <span>{showRbacMatrix ? "Hide RBAC Matrix" : "View 11-Role RBAC Matrix"}</span>
+            </button>
+
+            <button
+              id="btn-admin-import-repo-staff"
+              type="button"
+              onClick={handleImportRepoStaff}
+              disabled={isImportingStaff}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              title="Import all staff and super admins defined in the repository directly into the database"
+            >
+              <Download className={`w-3.5 h-3.5 text-purple-700 ${isImportingStaff ? "animate-bounce" : ""}`} />
+              <span>{isImportingStaff ? "Importing Staff..." : "Import Staff from Repo"}</span>
+            </button>
+
+            <button
+              id="btn-admin-import-repo-pharmacy"
+              type="button"
+              onClick={handleImportRepoPharmacyStock}
+              disabled={isImportingPharmacy}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border border-emerald-300 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              title="Import all 441+ pharmacy medications and formulations from the repository catalog into Firestore"
+            >
+              <Download className={`w-3.5 h-3.5 text-emerald-700 ${isImportingPharmacy ? "animate-bounce" : ""}`} />
+              <span>{isImportingPharmacy ? "Importing Stock..." : "Import Pharmacy Stock from Repo"}</span>
             </button>
 
             <button
@@ -1706,23 +1770,44 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
         </div>
 
         <div className="bg-slate-50/50 p-4 rounded-2xl border border-gray-200/60 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Custom brand name */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Custom Brand / Hospital Name</label>
-              <input
-                type="text"
-                value={customBrandNameInput}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setCustomBrandNameInput(val);
-                  updateBrandingSettings("platform_custom_brand_name", val);
-                }}
-                placeholder={tenant.name}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-emerald-500"
-              />
+          {/* Header Title (HMIS) & Document Legal Facility Name */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3.5 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-slate-700" />
+                <span>System Header Title</span>
+              </label>
+              <div className="flex items-center justify-between px-3 py-2 bg-white border border-slate-200 rounded-xl">
+                <span className="text-xs font-black text-slate-900 font-sans tracking-wide">HMIS</span>
+                <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-md">
+                  Standard Title (Locked to HMIS)
+                </span>
+              </div>
+              <p className="text-[9px] text-slate-500">The primary top header bar title remains HMIS across all hospital workstations.</p>
             </div>
 
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Hospital / Facility Legal Name (Printed on Documents)</span>
+              </label>
+              <input
+                type="text"
+                value={hospitalFacilityNameInput}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setHospitalFacilityNameInput(val);
+                  updateBrandingSettings("hospital_facility_name", val);
+                  setPwaConfig(prev => ({ ...prev, facilityName: val }));
+                }}
+                placeholder="The Tassia Hill Hospital"
+                className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-black text-slate-900 focus:outline-emerald-500 shadow-2xs"
+              />
+              <p className="text-[9px] text-emerald-700 font-medium">Facility legal name retained on all invoices, lab reports, receipts, and clinical forms.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Custom Google Font */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">Platform Base Font Family</label>
@@ -1816,16 +1901,16 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Logo URL and File Upload Input */}
-            <div className="space-y-1.5">
+            {/* System Logo (Platform Header & Workstations) */}
+            <div className="space-y-1.5 p-3 bg-white rounded-2xl border border-gray-200">
               <div className="flex items-center justify-between">
                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Link2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Custom Logo (Upload or URL)</span>
+                  <Building2 className="w-3.5 h-3.5 text-amber-500" />
+                  <span>1. System Logo (Platform Header)</span>
                 </label>
                 <label className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer bg-emerald-50 px-2 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">
                   <Upload className="w-3 h-3" />
-                  <span>Browse Image File</span>
+                  <span>Browse Image</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -1857,7 +1942,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                     updateBrandingSettings("platform_logo_url", val);
                   }}
                   placeholder="Paste URL or upload image file above"
-                  className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-emerald-500"
+                  className="flex-1 px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-emerald-500"
                 />
                 {logoUrlInput && (
                   <button
@@ -1872,8 +1957,115 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                   </button>
                 )}
               </div>
-              <p className="text-[9px] text-gray-400">Click "Browse Image File" to upload from your computer or paste an image URL.</p>
+              <p className="text-[9px] text-gray-400">Emblem that appears next to "HMIS" on the top navigation header.</p>
             </div>
+
+            {/* Document Logo (Separate Logo for Medical Documents & Reports) */}
+            <div className="space-y-1.5 p-3 bg-emerald-50/50 rounded-2xl border border-emerald-200">
+              <div className="flex items-center justify-between">
+                <label className="block text-[10px] font-bold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>2. Document Logo (Invoices, Lab Reports, Sick Sheets)</span>
+                </label>
+                <div className="flex items-center gap-1.5">
+                  {logoUrlInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocumentLogoUrlInput(logoUrlInput);
+                        updateBrandingSettings("platform_document_logo_url", logoUrlInput);
+                        setPwaConfig(prev => ({ ...prev, documentLogoUrl: logoUrlInput }));
+                        toast.success("Synced Document Logo from System Logo", "Logo Updated");
+                      }}
+                      className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Copy className="w-2.5 h-2.5" />
+                      <span>Sync</span>
+                    </button>
+                  )}
+                  <label className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 hover:text-emerald-900 cursor-pointer bg-emerald-100 px-2 py-0.5 rounded-md hover:bg-emerald-200 transition-colors">
+                    <Upload className="w-3 h-3" />
+                    <span>Browse</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const res = ev.target?.result as string;
+                            if (res) {
+                              setDocumentLogoUrlInput(res);
+                              updateBrandingSettings("platform_document_logo_url", res);
+                              setPwaConfig(prev => ({ ...prev, documentLogoUrl: res }));
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Mini Document Letterhead Preview */}
+              <div className="flex items-center gap-2 p-1.5 bg-white rounded-xl border border-emerald-200 shadow-2xs">
+                <div className="w-8 h-8 rounded-full border border-emerald-700 bg-white flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                  {documentLogoUrlInput ? (
+                    <img
+                      src={documentLogoUrlInput}
+                      alt="Document Logo"
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <FileText className="w-4 h-4 text-emerald-700" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black text-slate-950 uppercase truncate">
+                    {hospitalFacilityNameInput || "The Tassia Hill Hospital"}
+                  </p>
+                  <p className="text-[8px] text-emerald-700 truncate font-semibold">
+                    Document Header Letterhead Emblem
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={documentLogoUrlInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDocumentLogoUrlInput(val);
+                    updateBrandingSettings("platform_document_logo_url", val);
+                    setPwaConfig(prev => ({ ...prev, documentLogoUrl: val }));
+                  }}
+                  placeholder="Paste URL or upload document emblem"
+                  className="flex-1 px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs text-gray-700 focus:outline-emerald-500"
+                />
+                {documentLogoUrlInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocumentLogoUrlInput("");
+                      updateBrandingSettings("platform_document_logo_url", "");
+                      setPwaConfig(prev => ({ ...prev, documentLogoUrl: "" }));
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl border border-rose-200"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <p className="text-[9px] text-emerald-800">Appears on official patient documents separately from the system logo.</p>
+            </div>
+          </div>
+
+          <div>
 
             {/* Favicon Customizer */}
             <div className="space-y-2">
@@ -2344,7 +2536,13 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
                   onClick={async () => {
                     setPwaIsSaving(true);
                     try {
-                      await savePwaSettingsToCloud(pwaConfig, "Hospital Administrator");
+                      const updatedConfig = {
+                        ...pwaConfig,
+                        facilityName: hospitalFacilityNameInput || pwaConfig.facilityName,
+                        documentLogoUrl: documentLogoUrlInput || pwaConfig.documentLogoUrl,
+                        logoUrl: logoUrlInput || pwaConfig.logoUrl,
+                      };
+                      await savePwaSettingsToCloud(updatedConfig, "Hospital Administrator");
                       toast.success("PWA settings and Web App Manifest successfully synchronized with Cloud Firestore!", "PWA Settings Synced");
                     } catch {
                       toast.error("Failed to sync PWA settings with Cloud Firestore.", "Sync Failed");

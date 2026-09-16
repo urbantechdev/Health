@@ -912,16 +912,26 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled, initial
             invoiceId: invoiceId,
             timestamp: new Date().toISOString()
           };
-          await addDoc(collection(db, "encounters", activeEncounter.id, "bill_items"), cleanFirestoreData(billItemDoc));
+          const cleanBillItem = cleanFirestoreData(billItemDoc);
+          await Promise.all([
+            addDoc(collection(db, "encounters", activeEncounter.id, "bill_items"), cleanBillItem).catch(() => {}),
+            addDoc(collection(db, "clinical_encounters", activeEncounter.id, "bill_items"), cleanBillItem).catch(() => {}),
+          ]);
         }
 
-        // Update master encounter totals
-        await updateDoc(doc(db, "encounters", activeEncounter.id), {
+        // Update master encounter totals across both collections
+        const encUpdatePayload = cleanFirestoreData({
           totalBilled: (activeEncounter.totalBilled || 0) + netDueAfterDiscount,
           totalPaid: (activeEncounter.totalPaid || 0) + netDueAfterDiscount,
           billingCleared: true,
+          status: "PAID",
           updatedAt: new Date().toISOString()
         });
+
+        await Promise.all([
+          updateDoc(doc(db, "encounters", activeEncounter.id), encUpdatePayload).catch(() => {}),
+          updateDoc(doc(db, "clinical_encounters", activeEncounter.id), encUpdatePayload).catch(() => {}),
+        ]);
 
         // Mark associated encounter prescriptions as BILLED to prevent duplicate billing
         try {
@@ -932,11 +942,11 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled, initial
               (b) => b.sourceId === d.id || b.description.toLowerCase().includes(rxData.drugName?.toLowerCase())
             );
             if (wasBilled) {
-              await updateDoc(doc(db, "encounters", activeEncounter.id, "prescriptions", d.id), {
-                isBilled: true,
-                status: "BILLED",
-                invoiceId: invoiceId
-              });
+              const rxPayload = { isBilled: true, status: "BILLED", invoiceId };
+              await Promise.all([
+                updateDoc(doc(db, "encounters", activeEncounter.id, "prescriptions", d.id), rxPayload).catch(() => {}),
+                updateDoc(doc(db, "clinical_encounters", activeEncounter.id, "prescriptions", d.id), rxPayload).catch(() => {}),
+              ]);
             }
           }
         } catch (rxErr) {
@@ -952,11 +962,11 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled, initial
               (b) => b.sourceId === d.id || b.description.toLowerCase().includes(labData.testName?.toLowerCase())
             );
             if (wasBilled) {
-              await updateDoc(doc(db, "encounters", activeEncounter.id, "lab_requests", d.id), {
-                isBilled: true,
-                isPaid: true,
-                invoiceId: invoiceId
-              });
+              const labPayload = { isBilled: true, isPaid: true, invoiceId };
+              await Promise.all([
+                updateDoc(doc(db, "encounters", activeEncounter.id, "lab_requests", d.id), labPayload).catch(() => {}),
+                updateDoc(doc(db, "clinical_encounters", activeEncounter.id, "lab_requests", d.id), labPayload).catch(() => {}),
+              ]);
             }
           }
         } catch (labErr) {

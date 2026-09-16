@@ -113,14 +113,6 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
       <div className="relative max-w-md w-full">
-        {/* Gemini Rainbow Halo Shadow Motion Layer */}
-        <div className="absolute -inset-2 sm:-inset-3 rounded-3xl opacity-80 blur-xl sm:blur-2xl pointer-events-none -z-10 overflow-hidden">
-          <div className="w-[220%] h-[220%] -top-[60%] -left-[60%] absolute gemini-rainbow-spin" />
-        </div>
-        <div className="absolute -inset-[2px] rounded-3xl opacity-70 pointer-events-none -z-10 overflow-hidden">
-          <div className="w-full h-full gemini-rainbow-linear" />
-        </div>
-
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}

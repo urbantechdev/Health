@@ -25,12 +25,14 @@ import {
 } from "lucide-react";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer, ActiveAnnouncement } from "../lib/voiceAnnouncementService";
+import BigMonitorPage from "./BigMonitorPage";
 
 interface QueueDashboardProps {
   toggles: any;
+  onLaunchBigMonitor?: () => void;
 }
 
-export default function QueueDashboard({ toggles }: QueueDashboardProps) {
+export default function QueueDashboard({ toggles, onLaunchBigMonitor }: QueueDashboardProps) {
   const [tickets, setTickets] = useState<QueueTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSignageView, setIsSignageView] = useState<boolean>(() => {
@@ -430,355 +432,7 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
   // FULLSCREEN SIGNAGE VIEW FOR BIG MONITORS
   // ==========================================
   if (isSignageView) {
-    return (
-      <div 
-        id="full-signage" 
-        onClick={unlockAudio}
-        className="fixed inset-0 bg-slate-950 text-slate-100 z-50 flex flex-col p-6 sm:p-8 font-sans overflow-y-auto select-none"
-      >
-        {/* Instant Notification Toast */}
-        {toastMessage && (
-          <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl text-sm font-bold shadow-2xl flex items-center gap-3 border border-emerald-500/40 animate-fade-in">
-            <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-            <span>{toastMessage}</span>
-          </div>
-        )}
-
-        {/* Audio Gesture Unlock Banner (if browser blocked sound before user click) */}
-        {!audioUnlocked && (
-          <div className="mb-4 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold rounded-2xl shadow-lg flex items-center justify-between text-xs sm:text-sm animate-pulse cursor-pointer">
-            <div className="flex items-center gap-2.5">
-              <Volume2 className="w-5 h-5" />
-              <span>🔊 CLICK ANYWHERE ON THIS BIG MONITOR TO ACTIVATE PA AUDIO - All logged tickets will be read aloud automatically.</span>
-            </div>
-            <span className="px-3 py-1 bg-slate-950 text-white rounded-lg text-xs font-bold uppercase">Click to Unmute</span>
-          </div>
-        )}
-
-        {/* Top Header Bar for Big Monitor Screen */}
-        <div className="flex flex-wrap justify-between items-center border-b border-slate-800 pb-5 mb-6 gap-4">
-          {/* Hospital Brand & Screen Title */}
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20">
-              <Monitor className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
-                <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white font-mono">
-                  HMIS TICKET DISPLAY
-                </h1>
-              </div>
-              <p className="text-xs text-slate-400 font-medium">
-                Live Hospital Patient Queue & Automatic Voice PA System
-              </p>
-            </div>
-          </div>
-
-          {/* Large Digital Clock for Waiting Lounge */}
-          <div className="flex items-center gap-3 bg-slate-900/90 border border-slate-800 px-5 py-2.5 rounded-2xl shadow-inner">
-            <Clock className="w-5 h-5 text-emerald-400" />
-            <div className="text-right">
-              <div className="text-xl sm:text-2xl font-black font-mono tracking-wider text-emerald-300">
-                {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </div>
-              <div className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
-                {currentTime.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
-              </div>
-            </div>
-          </div>
-
-          {/* Big Monitor Audio Controls & Voice Status */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Auto Voice Reader Status Indicator */}
-            <button
-              onClick={handleToggleAutoVoice}
-              title="Toggle Automatic Voice Reading for any logged ticket"
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all cursor-pointer shadow-sm ${
-                autoVoiceReaderEnabled
-                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30"
-                  : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700"
-              }`}
-            >
-              {autoVoiceReaderEnabled ? (
-                <>
-                  <div className="flex items-end gap-0.5 h-3.5">
-                    <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.4s_ease-in-out_infinite] h-2" />
-                    <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.6s_ease-in-out_infinite] h-3.5" />
-                    <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.3s_ease-in-out_infinite] h-2.5" />
-                  </div>
-                  <span>Voice Reader: ON</span>
-                </>
-              ) : (
-                <>
-                  <VolumeX className="w-4 h-4 text-rose-400" />
-                  <span>Voice Reader: OFF</span>
-                </>
-              )}
-            </button>
-
-            {/* Test Voice Button */}
-            <button
-              onClick={handleTestVoice}
-              title="Test Loud PA Voice on Big Monitor Speakers"
-              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Test PA Voice</span>
-            </button>
-
-            {/* Read All Logged Tickets Button */}
-            <button
-              onClick={handleReadAllLoggedTickets}
-              title="Read aloud all active tickets currently in the queue"
-              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Megaphone className="w-3.5 h-3.5 text-blue-400" />
-              <span>Read Queue ({filteredServing.length + filteredPending.length})</span>
-            </button>
-
-            {/* Repeat Count (1x or 2x) */}
-            <button
-              onClick={handleToggleRepeat}
-              title="Set Announcement Repeat Count"
-              className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-3 h-3 text-amber-400" />
-              <span>{repeatCount}x Repeat</span>
-            </button>
-
-            {/* Fullscreen Toggle */}
-            <button
-              onClick={toggleFullscreen}
-              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen Mode for TV"}
-              className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-700 transition-colors cursor-pointer"
-            >
-              {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-            </button>
-
-            {/* Exit Signage */}
-            <button
-              id="btn-close-signage"
-              onClick={() => setIsSignageView(false)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 transition-colors cursor-pointer"
-            >
-              Exit View
-            </button>
-          </div>
-        </div>
-
-        {/* Live Vocal Marquee Broadcast Banner */}
-        {activeAnnouncement && (
-          <div className="mb-6 p-5 sm:p-6 bg-gradient-to-r from-emerald-950 via-slate-900 to-indigo-950 border-3 border-emerald-400 rounded-3xl text-white shadow-2xl animate-fade-in flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="p-3.5 bg-emerald-500 text-slate-950 rounded-2xl animate-bounce">
-                <Megaphone className="w-7 h-7" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 bg-emerald-400 text-slate-950 font-black text-[10px] uppercase rounded-md tracking-widest animate-pulse">
-                    LIVE HOSPITAL PA ANNOUNCEMENT
-                  </span>
-                  <span className="text-xs text-emerald-300 font-mono">
-                    Calling: {activeAnnouncement.ticketNo}
-                  </span>
-                </div>
-                <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-emerald-300 font-mono tracking-wide mt-1.5">
-                  📢 {activeAnnouncement.formattedText}
-                </h2>
-              </div>
-            </div>
-            <div className="hidden md:flex items-end gap-1.5 h-8 pr-2">
-              <span className="w-1.5 bg-emerald-400 rounded-full animate-[pulse_0.4s_ease-in-out_infinite] h-4" />
-              <span className="w-1.5 bg-emerald-400 rounded-full animate-[pulse_0.6s_ease-in-out_infinite] h-8" />
-              <span className="w-1.5 bg-emerald-400 rounded-full animate-[pulse_0.3s_ease-in-out_infinite] h-5" />
-              <span className="w-1.5 bg-emerald-400 rounded-full animate-[pulse_0.5s_ease-in-out_infinite] h-7" />
-            </div>
-          </div>
-        )}
-
-        {/* Main Display Grid for Big Monitor */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1">
-          {/* NOW SERVING SECTION (Columns 1-8) */}
-          <div className="lg:col-span-8 space-y-6 flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h2 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-white flex items-center gap-2.5">
-                <Volume2 className="w-6 h-6 text-emerald-400" />
-                <span>NOW SERVING / SASA HIVI</span>
-              </h2>
-              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                {filteredServing.length} ACTIVE CALLS
-              </span>
-            </div>
-
-            {filteredServing.length === 0 ? (
-              <div className="flex-1 min-h-[360px] border-2 border-dashed border-slate-800 rounded-3xl bg-slate-900/40 flex flex-col items-center justify-center text-slate-400 text-center p-8">
-                <Monitor className="w-20 h-20 mb-4 text-slate-700" />
-                <p className="text-xl font-bold text-slate-200">No active calls being processed</p>
-                <p className="text-sm text-slate-400 mt-2 max-w-md">
-                  Consultation desks, laboratories, and pharmacy stations will call tickets shortly. All calls are read aloud automatically.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1">
-                {filteredServing.map((t) => {
-                  const deptInfo = getDeptDisplayInfo(t);
-                  const isAnnouncing = activeAnnouncement?.ticketNo === t.ticketNo;
-
-                  return (
-                    <div
-                      key={t.id}
-                      className={`relative border-2 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-between text-center transition-all duration-500 shadow-xl ${
-                        isAnnouncing
-                          ? "ring-4 ring-emerald-400 scale-[1.02] bg-emerald-950/60 border-emerald-400 shadow-emerald-500/20 shadow-2xl"
-                          : "bg-slate-900/90 border-slate-700 hover:border-slate-600"
-                      }`}
-                    >
-                      {/* Department Chip */}
-                      <div className="w-full flex justify-between items-center mb-2">
-                        <span className="text-[11px] uppercase font-extrabold tracking-widest px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-                          {deptInfo.label}
-                        </span>
-                        <button
-                          onClick={() => announceTicket(t, deptInfo.room)}
-                          title="Re-read this ticket out loud"
-                          className="p-2 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 rounded-xl transition-colors cursor-pointer border border-slate-700/60"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Giant Ticket Number for High-Visibility Big Screens */}
-                      <div className="my-3">
-                        <span className="text-xs uppercase tracking-widest text-slate-400 font-bold block">TICKET NUMBER</span>
-                        <h3 className="text-6xl sm:text-7xl font-black tracking-wider font-mono text-emerald-400 drop-shadow-md">
-                          {t.ticketNo}
-                        </h3>
-                      </div>
-
-                      {/* Divider Accent */}
-                      <div className="h-1.5 w-16 bg-emerald-500/40 rounded-full my-3" />
-
-                      {/* Destination Station / Room */}
-                      <div className="w-full">
-                        <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold block mb-1">PROCEED TO</span>
-                        <p className="text-2xl sm:text-3xl font-black text-white font-sans tracking-tight">
-                          {deptInfo.room}
-                        </p>
-                        {t.patientName && (
-                          <p className="text-sm text-slate-300 font-medium truncate mt-2 bg-slate-800/80 px-4 py-1.5 rounded-xl border border-slate-700/60">
-                            Patient: <strong className="text-white font-bold">{t.patientName}</strong>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* WAITING QUEUE INTAKE LIST (Columns 9-12) */}
-          <div className="lg:col-span-4 border border-slate-800 rounded-3xl bg-slate-900/80 p-6 flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <Layers className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-lg font-bold text-white uppercase tracking-wider">
-                  WAITING IN QUEUE
-                </h2>
-              </div>
-              <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                {filteredPending.length} Waiting
-              </span>
-            </div>
-
-            {/* Department Quick Filter */}
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              {["all", "doctor", "laboratory", "radiology", "pharmacy", "triage"].map((deptKey) => (
-                <button
-                  key={deptKey}
-                  onClick={() => setDepartmentFilter(deptKey)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition-colors cursor-pointer ${
-                    departmentFilter === deptKey
-                      ? "bg-emerald-500 text-slate-950"
-                      : "bg-slate-800 hover:bg-slate-700 text-slate-400"
-                  }`}
-                >
-                  {deptKey === "all" ? "All" : deptKey}
-                </button>
-              ))}
-            </div>
-
-            {/* Scrollable list of waiting tickets */}
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1 max-h-[540px]">
-              {filteredPending.length === 0 ? (
-                <div className="h-48 flex flex-col items-center justify-center text-slate-500 text-xs text-center">
-                  <Check className="w-8 h-8 text-slate-600 mb-2" />
-                  <span>No patients currently waiting in queue</span>
-                </div>
-              ) : (
-                filteredPending.map((t) => {
-                  const deptInfo = getDeptDisplayInfo(t);
-                  return (
-                    <div 
-                      key={t.id} 
-                      className="flex justify-between items-center p-3.5 bg-slate-800/60 border border-slate-700/80 rounded-2xl hover:border-slate-600 transition-colors shadow-xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl font-bold font-mono text-emerald-400">
-                          {t.ticketNo}
-                        </span>
-                        <div className="text-xs">
-                          <p className="font-semibold text-slate-100">{t.patientName || "Patient"}</p>
-                          <p className="text-[10px] text-slate-400 capitalize">
-                            {deptInfo.label}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            unlockAudio();
-                            voiceAnnouncer.announceTicketLogged({
-                              ticketNo: t.ticketNo,
-                              patientName: t.patientName,
-                              department: t.currentDepartment,
-                              service: t.service,
-                              status: "pending",
-                              roomOrDesk: deptInfo.room
-                            });
-                          }}
-                          title="Read this ticket out loud"
-                          className="p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Volume2 className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-[10px] bg-slate-900 border border-slate-700 text-slate-300 font-semibold px-2 py-0.5 rounded-md">
-                          Waiting
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Hospital Ticker for Big Monitor Display */}
-        <div className="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-medium overflow-hidden">
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            <span className="w-2 h-2 bg-emerald-400 rounded-full" />
-            <strong className="text-slate-200">NextGen Hospital HMIS:</strong>
-            <span>All tickets logged on queue are read aloud automatically • Please listen for your ticket number and proceed to the announced room.</span>
-          </div>
-          <div className="hidden sm:flex items-center gap-2 font-mono text-[11px] text-slate-500">
-            <span>PA VOICE: {autoVoiceReaderEnabled ? "ACTIVE (AUTO)" : "PAUSED"}</span>
-          </div>
-        </div>
-      </div>
-    );
+    return <BigMonitorPage onReturnToApp={() => setIsSignageView(false)} />;
   }
 
   // ==========================================
@@ -870,14 +524,33 @@ export default function QueueDashboard({ toggles }: QueueDashboardProps) {
           )}
 
           {/* Launch Big Monitor Display */}
-          <button
-            id="btn-launch-signage"
-            onClick={() => setIsSignageView(true)}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Launch Big Monitor Display</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              id="btn-launch-signage"
+              type="button"
+              onClick={() => {
+                if (onLaunchBigMonitor) {
+                  onLaunchBigMonitor();
+                } else {
+                  setIsSignageView(true);
+                }
+              }}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            >
+              <Monitor className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Launch Big Monitor</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                window.open(`${window.location.origin}${window.location.pathname}?display=big-monitor`, "_blank");
+              }}
+              title="Open Big Monitor on Separate TV Screen or Window"
+              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs border border-slate-200 transition-colors cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-slate-700" />
+            </button>
+          </div>
         </div>
       </div>
 

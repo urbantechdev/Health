@@ -13,10 +13,12 @@ import {
   X,
   Sparkles,
   Download,
+  AppWindow,
   AlertTriangle
 } from "lucide-react";
 import { PWAInstallState } from "../hooks/usePWAInstall";
 import { toast } from "../lib/promptService";
+import { WindowsLogo } from "./PWAInstallButton";
 
 interface PWAInstallGuideModalProps {
   isOpen: boolean;
@@ -205,8 +207,8 @@ export const PWAInstallGuideModal: React.FC<PWAInstallGuideModalProps> = ({
                 : "text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-200/60"
             }`}
           >
-            <Laptop className="w-3.5 h-3.5 text-blue-600" />
-            <span>Mac / Windows PC</span>
+            <WindowsLogo className="w-3.5 h-3.5 text-blue-600" />
+            <span>Windows PC / Desktop</span>
             {!isIOS && !isAndroid && <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />}
           </button>
 
@@ -332,7 +334,7 @@ export const PWAInstallGuideModal: React.FC<PWAInstallGuideModalProps> = ({
                     disabled={isAttemptingInstall}
                     className="mt-2 w-full py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Download className="w-4 h-4" />
+                    <AppWindow className="w-4 h-4" />
                     <span>{isAttemptingInstall ? "Opening Android Prompt..." : "Install HMIS App Now"}</span>
                   </button>
                 </div>
@@ -375,30 +377,33 @@ export const PWAInstallGuideModal: React.FC<PWAInstallGuideModalProps> = ({
             <div className="space-y-3.5 animate-in fade-in duration-150">
               {hasNativePrompt ? (
                 <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-center space-y-2">
-                  <Download className="w-8 h-8 text-emerald-600 mx-auto" />
+                  <WindowsLogo className="w-8 h-8 text-emerald-600 mx-auto" />
                   <h3 className="font-bold text-sm text-emerald-950">
-                    Ready to Install on your Desktop / Laptop
+                    Ready to Install on Windows / Desktop Workstation
                   </h3>
                   <p className="text-xs text-emerald-800">
-                    Run HMIS as a dedicated desktop workstation window with full offline access.
+                    Run HMIS as a dedicated Windows workstation window with full offline access.
                   </p>
                   <button
                     onClick={handleDirectInstall}
                     disabled={isAttemptingInstall}
                     className="mt-2 w-full py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Download className="w-4 h-4" />
-                    <span>{isAttemptingInstall ? "Installing..." : "Install Desktop App"}</span>
+                    <WindowsLogo className="w-4 h-4" />
+                    <span>{isAttemptingInstall ? "Installing..." : "Install Windows Desktop App"}</span>
                   </button>
                 </div>
               ) : (
                 <div className="space-y-3 text-xs">
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <strong className="text-slate-900 font-bold text-sm block mb-1">
-                      Google Chrome & Microsoft Edge:
-                    </strong>
+                    <div className="flex items-center gap-2 mb-1">
+                      <WindowsLogo className="w-4 h-4 text-blue-600 shrink-0" />
+                      <strong className="text-slate-900 font-bold text-sm">
+                        Windows (Google Chrome & Microsoft Edge):
+                      </strong>
+                    </div>
                     <p className="text-slate-600 leading-relaxed">
-                      Look at the <strong>right side of your browser URL address bar</strong> for the install icon (<Download className="w-3 h-3 inline text-slate-700" /> or screen icon). Click it and select <strong>Install</strong>.
+                      Look at the <strong>right side of your browser URL address bar</strong> for the install icon (<WindowsLogo className="w-3.5 h-3.5 inline text-slate-700" /> or screen icon). Click it and select <strong>Install</strong>.
                     </p>
                   </div>
 

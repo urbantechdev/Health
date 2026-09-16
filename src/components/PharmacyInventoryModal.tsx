@@ -821,21 +821,21 @@ export default function PharmacyInventoryModal({
                   <span>Manual Form</span>
                 </button>
 
-                {/* Upload & Sync Drug Reference Dictionary (429+ Items) */}
+                {/* Upload & Sync Drug Reference Dictionary (441+ Items from Repo) */}
                 <button
                   id="btn-sync-drug-dictionary"
                   type="button"
                   onClick={handleSyncDrugDictionary}
                   disabled={syncingDictionary}
-                  className="px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap min-h-[38px] bg-sky-50 text-sky-850 hover:bg-sky-100 border border-sky-300 disabled:opacity-50"
-                  title="Upload or sync 429+ documented formulations from the Drug Reference Dictionary"
+                  className="px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap min-h-[38px] bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-300 disabled:opacity-50"
+                  title="Import and sync 441+ medications and formulations from the repository pharmacy catalog"
                 >
                   {syncingDictionary ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
                   ) : (
-                    <UploadCloud className="w-3.5 h-3.5 text-sky-600" />
+                    <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
                   )}
-                  <span>{syncingDictionary ? "Syncing..." : "Sync 429+ Drug Reference"}</span>
+                  <span>{syncingDictionary ? "Syncing..." : "Import 441+ Repo Stock"}</span>
                 </button>
               </>
             )}

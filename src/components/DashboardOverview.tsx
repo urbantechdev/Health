@@ -85,49 +85,79 @@ export default function DashboardOverview({
 
   useEffect(() => {
     // 1. Queue Listener
-    const unsubQueue = onSnapshot(collection(db, "queue"), (snapshot) => {
-      const ticketsData: QueueTicket[] = [];
-      snapshot.forEach((doc) => {
-        ticketsData.push({ id: doc.id, ...doc.data() } as QueueTicket);
-      });
-      setTickets(ticketsData);
-    });
+    const unsubQueue = onSnapshot(
+      collection(db, "queue"),
+      (snapshot) => {
+        const ticketsData: QueueTicket[] = [];
+        snapshot.forEach((doc) => {
+          ticketsData.push({ id: doc.id, ...doc.data() } as QueueTicket);
+        });
+        setTickets(ticketsData);
+      },
+      (err) => {
+        console.warn("[DashboardOverview] Queue onSnapshot error:", err);
+      }
+    );
 
     // 2. Patients Listener
-    const unsubPatients = onSnapshot(collection(db, "patients"), (snapshot) => {
-      const patData: MedicalRecord[] = [];
-      snapshot.forEach((doc) => {
-        patData.push({ id: doc.id, ...doc.data() } as MedicalRecord);
-      });
-      setPatients(patData);
-    });
+    const unsubPatients = onSnapshot(
+      collection(db, "patients"),
+      (snapshot) => {
+        const patData: MedicalRecord[] = [];
+        snapshot.forEach((doc) => {
+          patData.push({ id: doc.id, ...doc.data() } as MedicalRecord);
+        });
+        setPatients(patData);
+      },
+      (err) => {
+        console.warn("[DashboardOverview] Patients onSnapshot error:", err);
+      }
+    );
 
     // 3. Medications Listener
-    const unsubMeds = onSnapshot(collection(db, "medications"), (snapshot) => {
-      const medsData: Medication[] = [];
-      snapshot.forEach((doc) => {
-        medsData.push({ id: doc.id, ...doc.data() } as Medication);
-      });
-      setMeds(medsData);
-    });
+    const unsubMeds = onSnapshot(
+      collection(db, "medications"),
+      (snapshot) => {
+        const medsData: Medication[] = [];
+        snapshot.forEach((doc) => {
+          medsData.push({ id: doc.id, ...doc.data() } as Medication);
+        });
+        setMeds(medsData);
+      },
+      (err) => {
+        console.warn("[DashboardOverview] Medications onSnapshot error:", err);
+      }
+    );
 
     // 4. Invoices Listener
-    const unsubInvoices = onSnapshot(collection(db, "invoices"), (snapshot) => {
-      const invoicesData: Invoice[] = [];
-      snapshot.forEach((doc) => {
-        invoicesData.push({ id: doc.id, ...doc.data() } as Invoice);
-      });
-      setInvoices(invoicesData);
-    });
+    const unsubInvoices = onSnapshot(
+      collection(db, "invoices"),
+      (snapshot) => {
+        const invoicesData: Invoice[] = [];
+        snapshot.forEach((doc) => {
+          invoicesData.push({ id: doc.id, ...doc.data() } as Invoice);
+        });
+        setInvoices(invoicesData);
+      },
+      (err) => {
+        console.warn("[DashboardOverview] Invoices onSnapshot error:", err);
+      }
+    );
 
     // 5. Employees Listener
-    const unsubEmployees = onSnapshot(collection(db, "employees"), (snapshot) => {
-      const empData: Employee[] = [];
-      snapshot.forEach((doc) => {
-        empData.push({ id: doc.id, ...doc.data() } as Employee);
-      });
-      setEmployees(empData);
-    });
+    const unsubEmployees = onSnapshot(
+      collection(db, "employees"),
+      (snapshot) => {
+        const empData: Employee[] = [];
+        snapshot.forEach((doc) => {
+          empData.push({ id: doc.id, ...doc.data() } as Employee);
+        });
+        setEmployees(empData);
+      },
+      (err) => {
+        console.warn("[DashboardOverview] Employees onSnapshot error:", err);
+      }
+    );
 
     return () => {
       unsubQueue();

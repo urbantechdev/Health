@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Smartphone, Download, X, Sparkles } from "lucide-react";
+import { X, Sparkles } from "lucide-react";
 import { usePWAInstall } from "../hooks/usePWAInstall";
 import { PWAInstallGuideModal } from "./PWAInstallGuideModal";
+import { WindowsLogo } from "./PWAInstallButton";
 
 const BANNER_DISMISS_KEY = "hmis_pwa_banner_dismissed_until";
 
@@ -128,11 +129,7 @@ export const PWAInstallBanner: React.FC = () => {
               onClick={handleInstallClick}
               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold rounded-lg shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              {isIOS ? (
-                <Smartphone className="w-3.5 h-3.5 text-emerald-200" />
-              ) : (
-                <Download className="w-3.5 h-3.5 text-emerald-200" />
-              )}
+              <WindowsLogo className="w-3.5 h-3.5 text-emerald-200" />
               <span>{isIPhone ? "Install on iPhone" : "Install"}</span>
             </button>
 

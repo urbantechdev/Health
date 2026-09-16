@@ -4,6 +4,7 @@ import { collection, addDoc } from "firebase/firestore";
 import { Employee, SystemRole } from "../types";
 import { SYSTEM_ROLES_DIRECTORY, getRoleConfig } from "../constants/roles";
 import { checkDuplicateEmployee } from "../lib/deduplicationService";
+import { saveUserToDatabase } from "../lib/userService";
 import { toast } from "../lib/promptService";
 import { 
   UserPlus, 
@@ -152,17 +153,43 @@ export default function StaffOnboardingModal({
         hireDate: new Date().toISOString().split("T")[0]
       };
 
-      const docRef = await addDoc(collection(db, "employees"), {
-        ...newEmployeeData,
+      // Save into both system_users and employees database collections
+      const { employeeId } = await saveUserToDatabase({
+        name: cleanName,
+        email: cleanEmail,
+        nationalId: cleanNationalId,
+        phone: cleanPhone,
+        role: selectedRole,
+        systemRole: selectedRole,
+        department: department,
+        specialty: specialty || selectedRole,
+        accessLevel: accessLevel,
+        pin: cleanPin,
+        salary: parseInt(salary) || 80000,
+        status: "active",
+        hireDate: new Date().toISOString().split("T")[0],
         employeeNumber: generatedEmpId,
         licenseNumber: licenseNumber.trim(),
-        createdAt: new Date().toISOString()
       });
 
       const fullEmployee: Employee = {
-        id: docRef.id,
-        ...newEmployeeData,
-      } as Employee;
+        id: employeeId,
+        name: cleanName,
+        email: cleanEmail,
+        nationalId: cleanNationalId,
+        phone: cleanPhone,
+        role: selectedRole,
+        systemRole: selectedRole,
+        department: department,
+        specialty: specialty || selectedRole,
+        accessLevel: accessLevel,
+        pin: cleanPin,
+        salary: parseInt(salary) || 80000,
+        status: "active",
+        hireDate: new Date().toISOString().split("T")[0],
+        employeeNumber: generatedEmpId,
+        licenseNumber: licenseNumber.trim(),
+      };
 
       if (onStaffCreated) {
         onStaffCreated(fullEmployee);

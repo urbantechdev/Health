@@ -27,6 +27,7 @@ import { Employee, SystemRole } from "../types";
 import { SYSTEM_ROLES_DIRECTORY } from "../constants/roles";
 import { doc, updateDoc, setDoc, getDocs, collection, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { saveUserToDatabase } from "../lib/userService";
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -252,20 +253,25 @@ export default function UserProfileModal({
         updatePayload.password = newPassword;
       }
 
-      if (employeeDocId) {
-        await updateDoc(doc(db, "employees", employeeDocId), updatePayload);
-      } else {
-        // If it's a standalone super admin or new account, persist with setDoc
-        const newRef = doc(collection(db, "employees"));
-        await setDoc(newRef, {
-          ...updatePayload,
-          salary: employeeRecord?.salary || 380000,
-          status: "active",
-          hireDate: employeeRecord?.hireDate || new Date().toISOString().split("T")[0],
-          accessLevel: isSuperAdmin ? "Super Admin" : "Standard Staff",
-          createdAt: new Date().toISOString()
-        });
-      }
+      // Persist to both employees and system_users collections in the database
+      await saveUserToDatabase({
+        id: employeeDocId,
+        name: cleanName,
+        email: cleanEmail,
+        phone: phone.trim(),
+        nationalId: nationalId.trim(),
+        specialty: specialty.trim(),
+        photoURL: photoURL.trim(),
+        avatarUrl: photoURL.trim(),
+        pin: pin.trim(),
+        department: department,
+        systemRole: systemRole,
+        role: systemRole,
+        accessLevel: isSuperAdmin ? "Super Admin" : "Standard Staff",
+        salary: employeeRecord?.salary || 380000,
+        password: newPassword || undefined,
+        status: "active",
+      });
 
       // 2. Propagate updates to parent auth state in App.tsx
       onUpdateUserProfile({

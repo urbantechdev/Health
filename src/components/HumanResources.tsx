@@ -3,6 +3,7 @@ import { db } from "../lib/firebase";
 import { collection, onSnapshot, doc, addDoc, updateDoc, writeBatch, deleteDoc, query, where, getDocs } from "firebase/firestore";
 import { Employee, PayrollRecord } from "../types";
 import { checkDuplicateEmployee } from "../lib/deduplicationService";
+import { saveUserToDatabase, importStaffFromRepo, REPO_STAFF_SEEDS } from "../lib/userService";
 import StaffOnboardingModal from "./StaffOnboardingModal";
 import EditStaffModal from "./EditStaffModal";
 import { 
@@ -169,6 +170,23 @@ export default function HumanResources() {
   const [dossierPrinting, setDossierPrinting] = useState(false);
   const [dossierDownloading, setDossierDownloading] = useState(false);
   const [dossierDownloadSuccess, setDossierDownloadSuccess] = useState(false);
+  const [isImportingRepoStaff, setIsImportingRepoStaff] = useState(false);
+
+  const handleImportRepoStaff = async () => {
+    setIsImportingRepoStaff(true);
+    try {
+      const result = await importStaffFromRepo();
+      toast.success(
+        `Successfully imported and synced ${result.importedCount} staff members from the repository into the database.`,
+        "Staff Import Complete"
+      );
+    } catch (err: any) {
+      console.error("Failed to import staff from repo:", err);
+      toast.error("Failed to import staff from repository: " + (err?.message || "Unknown error"), "Import Failed");
+    } finally {
+      setIsImportingRepoStaff(false);
+    }
+  };
 
   const handlePrintDossier = async () => {
     if (dossierPrinting || !viewingEmployee) return;
@@ -379,7 +397,11 @@ export default function HumanResources() {
         pin: generatedPin
       };
 
-      await addDoc(collection(db, "employees"), newEmp);
+      // Save into both system_users and employees database collections
+      await saveUserToDatabase({
+        ...newEmp,
+        basicSalary: parseInt(empSalary),
+      });
       
       toast.success(
         `Staff member ${empName.trim()} registered successfully with PIN ${generatedPin}.`,
@@ -707,7 +729,21 @@ export default function HumanResources() {
               Manage clinical & administrative staff records, track duty shifts, monitor professional licensing (KMPDC, NCK, PPB), and handle staff onboarding & appraisals.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              id="btn-hr-import-repo-staff"
+              onClick={handleImportRepoStaff}
+              disabled={isImportingRepoStaff}
+              className="px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 disabled:opacity-50"
+              title="Bulk import all repository staff and super administrators directly into Firestore"
+            >
+              {isImportingRepoStaff ? (
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+              ) : (
+                <Download className="w-4 h-4 text-emerald-400" />
+              )}
+              <span>{isImportingRepoStaff ? "Importing Repo Staff..." : "Import Staff from Repo"}</span>
+            </button>
             <button
               id="btn-hr-view-directory"
               onClick={() => setActiveTab("directory")}

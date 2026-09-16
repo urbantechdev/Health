@@ -14,7 +14,11 @@ import {
   UserCheck,
   AlertCircle,
   Receipt,
-  Stethoscope
+  Stethoscope,
+  Calendar,
+  FileText,
+  Baby,
+  Globe
 } from "lucide-react";
 import { collection, addDoc, doc, setDoc, query, where, getDocs, updateDoc } from "firebase/firestore";
 import { db, cleanFirestoreData } from "../lib/firebase";
@@ -35,7 +39,11 @@ interface ReceptionKioskProps {
 
 export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, onOpenBiometrics }: ReceptionKioskProps) {
   const [fullName, setFullName] = useState("");
+  const [idType, setIdType] = useState<"National ID" | "Passport" | "Birth Certificate">("National ID");
   const [nationalId, setNationalId] = useState("");
+  const [passportNumber, setPassportNumber] = useState("");
+  const [birthCertificateNumber, setBirthCertificateNumber] = useState("");
+  const [dob, setDob] = useState("");
   const [phone, setPhone] = useState("");
   const [age, setAge] = useState<number | "">("");
   const [gender, setGender] = useState<"Male" | "Female" | "Other">("Male");
@@ -55,10 +63,41 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
   const [existingPatientMatch, setExistingPatientMatch] = useState<any>(null);
   const [isSearchingExisting, setIsSearchingExisting] = useState(false);
 
-  // Auto-lookup returning patient by National ID
+  // Auto-sync DOB and Age
+  const handleDobChange = (newDob: string) => {
+    setDob(newDob);
+    if (newDob) {
+      const birth = new Date(newDob);
+      const today = new Date();
+      let calculatedAge = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        calculatedAge--;
+      }
+      if (calculatedAge >= 0 && calculatedAge < 130) {
+        setAge(calculatedAge);
+        if (calculatedAge < 18 && idType === "National ID") {
+          setIdType("Birth Certificate");
+        }
+      }
+    }
+  };
+
+  const handleAgeChange = (newAge: number | "") => {
+    setAge(newAge);
+    if (typeof newAge === "number" && newAge >= 0 && !dob) {
+      const estYear = new Date().getFullYear() - newAge;
+      setDob(`${estYear}-06-15`);
+    }
+    if (typeof newAge === "number" && newAge < 18 && idType === "National ID") {
+      setIdType("Birth Certificate");
+    }
+  };
+
+  // Auto-lookup returning patient by National ID, Passport, or Birth Certificate
   const handleLookupNationalId = async (idToSearch: string) => {
     const cleanId = idToSearch.trim();
-    if (!cleanId || cleanId.length < 5) {
+    if (!cleanId || cleanId.length < 4) {
       setExistingPatientMatch(null);
       return;
     }
@@ -66,13 +105,30 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
     setIsSearchingExisting(true);
     try {
       const q1 = query(collection(db, "patients"), where("nationalId", "==", cleanId));
-      const snap1 = await getDocs(q1);
+      let snap1 = await getDocs(q1);
+      if (snap1.empty) {
+        const qPass = query(collection(db, "patients"), where("passportNumber", "==", cleanId));
+        snap1 = await getDocs(qPass);
+      }
+      if (snap1.empty) {
+        const qCert = query(collection(db, "patients"), where("birthCertificateNumber", "==", cleanId));
+        snap1 = await getDocs(qCert);
+      }
+
       if (!snap1.empty) {
         const foundData = snap1.docs[0].data() as any;
         setExistingPatientMatch({ ...foundData, id: snap1.docs[0].id });
         if (!fullName) setFullName(foundData.patientName || foundData.name || foundData.fullName || "");
         if (!phone) setPhone(foundData.phone || "");
         if (!age && foundData.age) setAge(foundData.age);
+        if (foundData.dob) setDob(foundData.dob);
+        if (foundData.passportNumber) setPassportNumber(foundData.passportNumber);
+        if (foundData.birthCertificateNumber) {
+          setBirthCertificateNumber(foundData.birthCertificateNumber);
+          setIdType("Birth Certificate");
+        } else if (foundData.passportNumber) {
+          setIdType("Passport");
+        }
         if (foundData.gender) setGender(foundData.gender);
         if (foundData.residence) setResidence(foundData.residence);
         if (foundData.nextOfKin) setNextOfKin(foundData.nextOfKin);
@@ -103,11 +159,18 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
       const randomNum = Math.floor(100 + Math.random() * 900);
       const ticketNo = `${ticketPrefix}-${randomNum}`;
 
+      // Determine primary identifier based on selected type
+      const effectiveId = idType === "Passport" 
+        ? (passportNumber.trim() || nationalId.trim()) 
+        : idType === "Birth Certificate" 
+          ? (birthCertificateNumber.trim() || nationalId.trim()) 
+          : nationalId.trim();
+
       // 1. Check for duplicates in the system
-      let targetPatientId = `PAT-${nationalId.trim() || Date.now().toString().slice(-6)}`;
+      let targetPatientId = `PAT-${effectiveId || Date.now().toString().slice(-6)}`;
       try {
         const dupCheck = await checkDuplicatePatientRegistration(
-          nationalId.trim(),
+          effectiveId,
           phone.trim(),
           fullName.trim()
         );
@@ -124,7 +187,10 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
       const syncResult = await upsertUnifiedPatientRecord({
         id: targetPatientId,
         patientName: fullName.trim(),
-        nationalId: nationalId.trim(),
+        nationalId: nationalId.trim() || effectiveId,
+        passportNumber: passportNumber.trim(),
+        birthCertificateNumber: birthCertificateNumber.trim(),
+        dob: dob || undefined,
         phone: phone.trim(),
         age: Number(age) || 30,
         gender,
@@ -149,14 +215,14 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
         encounterId = await createHospitalEncounter({
           patientId: finalPatientId,
           patientName: fullName.trim(),
-          nationalId: nationalId.trim(),
+          nationalId: nationalId.trim() || effectiveId,
           phone: phone.trim(),
           age: Number(age) || 30,
           gender,
           status: "ADMITTED",
           admissionDate: new Date().toISOString(),
           assignedWard: "Outpatient / OPD",
-          notes: `Reception Intake: ${serviceStation} [${paymentScheme}]`,
+          notes: `Reception Intake: ${serviceStation} [${paymentScheme}] • ID Type: ${idType}`,
           activeTicketNo: syncResult?.ticketNo || ticketNo,
           paymentScheme,
           insuranceScheme: paymentScheme === "Social Health Authority (SHA)" 
@@ -345,6 +411,52 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
         {/* Form Container */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
           <form onSubmit={handleRegisterPatient} className="space-y-4">
+            {/* Identification Type Selector */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Primary Identification Document *
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIdType("National ID")}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    idType === "National ID"
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>National ID (Adult)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIdType("Birth Certificate")}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    idType === "Birth Certificate"
+                      ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <Baby className="w-3.5 h-3.5" />
+                  <span>Birth Certificate (Minor)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIdType("Passport")}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    idType === "Passport"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Passport (Non-Citizen)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Identification Inputs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -362,25 +474,55 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Kenyan National ID / Passport No
+                  {idType === "National ID" ? "Kenyan National ID Number *" : idType === "Birth Certificate" ? "Birth Certificate Entry No *" : "Passport Number *"}
                 </label>
                 <div className="relative">
-                  <input
-                    type="text"
-                    value={nationalId}
-                    onChange={(e) => {
-                      setNationalId(e.target.value);
-                      handleLookupNationalId(e.target.value);
-                    }}
-                    placeholder="e.g. 32441928"
-                    className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-xl text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                  />
+                  {idType === "National ID" && (
+                    <input
+                      type="text"
+                      value={nationalId}
+                      onChange={(e) => {
+                        setNationalId(e.target.value);
+                        handleLookupNationalId(e.target.value);
+                      }}
+                      placeholder="e.g. 32441928"
+                      className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-xl text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                      required
+                    />
+                  )}
+                  {idType === "Birth Certificate" && (
+                    <input
+                      type="text"
+                      value={birthCertificateNumber}
+                      onChange={(e) => {
+                        setBirthCertificateNumber(e.target.value);
+                        handleLookupNationalId(e.target.value);
+                      }}
+                      placeholder="e.g. BC-2023-88219"
+                      className="w-full pl-3 pr-10 py-2 border border-purple-300 bg-purple-50/20 rounded-xl text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                  )}
+                  {idType === "Passport" && (
+                    <input
+                      type="text"
+                      value={passportNumber}
+                      onChange={(e) => {
+                        setPassportNumber(e.target.value);
+                        handleLookupNationalId(e.target.value);
+                      }}
+                      placeholder="e.g. AK129845"
+                      className="w-full pl-3 pr-10 py-2 border border-blue-300 bg-blue-50/20 rounded-xl text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  )}
+
                   <button
                     type="button"
                     id="btn-tap-fingerprint-kiosk"
                     onClick={() => {
                       if (onOpenBiometrics) {
-                        onOpenBiometrics(fullName || "Patient", nationalId, (res) => {
+                        onOpenBiometrics(fullName || "Patient", nationalId || passportNumber || birthCertificateNumber, (res) => {
                           setBiometricStatus("verified");
                           setBiometricResult(res);
                         });
@@ -388,7 +530,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
                         setShowBiometricModal(true);
                       }
                     }}
-                    title="Tap to open Biometric Scanner (Full Screen / Top Popup)"
+                    title="Tap to open Biometric Scanner"
                     className="absolute right-1.5 top-1.5 p-1 rounded-lg text-emerald-600 hover:bg-emerald-50 hover:scale-110 active:scale-95 transition-all cursor-pointer"
                   >
                     <Fingerprint className="w-5 h-5 animate-pulse" />
@@ -405,7 +547,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
                 {existingPatientMatch && (
                   <div className="mt-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs flex items-center justify-between gap-2">
                     <div className="truncate">
-                      <span className="font-bold">Returning Patient:</span> {existingPatientMatch.name || existingPatientMatch.fullName} ({existingPatientMatch.patientNumber || "EHR Linked"})
+                      <span className="font-bold">Returning Patient:</span> {existingPatientMatch.name || existingPatientMatch.fullName || existingPatientMatch.patientName} ({existingPatientMatch.patientNumber || "EHR Linked"})
                     </div>
                     <button
                       type="button"
@@ -420,54 +562,25 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
                     </button>
                   </div>
                 )}
-
-                {/* Direct Tap CTA Button for Full Screen Biometric Window */}
-                <button
-                  type="button"
-                  id="btn-kiosk-scan-fingerprint-cta"
-                  onClick={() => {
-                    if (onOpenBiometrics) {
-                      onOpenBiometrics(fullName || "Patient", nationalId, (res) => {
-                        setBiometricStatus("verified");
-                        setBiometricResult(res);
-                      });
-                    } else {
-                      setShowBiometricModal(true);
-                    }
-                  }}
-                  className={`mt-2 w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-between transition-all cursor-pointer border shadow-xs ${
-                    biometricStatus === "verified"
-                      ? "bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100"
-                      : "bg-indigo-50/80 hover:bg-indigo-100/80 text-indigo-950 border-indigo-200 hover:border-indigo-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Fingerprint className={`w-4 h-4 ${biometricStatus === "verified" ? "text-emerald-600" : "text-indigo-600 animate-pulse"}`} />
-                    <span>{biometricStatus === "verified" ? "Biometrics Attached to Patient" : "Tap to Open Biometric Scanner (Full Screen)"}</span>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    biometricStatus === "verified" ? "bg-emerald-600 text-white" : "bg-indigo-600 text-white"
-                  }`}>
-                    {biometricStatus === "verified" ? "✓ Verified" : "Tap to Scan"}
-                  </span>
-                </button>
               </div>
             </div>
 
+            {/* Demographics & DOB Row */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Phone (Safaricom / Airtel)
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                  <span>Date of Birth</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold">Auto-computes age</span>
                 </label>
                 <div className="relative">
                   <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="0712 345 678"
+                    type="date"
+                    value={dob}
+                    onChange={(e) => handleDobChange(e.target.value)}
+                    max={new Date().toISOString().split("T")[0]}
                     className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                   />
-                  <Phone className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                  <Calendar className="w-4 h-4 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
                 </div>
               </div>
 
@@ -478,8 +591,10 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
                 <input
                   type="number"
                   value={age}
-                  onChange={(e) => setAge(e.target.value === "" ? "" : Number(e.target.value))}
+                  onChange={(e) => handleAgeChange(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="e.g. 34"
+                  min="0"
+                  max="125"
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                   required
                 />
@@ -487,7 +602,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Gender
+                  Sex / Gender *
                 </label>
                 <select
                   value={gender}
@@ -501,6 +616,73 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
               </div>
             </div>
 
+            {/* Contact & Residence Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Phone (Safaricom / Airtel) *
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="0712 345 678"
+                    className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    required
+                  />
+                  <Phone className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Residence / Address (County & Town) *
+                </label>
+                <input
+                  type="text"
+                  value={residence}
+                  onChange={(e) => setResidence(e.target.value)}
+                  placeholder="e.g. Westlands, Nairobi / Kiambu"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Next of Kin Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Next of Kin (Full Name & Relationship)
+                </label>
+                <input
+                  type="text"
+                  value={nextOfKin}
+                  onChange={(e) => setNextOfKin(e.target.value)}
+                  placeholder="e.g. Peter Kamau (Spouse / Guardian)"
+                  className="w-full px-3 py-2 border border-slate-300 bg-white rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Next of Kin Contact Phone
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    value={kinPhone}
+                    onChange={(e) => setKinPhone(e.target.value)}
+                    placeholder="0722 123 456"
+                    className="w-full pl-3 pr-8 py-2 border border-slate-300 bg-white rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <Phone className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Scheme & Insurance */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -531,6 +713,7 @@ export default function ReceptionKiosk({ onTicketCreated, onNavigateToBilling, o
               </div>
             </div>
 
+            {/* Priority & Routing */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">

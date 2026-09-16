@@ -17,6 +17,7 @@ import {
 } from "../lib/voiceAnnouncementService";
 import { 
   Ticket, 
+  Monitor,
   CheckCircle2, 
   Clock, 
   AlertCircle, 
@@ -767,6 +768,18 @@ export default function TicketSystem() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              window.open(`${window.location.origin}${window.location.pathname}?display=big-monitor`, "_blank");
+            }}
+            className="px-3.5 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-200 border border-slate-600/60 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Launch Big Monitor Display in Standalone View/TV"
+          >
+            <Monitor className="w-4 h-4 text-cyan-400" />
+            <span>Launch Big Monitor</span>
+          </button>
+
           <button
             onClick={() => setShowVoiceSettingsModal(true)}
             className="px-3.5 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all duration-200 border border-slate-600/60 flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -1914,36 +1927,37 @@ export default function TicketSystem() {
             </div>
 
             <div className="p-6 space-y-5 text-xs overflow-y-auto flex-1">
-              {/* Quick Calm Female Voice Preset */}
-              <div className="p-4 bg-gradient-to-r from-rose-50 to-indigo-50 border border-rose-200/80 rounded-2xl flex items-center justify-between gap-3">
+              {/* Quick Calm Fluent English Voice Preset */}
+              <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200/80 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
                 <div className="space-y-0.5">
-                  <div className="flex items-center gap-1.5 font-black text-rose-950 text-xs">
-                    <Sparkles className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Calm Female Voice & Loud English Preset</span>
+                  <div className="flex items-center gap-1.5 font-black text-slate-900 text-xs">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Calm Fluent English Voice Preset</span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.2 rounded">Recommended</span>
                   </div>
                   <p className="text-[11px] text-slate-600">
-                    Auto-calibrates 100% volume, fluent 0.90x cadence, warm pitch, and high-clarity chime.
+                    Auto-calibrates to fluent natural English cadence (0.90x), warm grounded pitch (1.00x), and soothing 3-tone hospital chime.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     const voices = voiceAnnouncer.getVoices();
-                    const best = voiceAnnouncer.selectBestCalmFemaleVoice(voices);
+                    const best = voiceAnnouncer.selectBestCalmVoice(voices);
                     updateVoiceSettings({
                       volume: 1.0,
                       rate: 0.90,
-                      pitch: 1.02,
-                      chimeType: "banking_ding_dong",
+                      pitch: 1.0,
+                      chimeType: "hospital_3tone",
                       preferredVoiceURI: best?.voiceURI || "",
                       voiceGenderPreference: "female",
                       enabled: true
                     });
-                    toast.success("Applied Loud & Calm Female English Voice Preset!", "Voice Preset Active");
+                    toast.success("Applied Calm Fluent English Voice Preset!", "Voice Calibrated");
                   }}
-                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs whitespace-nowrap cursor-pointer transition-colors shadow-xs"
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs whitespace-nowrap cursor-pointer transition-colors shadow-xs active:scale-95"
                 >
-                  Apply Preset
+                  Apply Calm English Preset
                 </button>
               </div>
 
@@ -1970,8 +1984,8 @@ export default function TicketSystem() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block font-bold text-slate-800">Installed Speech Synthesizer Voice</label>
-                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                    Fluent English Female Preferred
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    Calm Fluent English Ranked
                   </span>
                 </div>
                 <select
@@ -1979,14 +1993,25 @@ export default function TicketSystem() {
                   onChange={(e) => updateVoiceSettings({ preferredVoiceURI: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-indigo-600"
                 >
-                  <option value="">✨ Auto-Select Best Calm Female Voice (Recommended)</option>
-                  {(availableVoices.length > 0 ? availableVoices : voiceAnnouncer.getVoices())
-                    .filter((v) => v.lang.toLowerCase().startsWith("en") || v.lang.toLowerCase().startsWith("sw"))
+                  <option value="">✨ Auto-Select Best Calm English Voice (Recommended)</option>
+                  {voiceAnnouncer.getSortedEnglishVoices(availableVoices.length > 0 ? availableVoices : voiceAnnouncer.getVoices())
                     .map((v) => {
+                      const isNatural = /natural|neural|online|premium/i.test(v.name);
+                      const isBritish = /en-gb/i.test(v.lang);
+                      const isUS = /en-us/i.test(v.lang);
                       const isLikelyFemale = /female|samantha|victoria|karen|zira|hazel|aria|jenny|sonia|libby|natasha|ava|emma|ana|serena/i.test(v.name);
+                      const tag = isNatural
+                        ? "✨ Natural Neural"
+                        : isBritish
+                        ? "🇬🇧 British English"
+                        : isUS
+                        ? "🇺🇸 US English"
+                        : isLikelyFemale
+                        ? "👩 Calm Voice"
+                        : "";
                       return (
                         <option key={v.voiceURI} value={v.voiceURI}>
-                          {v.name} ({v.lang}) {isLikelyFemale ? "👩 Calm Female" : ""}
+                          {v.name} ({v.lang}) {tag ? `[${tag}]` : ""}
                         </option>
                       );
                     })}
@@ -2150,10 +2175,10 @@ export default function TicketSystem() {
                 <button
                   type="button"
                   onClick={handleTestVoiceCall}
-                  className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-rose-200 shadow-xs"
+                  className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-emerald-200 shadow-xs"
                 >
-                  <Megaphone className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Test Calm Female Voice</span>
+                  <Megaphone className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Test Calm English Voice</span>
                 </button>
 
                 <button

@@ -108,7 +108,7 @@ export default function RolePortalLogin({
   const [localError, setLocalError] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
 
-  // 4 Primary Boxes definition (Clean White Background theme)
+  // 4 Primary Boxes definition (Clean crisp presentation)
   const primaryBoxes: RoleCardItem[] = [
     {
       id: "reception",
@@ -122,7 +122,7 @@ export default function RolePortalLogin({
       accentColor: "text-blue-600",
       lightBg: "bg-blue-50",
       borderColor: "border-blue-200",
-      hoverBorder: "hover:border-blue-500"
+      hoverBorder: "hover:border-blue-500",
     },
     {
       id: "admin",
@@ -136,7 +136,7 @@ export default function RolePortalLogin({
       accentColor: "text-slate-900",
       lightBg: "bg-slate-100",
       borderColor: "border-slate-300",
-      hoverBorder: "hover:border-slate-700"
+      hoverBorder: "hover:border-slate-600",
     },
     {
       id: "pharmacy",
@@ -150,7 +150,7 @@ export default function RolePortalLogin({
       accentColor: "text-emerald-600",
       lightBg: "bg-emerald-50",
       borderColor: "border-emerald-200",
-      hoverBorder: "hover:border-emerald-500"
+      hoverBorder: "hover:border-emerald-500",
     },
     {
       id: "staff",
@@ -164,7 +164,7 @@ export default function RolePortalLogin({
       accentColor: "text-purple-600",
       lightBg: "bg-purple-50",
       borderColor: "border-purple-200",
-      hoverBorder: "hover:border-purple-500"
+      hoverBorder: "hover:border-purple-500",
     }
   ];
 
@@ -742,81 +742,73 @@ export default function RolePortalLogin({
           </div>
         )}
 
-        {/* The 4 Distinct Boxes (Reception, Admin, Pharmacy, Staff) with Gemini Rainbow Shadow Motion */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {primaryBoxes.map((box) => {
-            const Icon = box.icon;
-            const isStaff = box.id === "staff";
+        {/* The 4 Distinct Workstation Boxes (Reception, Admin, Pharmacy, Staff) */}
+        <div className="relative">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {primaryBoxes.map((box) => {
+              const Icon = box.icon;
+              const isStaff = box.id === "staff";
 
-            return (
-              <div key={box.id} className="relative group rounded-3xl">
-                {/* 1. Ambient Gemini Rainbow Halo Shadow Motion (Soft Rotating Blurred Conic Glow) */}
-                <div className="absolute -inset-1 sm:-inset-1.5 rounded-3xl opacity-40 group-hover:opacity-100 transition-all duration-500 blur-lg sm:blur-xl pointer-events-none -z-10 overflow-hidden">
-                  <div className="w-[220%] h-[220%] -top-[60%] -left-[60%] absolute gemini-rainbow-spin" />
-                </div>
-
-                {/* 2. Shifting Gemini Rainbow Outline Tracer */}
-                <div className="absolute -inset-[2px] rounded-3xl opacity-40 group-hover:opacity-90 transition-opacity duration-300 pointer-events-none -z-10 overflow-hidden">
-                  <div className="w-full h-full gemini-rainbow-linear" />
-                </div>
-
-                {/* 3. Primary Card Body */}
-                <motion.div
-                  whileHover={{ y: -5, scale: 1.015 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => handleBoxClick(box)}
-                  id={`role-box-${box.id}`}
-                  className={`h-full p-6 rounded-3xl bg-white/95 backdrop-blur-xs border-2 ${box.borderColor} ${box.hoverBorder} shadow-lg group-hover:shadow-2xl transition-all duration-300 cursor-pointer flex flex-col justify-between relative z-10`}
-                >
-                  {/* Visual Header */}
-                  <div>
-                    <div className="flex items-center justify-between mb-5">
-                      <div className={`p-4 rounded-2xl ${box.lightBg} ${box.accentColor} transition-transform group-hover:scale-110 duration-200 shadow-xs`}>
-                        <Icon className="w-8 h-8" />
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-slate-100 text-slate-800 rounded-full border border-slate-200 shadow-2xs">
-                        {box.badge}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5 mb-6">
-                      <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center justify-between">
-                        <span>{box.title}</span>
-                        {isStaff && (
-                          <span className="text-slate-400 group-hover:text-purple-600 transition-colors">
-                            {isStaffExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                          </span>
-                        )}
-                      </h3>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">
-                        {box.subtitle}
-                      </p>
-                      <p className="text-xs text-slate-600 font-normal leading-relaxed pt-1">
-                        {box.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Action CTA Button */}
-                  <button
-                    type="button"
-                    className={`w-full py-3 px-4 rounded-2xl text-xs font-black flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
-                      isStaff
-                        ? isStaffExpanded
-                          ? "bg-purple-600 text-white shadow-md"
-                          : "bg-purple-50 text-purple-700 hover:bg-purple-100"
-                        : "bg-slate-900 text-white hover:bg-slate-800 shadow-md"
-                    }`}
+              return (
+                <div key={box.id} className="relative group rounded-3xl">
+                  {/* Primary Card Body */}
+                  <motion.div
+                    whileHover={{ y: -5, scale: 1.015 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleBoxClick(box)}
+                    id={`role-box-${box.id}`}
+                    className={`h-full p-6 rounded-3xl bg-white border-2 ${box.borderColor} ${box.hoverBorder} shadow-md hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col justify-between relative z-10`}
                   >
-                    <span>
-                      {isStaff ? (isStaffExpanded ? "Close Staff Stations" : "View Staff Stations") : `Authenticate & Enter ${box.title}`}
-                    </span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </motion.div>
-              </div>
-            );
-          })}
+                    {/* Visual Header */}
+                    <div>
+                      <div className="flex items-center justify-between mb-5">
+                        <div className={`p-4 rounded-2xl ${box.lightBg} ${box.accentColor} transition-transform group-hover:scale-110 duration-200 shadow-xs`}>
+                          <Icon className="w-8 h-8" />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-slate-100 text-slate-800 rounded-full border border-slate-200 shadow-2xs">
+                          {box.badge}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 mb-6">
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center justify-between">
+                          <span>{box.title}</span>
+                          {isStaff && (
+                            <span className="text-slate-400 group-hover:text-purple-600 transition-colors">
+                              {isStaffExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                          {box.subtitle}
+                        </p>
+                        <p className="text-xs text-slate-600 font-normal leading-relaxed pt-1">
+                          {box.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action CTA Button */}
+                    <button
+                      type="button"
+                      className={`w-full py-3 px-4 rounded-2xl text-xs font-black flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
+                        isStaff
+                          ? isStaffExpanded
+                            ? "bg-purple-600 text-white shadow-md"
+                            : "bg-purple-50 text-purple-700 hover:bg-purple-100"
+                          : "bg-slate-900 text-white hover:bg-slate-800 shadow-md"
+                      }`}
+                    >
+                      <span>
+                        {isStaff ? (isStaffExpanded ? "Close Staff Stations" : "View Staff Stations") : `Authenticate & Enter ${box.title}`}
+                      </span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </motion.div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Smooth Expandable Section for Staff Sub-Roles */}
@@ -850,16 +842,12 @@ export default function RolePortalLogin({
                   const SubIcon = sub.icon;
                   return (
                     <div key={sub.id} className="relative group rounded-2xl">
-                      {/* Gemini Rainbow Halo Subtle Effect on Staff Cards */}
-                      <div className="absolute -inset-0.5 rounded-2xl opacity-0 group-hover:opacity-90 transition-opacity duration-300 blur-md pointer-events-none -z-10 overflow-hidden">
-                        <div className="w-[200%] h-[200%] -top-1/2 -left-1/2 absolute gemini-rainbow-spin" />
-                      </div>
                       <motion.div
                         whileHover={{ scale: 1.015, y: -2 }}
                         whileTap={{ scale: 0.99 }}
                         onClick={() => handleSubRoleClick(sub)}
                         id={`staff-subrole-${sub.id}`}
-                        className="p-4 bg-white/95 backdrop-blur-xs border border-slate-200 group-hover:border-transparent rounded-2xl shadow-xs group-hover:shadow-xl transition-all duration-200 cursor-pointer flex items-center justify-between relative z-10"
+                        className="p-4 bg-white border border-slate-200 hover:border-purple-300 rounded-2xl shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer flex items-center justify-between relative z-10"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
                           <div className={`p-3 rounded-xl ${sub.bg} ${sub.color} shrink-0 group-hover:scale-105 transition-transform`}>
@@ -983,14 +971,6 @@ export default function RolePortalLogin({
         {activeModalRole && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
             <div className="relative max-w-md w-full">
-              {/* Gemini Rainbow Halo Shadow Motion Layer */}
-              <div className="absolute -inset-2 sm:-inset-3 rounded-3xl opacity-80 blur-xl sm:blur-2xl pointer-events-none -z-10 overflow-hidden">
-                <div className="w-[220%] h-[220%] -top-[60%] -left-[60%] absolute gemini-rainbow-spin" />
-              </div>
-              <div className="absolute -inset-[2px] rounded-3xl opacity-70 pointer-events-none -z-10 overflow-hidden">
-                <div className="w-full h-full gemini-rainbow-linear" />
-              </div>
-
               <motion.div
                 initial={{ scale: 0.95, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}

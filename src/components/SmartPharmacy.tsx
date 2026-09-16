@@ -3,6 +3,7 @@ import { db, cleanFirestoreData } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, where } from "firebase/firestore";
 import { Medication, QueueTicket, PrescriptionItem, Invoice, MedicalRecord } from "../types";
 import { findUnifiedPatient } from "../lib/patientSyncService";
+import { dispenseEncounterPrescription } from "../lib/encounterService";
 import { 
   ShoppingCart, 
   PackageOpen, 
@@ -23,7 +24,8 @@ import {
   Pill,
   Plus,
   ArrowRightCircle,
-  Receipt
+  Receipt,
+  Download
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
 import { Html5Qrcode } from "html5-qrcode";
@@ -32,6 +34,7 @@ import PharmacyPOSCheckoutModal from "./PharmacyPOSCheckoutModal";
 import { toast, modernAlert } from "../lib/promptService";
 import { onHotkeyAction } from "../lib/hotkeyService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
+import { importPharmacyStockFromRepo } from "../services/drugInventorySync";
 
 interface SmartPharmacyProps {
   toggles: any;
@@ -73,6 +76,23 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
   // Loading / saving
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncingRepoStock, setSyncingRepoStock] = useState(false);
+
+  const handleSyncRepoStock = async () => {
+    setSyncingRepoStock(true);
+    try {
+      const res = await importPharmacyStockFromRepo();
+      if (res.success) {
+        toast.success(res.message, "Stock Import Completed");
+      } else {
+        toast.error(res.message, "Stock Import Failed");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to import pharmacy stock from repo", "Import Error");
+    } finally {
+      setSyncingRepoStock(false);
+    }
+  };
 
   useEffect(() => {
     // Listen to Patients
@@ -474,12 +494,32 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
 
       // 3. Update queue ticket -> route to billing
       if (ticketId) {
-        await updateDoc(doc(db, "queue", ticketId), {
+        const activeTicket = activePrescriptions.find((p) => p.id === ticketId);
+        const baseNum = activeTicket?.ticketNo?.includes("-") ? activeTicket.ticketNo.split("-")[1] : Math.floor(100 + Math.random() * 900);
+        const activeEncId = activeTicket?.encounterId || (activeTicket as any)?.activeEncounterId || null;
+
+        if (activeEncId) {
+          cart.forEach((item) => {
+            dispenseEncounterPrescription(activeEncId, `disp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`, {
+              drugName: item.med.name,
+              quantity: item.qty,
+              unitPrice: item.med.price,
+              totalPrice: item.med.price * item.qty,
+              dispensedBy: "Hospital Pharmacy",
+              kraNo,
+            }).catch(err => console.warn("dispenseEncounterPrescription error:", err));
+          });
+        }
+
+        await updateDoc(doc(db, "queue", ticketId), cleanFirestoreData({
+          department: "billing",
           currentDepartment: "billing",
-          ticketNo: `BIL-${activePrescriptions.find((p) => p.id === ticketId)?.ticketNo.split("-")[1]}`,
+          ticketNo: `BIL-${baseNum}`,
           status: "pending",
+          encounterId: activeEncId,
+          invoiceId: invoiceData.id,
           notes: `Pharmacy products dispensed (eTIMS #${kraNo}). Invoice routed to central billing.`,
-        });
+        }));
       }
 
       setCart([]);
@@ -694,6 +734,18 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
 
         {/* Selected Prescription Queue & Inventory Control */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="btn-import-pharmacy-stock-repo"
+            type="button"
+            onClick={handleSyncRepoStock}
+            disabled={syncingRepoStock}
+            className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            title="Import all 441+ medications and formulations from the repository formulary into Firestore"
+          >
+            <Download className={`w-4 h-4 text-emerald-300 ${syncingRepoStock ? "animate-bounce" : ""}`} />
+            <span>{syncingRepoStock ? "Importing Stock..." : "Import Stock from Repo"}</span>
+          </button>
+
           <button
             id="btn-open-drug-inventory"
             type="button"

@@ -80,6 +80,10 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
     "billing": false,
     "admissions": false,
     "transfers": false,
+    "surveillance": true,
+    "data-protection": true,
+    "sha-integration": false,
+    "offline-pwa": false,
     "security": false,
     "kenyan-forms": false,
     "hardware-scanners": false,
@@ -464,8 +468,104 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
       kenyaComplianceNote: "Standardized templates approved by the Kenya Medical Practitioners and Dentists Council (KMPDC).",
     },
     {
+      id: "surveillance",
+      title: "14. Public Health & Disease Surveillance Hub (eIDSR, MOH 505 & WHO IHR)",
+      category: "clinical",
+      targetTab: "surveillance",
+      hotkey: "Alt + S",
+      icon: Radio,
+      roleTags: ["Doctors", "Nurses", "Lab Technologists", "Public Health Officers", "Admins"],
+      summary: "Operating the Integrated Disease Surveillance and Response (IDSR) desk, 24-hour statutory notifiable disease reporting, weekly MOH 505 matrices, WHO IHR 2005 decision instruments, and KHIS export.",
+      prerequisites: [
+        "Authenticated clinical or surveillance officer role.",
+        "Laboratory or clinical suspicion of reportable infectious disease.",
+      ],
+      steps: [
+        "**Immediate 24h Notifications**: When a patient is suspected or confirmed to have a priority statutory condition (e.g. Cholera, Measles, VHF, Mpox, Polio/AFP, Anthrax, Plague, Yellow Fever), click **New Immediate Notification** or enter the patient National ID to auto-populate demography.",
+        "**MOH 505 Case Investigation Dossier**: Complete the standardized epidemiological fields (Date of Onset, Specimen Collected, GPS Village/Location, Case Classification). Click **Generate Official MOH 505 Dossier** to preview and export the statutory form.",
+        "**Weekly IDSR Matrix (Epi-Weeks 1–52)**: Open the **Weekly IDSR Matrix** tab to inspect aggregated case counts across all 44 surveillance categories. Look for automatic Red/Yellow epidemic threshold alarms flagged by the surveillance engine.",
+        "**WHO IHR 2005 Annex 2 Assessment**: For unexpected epidemiological events, open the **WHO IHR (2005)** tab. Complete the 4-question algorithmic instrument (Serious Public Health Impact, Unusual/Unexpected, International Spread Risk, Travel/Trade Restrictions). If scored positive, immediately notify the National IHR Focal Point.",
+        "**Exporting to KHIS / DHIS2**: Click **Export KHIS ADX Bundle** to download machine-readable XML/JSON formatted for direct import into the Kenya Health Information System (KHIS)."
+      ],
+      tips: [
+        "Attending clinicians have a statutory legal duty under the Kenya Public Health Act (Cap 242) to report priority conditions within 24 hours of clinical suspicion.",
+        "Immediate notifications automatically broadcast an alert across all active hospital clinical workstations and log an audit entry for the County Epidemiologist."
+      ],
+      kenyaComplianceNote: "Compliant with Ministry of Health Integrated Disease Surveillance and Response (IDSR 3rd Edition) and WHO International Health Regulations (IHR 2005).",
+    },
+    {
+      id: "data-protection",
+      title: "15. Kenya Data Protection Act (KDPA 2019) & Patient Privacy Protocols",
+      category: "security",
+      targetTab: "admin",
+      icon: ShieldCheck,
+      roleTags: ["All Staff", "Admins", "Doctors", "Nurses", "Records Officers"],
+      summary: "Staff operational guidelines for handling Sensitive Personal Data, biometric encryption, patient access requests, and 72-hour breach response.",
+      prerequisites: [
+        "Staff compliance declaration sign-off.",
+        "Hospital-issued role credentials.",
+      ],
+      steps: [
+        "**Processing Sensitive Personal Data (KDPA Sec 44)**: Treat all clinical records, diagnostic results, and prescriptions as confidential. Access patient files strictly on a clinical 'need-to-know' basis for direct patient management.",
+        "**Biometric Security**: Biometric templates captured at intake are converted into salted one-way SHA-256 hashes. Never attempt to export or photograph raw biometric screens.",
+        "**Patient Rights Management (KDPA Sec 26)**: If a patient requests access to their health chart, refer them to the Medical Records Officer. Patients are entitled to FHIR machine-readable summaries for cross-facility continuity.",
+        "**72-Hour Breach Reporting Protocol (KDPA Sec 43)**: If you suspect unauthorized access, lost staff credentials, or data exfiltration, notify the Data Protection Officer (DPO) immediately via ext. 104 or dpo@tassiahillhospital.co.ke. The hospital is legally required to notify the ODPC within 72 hours.",
+        "**Viewing ODPC Certificate & Policies**: Click 'Data Protection & ODPC Terms' in the top header bar or user profile menu to review the hospital's registered Data Controller certificate (#ODPC/CR/2026/00482). On the 'Staff Sign-Off' tab, use the **Staff Auto-Fill Dropdown** to instantly select your profile from the registered employee directory—automatically populating your legal name, statutory license (KMPDC, NCK, PPB, KMLTTB), and department before digitally certifying your compliance declaration."
+      ],
+      tips: [
+        "Always lock your terminal (or switch PINs) when stepping away from the consultation desk or nurse station.",
+        "Patient National ID and telephone numbers are automatically masked on patient-facing queue displays to prevent visual eavesdropping."
+      ],
+      kenyaComplianceNote: "Strictly aligned with the Kenya Data Protection Act 2019 and registered with the Office of the Data Protection Commissioner (ODPC Kenya Certificate #ODPC/CR/2026/00482).",
+    },
+    {
+      id: "sha-integration",
+      title: "16. Social Health Authority (SHA) & Digital Health Act 2023 Operations",
+      category: "finance",
+      targetTab: "billing",
+      icon: Activity,
+      roleTags: ["Cashiers", "Billing Officers", "Receptionists", "Admins"],
+      summary: "Live verification of patient SHA / Taifa Care insurance eligibility, automated benefit splits, and electronic claim submissions.",
+      prerequisites: [
+        "Valid patient National ID or SHA Policy Number.",
+        "Cashier or Billing Officer role credentials.",
+      ],
+      steps: [
+        "**Eligibility Lookup**: At Reception or Billing, enter the patient's National ID. The system queries the DHA AfyaLink enterprise bus to verify active SHA coverage and biometric status.",
+        "**Benefit Split Calculation**: In the Split-Ledger Billing register, the system automatically checks prescribed procedures and medications against the official SHA tariff schedule.",
+        "**Patient Co-Pay & Top-Up**: Any out-of-pocket balance or non-covered consumables are automatically isolated into the patient co-pay column for instant M-Pesa STK push or cash settlement.",
+        "**Digital e-Claim Submission**: Click 'Submit SHA e-Claim' to bundle the electronic consultation chart, lab results, and fiscal invoice into an encrypted FHIR claim sent to the SHA adjudication engine."
+      ],
+      tips: [
+        "Real-time OTP verification sent to the patient's registered mobile phone ensures authentic billing and eliminates ghost claims."
+      ],
+      kenyaComplianceNote: "Complies with the Digital Health Act 2023 (Act No. 15 of 2023) and Social Health Insurance Regulations.",
+    },
+    {
+      id: "offline-pwa",
+      title: "17. Offline PWA Resilience & Local Sync Engine",
+      category: "core",
+      targetTab: "dashboard",
+      icon: Smartphone,
+      roleTags: ["All Staff", "IT Admins"],
+      summary: "Operating the HMIS seamlessly during hospital internet outages with zero data loss using Service Worker and IndexedDB caching.",
+      prerequisites: [
+        "Modern browser (Chrome, Edge, Safari, Firefox) with Service Worker support.",
+      ],
+      steps: [
+        "**Automatic Offline Detection**: If the hospital fiber or 4G connection fails, the system displays an amber 'Offline Mode — Local Cache Active' badge in the status bar.",
+        "**Uninterrupted Clinical Workflow**: Continue admitting patients, recording triage vitals, typing clinical consultation notes, and dispensing medication as usual. Data is securely saved to browser IndexedDB.",
+        "**Automated Sync on Reconnection**: When internet connectivity is restored, the Workbox background sync queue automatically replays pending writes to Google Cloud Firestore.",
+        "**Installing as Desktop / Mobile App**: Click the 'Install App' icon in the browser address bar to install The Tassia Hill Hospital HMIS as a standalone desktop application with dedicated window and instant launch icon."
+      ],
+      tips: [
+        "Do not clear your browser cache or cookies while offline if you have unsynchronized patient records pending upload."
+      ],
+      kenyaComplianceNote: "Engineered to W3C Progressive Web App standards and ISO/IEC 27001 data resilience criteria.",
+    },
+    {
       id: "hardware-scanners",
-      title: "13. Hardware Scanner & Thermal Printer Setup",
+      title: "18. Hardware Scanner & Thermal Printer Setup",
       category: "admin",
       targetTab: "admin",
       icon: ScanLine,
@@ -486,7 +586,7 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
     },
     {
       id: "faq",
-      title: "14. Frequently Asked Questions & Troubleshooting",
+      title: "19. Frequently Asked Questions & Troubleshooting",
       category: "core",
       targetTab: "dashboard",
       icon: HelpCircle,
@@ -495,6 +595,7 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
       prerequisites: [],
       steps: [
         "**Q: What happens if the internet connection goes down?**\nA: The Tassia Hill Hospital HMS utilizes Google Cloud Firestore with client-side IndexedDB persistence. You can continue consulting, recording vitals, and dispensing medication offline. All changes sync automatically when connectivity is restored.",
+        "**Q: How do I report a suspected cholera or priority outbreak case?**\nA: Go to the Public Health & Surveillance module (Alt + S), click 'New Immediate Notification', select the condition, and submit. The system alerts the hospital IPC team and generates the official MOH 505 dossier.",
         "**Q: How do I handle patients with split insurance and cash co-pays?**\nA: In the Split Billing register, apply the SHA / Insurance coverage amount first. The system automatically computes the remaining balance and enables M-Pesa STK push or cash payment for the difference.",
         "**Q: How do I change my station or pass the terminal to another nurse/doctor?**\nA: Click your user profile avatar in the header and enter your Security Station PIN. The interface instantly adapts to your individual role permissions.",
         "**Q: Where can I download the complete system README and architectural specs?**\nA: Click the 'Download README.md' button at the bottom footer of any page or inside this User Guide header."
@@ -682,9 +783,9 @@ export const UserGuide: React.FC<UserGuideProps> = ({ onNavigateTab }) => {
             { label: "6. Split Billing", tab: "billing", icon: CreditCard, color: "hover:border-rose-400 hover:bg-rose-50/50 text-rose-700" },
             { label: "7. Admissions", tab: "admissions", icon: Bed, color: "hover:border-indigo-400 hover:bg-indigo-50/50 text-indigo-700" },
             { label: "8. Transfers", tab: "transfers", icon: ArrowRightLeft, color: "hover:border-teal-400 hover:bg-teal-50/50 text-teal-700" },
-            { label: "9. Patient Journey", tab: "journey", icon: Activity, color: "hover:border-emerald-400 hover:bg-emerald-50/50 text-emerald-700" },
-            { label: "10. Security Desk", tab: "security", icon: Shield, color: "hover:border-slate-400 hover:bg-slate-50 text-slate-700" },
-            { label: "11. Finance Ledger", tab: "finance", icon: DollarSign, color: "hover:border-emerald-400 hover:bg-emerald-50/50 text-emerald-700" },
+            { label: "9. Public Health", tab: "surveillance", icon: Radio, color: "hover:border-red-400 hover:bg-red-50/50 text-red-700" },
+            { label: "10. Patient Journey", tab: "journey", icon: Activity, color: "hover:border-emerald-400 hover:bg-emerald-50/50 text-emerald-700" },
+            { label: "11. Security Desk", tab: "security", icon: Shield, color: "hover:border-slate-400 hover:bg-slate-50 text-slate-700" },
             { label: "12. Admin Settings", tab: "admin", icon: Sliders, color: "hover:border-yellow-400 hover:bg-yellow-50/50 text-yellow-700" },
           ].map((item) => {
             const Icon = item.icon;

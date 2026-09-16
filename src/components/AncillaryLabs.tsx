@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { db } from "../lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, getDocs, query, where, addDoc } from "firebase/firestore";
+import { db, cleanFirestoreData } from "../lib/firebase";
+import { collection, onSnapshot, doc, updateDoc, getDocs, query, where, addDoc, setDoc } from "firebase/firestore";
 import { QueueTicket, MedicalRecord, ClinicalVisit } from "../types";
 import { findUnifiedPatient, upsertUnifiedPatientRecord } from "../lib/patientSyncService";
+import { completeEncounterLabRequest } from "../lib/encounterService";
 import {
   FlaskConical,
   Radio,
@@ -232,30 +233,27 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
       setPatients(pats);
     });
 
-    // Listen to active Laboratory queue (both pending and serving)
-    const qLab = query(collection(db, "queue"), where("currentDepartment", "==", "laboratory"), where("status", "in", ["pending", "serving"]));
-    const unsubLab = onSnapshot(qLab, (snapshot) => {
-      const tickets: QueueTicket[] = [];
+    // Listen to active queue tickets (both pending and serving)
+    const qQueue = query(collection(db, "queue"), where("status", "in", ["pending", "serving", "waiting"]));
+    const unsubQueue = onSnapshot(qQueue, (snapshot) => {
+      const labs: QueueTicket[] = [];
+      const rads: QueueTicket[] = [];
       snapshot.forEach((doc) => {
-        tickets.push({ id: doc.id, ...doc.data() } as QueueTicket);
+        const t = { id: doc.id, ...doc.data() } as QueueTicket;
+        const curDept = ((t.currentDepartment || (t as any).department) || "").toLowerCase();
+        if (curDept === "laboratory" || curDept === "lab") {
+          labs.push(t);
+        } else if (curDept === "radiology" || curDept === "rad") {
+          rads.push(t);
+        }
       });
-      setLabTickets(tickets);
-    });
-
-    // Listen to active Radiology queue (both pending and serving)
-    const qRad = query(collection(db, "queue"), where("currentDepartment", "==", "radiology"), where("status", "in", ["pending", "serving"]));
-    const unsubRad = onSnapshot(qRad, (snapshot) => {
-      const tickets: QueueTicket[] = [];
-      snapshot.forEach((doc) => {
-        tickets.push({ id: doc.id, ...doc.data() } as QueueTicket);
-      });
-      setRadTickets(tickets);
+      setLabTickets(labs);
+      setRadTickets(rads);
     });
 
     return () => {
       unsubPatients();
-      unsubLab();
-      unsubRad();
+      unsubQueue();
     };
   }, []);
 
@@ -1076,23 +1074,37 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
           patientUpdatePayload.visits = updatedVisits;
         }
 
-        await updateDoc(patientRef, patientUpdatePayload);
+        await setDoc(patientRef, cleanFirestoreData(patientUpdatePayload), { merge: true });
+      }
+
+      // If active encounter is linked, update encounter lab request
+      const activeEncId = selectedTicket.encounterId || matchedPatient?.activeEncounterId || null;
+      if (activeEncId) {
+        completeEncounterLabRequest(
+          activeEncId,
+          `lab-${selectedTicket.id}`,
+          compileResults,
+          `Lab Results: ${compileResults}`,
+          "LIS Lab Officer"
+        ).catch(err => console.warn("Encounter lab completion error:", err));
       }
 
       // Automated routing: Return patient to doctor desk with Results Ready metadata (Kenyan 2-Phase Loop)
       const baseNum = selectedTicket.ticketNo.includes("-") ? selectedTicket.ticketNo.split("-")[1] : Math.floor(100 + Math.random() * 900);
       const newTicketNo = `REV-${baseNum}`;
-      await updateDoc(doc(db, "queue", selectedTicket.id), {
+      await updateDoc(doc(db, "queue", selectedTicket.id), cleanFirestoreData({
+        department: "doctor",
         currentDepartment: "doctor",
         ticketNo: newTicketNo,
         status: "pending",
+        encounterId: activeEncId,
         isResultsReview: true,
         resultsReady: true,
         labSummary: compileResults,
         service: "Doctor Results Review",
         notes: `🔬 Urinalysis & Full Haemogram results ready for Doctor Review (No double consultation charge). LIS findings posted.`,
         timestamp: new Date().toISOString(),
-      });
+      }));
 
       setSelectedTicket(null);
       setTestResults("");

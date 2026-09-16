@@ -332,7 +332,7 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
                   <button
                     type="button"
                     disabled={isTesting}
-                    onClick={sendTest}
+                    onClick={() => sendTest()}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5 text-emerald-400" />

@@ -26,7 +26,7 @@ import {
   HaemogramParameter
 } from "../lib/haemogramParser";
 import { printElement, downloadElementAsPdf } from "../lib/printUtils";
-import DocumentLogo from "./DocumentLogo";
+import DocumentLogo, { getHospitalFacilityName } from "./DocumentLogo";
 import { toast } from "../lib/promptService";
 
 interface HaemogramDocumentProps {
@@ -170,7 +170,7 @@ export default function HaemogramDocument({
             <DocumentLogo size="md" className="border-2 border-rose-800/60 shadow-xs" />
             <div>
               <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-950 uppercase">
-                {report.facilityName}
+                {report.facilityName || getHospitalFacilityName()}
               </h1>
               <p className="text-xs font-semibold text-rose-900">
                 Department of Clinical Pathology, Hematology & Blood Transfusion

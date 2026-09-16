@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { db } from "../lib/firebase";
+import { db, cleanFirestoreData } from "../lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, query, orderBy, getDocs, where, addDoc } from "firebase/firestore";
 import { QueueTicket, MedicalRecord, ClinicalVisit, Employee } from "../types";
 import { findUnifiedPatient, upsertUnifiedPatientRecord } from "../lib/patientSyncService";
@@ -162,9 +162,9 @@ export default function NurseTriageStation({
   const triageTickets = useMemo(() => {
     return tickets
       .filter((t) => {
-        const dept = (t.currentDepartment || "").toLowerCase();
+        const dept = (t.currentDepartment || (t as any).department || "").toLowerCase();
         const isTriageDept = dept === "triage" || dept === "reception" || dept === "nurse" || dept === "nursing" || dept === "";
-        const isPending = t.status === "pending" || t.status === "serving";
+        const isPending = t.status === "pending" || t.status === "serving" || t.status === "waiting";
         return isTriageDept && isPending;
       })
       .sort((a, b) => getTicketCreatedTime(a) - getTicketCreatedTime(b));
@@ -445,10 +445,12 @@ export default function NurseTriageStation({
 
       // 3. Update Queue ticket to route to assigned Department / Specialist Doctor
       const queueRef = doc(db, "queue", selectedTicket.id);
-      await updateDoc(queueRef, {
+      await updateDoc(queueRef, cleanFirestoreData({
+        department: finalDepartment,
         currentDepartment: finalDepartment,
         service: finalClinicName,
         status: "pending",
+        encounterId: selectedTicket.encounterId || matched?.activeEncounterId || null,
         assignedSpecialistId: finalDocId || "",
         assignedSpecialistName: finalDocName || "",
         specialistTitle: finalSpecialistTitle || "",
@@ -468,7 +470,7 @@ export default function NurseTriageStation({
         triageScore: triageCategory,
         notes: `Triage Completed [${triageCategory}] • BP: ${bpString}, HR: ${pulse} bpm, Temp: ${temp}°C, SpO2: ${spo2}%. ${chiefComplaint ? `Complaint: ${chiefComplaint}` : ""}`,
         triageCompletedAt: new Date().toISOString()
-      });
+      }));
 
       // 4. Loud, Calm Female Voice Announcement for Patient
       try {

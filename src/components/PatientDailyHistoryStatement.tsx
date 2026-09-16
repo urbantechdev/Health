@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { QueueTicket, MedicalRecord, Invoice, ClinicalVisit } from "../types";
 import { normalizeString, normalizePhone } from "../lib/patientSyncService";
+import { getHospitalFacilityName } from "./DocumentLogo";
 import {
   Calendar,
   Clock,
@@ -137,7 +138,7 @@ export default function PatientDailyHistoryStatement({
   invoices,
   onOpenPatientHistory,
   onPrintPatientDocument,
-  facilityName = "The Tassia Hill Hospital"
+  facilityName = getHospitalFacilityName()
 }: PatientDailyHistoryStatementProps) {
   // Helper for formatting YYYY-MM-DD
   const getTodayStr = () => {
@@ -1261,7 +1262,7 @@ export default function PatientDailyHistoryStatement({
                                 </h4>
                               </div>
                               <p className="text-[10px] text-slate-500 mt-0.5">
-                                Official The Tassia Hill Hospital Patient Account Statement
+                                Official {facilityName} Patient Account Statement
                               </p>
                             </div>
 
@@ -1398,7 +1399,7 @@ export default function PatientDailyHistoryStatement({
           patientMeta={{
             name: selectedHaemogramView.patientName || "Patient Record",
             date: selectedHaemogramView.date,
-            facilityName: "The Tassia Hill Hospital Diagnostic & Laboratory Center",
+            facilityName: `${facilityName} Diagnostic & Laboratory Center`,
             doctor: "Attending Medical Officer"
           }}
         />

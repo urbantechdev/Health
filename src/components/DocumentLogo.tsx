@@ -1,11 +1,10 @@
-import React from "react";
-import { Hospital, Building2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Hospital } from "lucide-react";
 
 export const DEFAULT_BRAND_LOGO = "https://i.pinimg.com/1200x/0d/21/0a/0d210ae7221bc218df223d59b16d2198.jpg";
 
 /**
- * Returns the currently active platform / hospital logo URL from localStorage,
- * falling back to the official high-resolution brand logo.
+ * Returns the currently active platform / system interface logo URL from localStorage.
  */
 export function getPlatformLogoUrl(): string {
   try {
@@ -22,6 +21,50 @@ export function getPlatformLogoUrl(): string {
   return DEFAULT_BRAND_LOGO;
 }
 
+/**
+ * Returns the dedicated logo URL specifically configured for clinical documents,
+ * patient invoices, lab reports, receipts, and official forms.
+ * Falls back to the platform system logo if no separate document logo is set.
+ */
+export function getDocumentLogoUrl(): string {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const docLogo =
+        window.localStorage.getItem("platform_document_logo_url") ||
+        window.localStorage.getItem("document_logo_url");
+      if (docLogo && docLogo.trim() !== "") {
+        return docLogo.trim();
+      }
+      return getPlatformLogoUrl();
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_BRAND_LOGO;
+}
+
+/**
+ * Returns the hospital/facility name retained for official medical documents,
+ * reports, letters, and certificates.
+ */
+export function getHospitalFacilityName(): string {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const explicit = window.localStorage.getItem("hospital_facility_name");
+      if (explicit && explicit.trim() && explicit.trim().toUpperCase() !== "HMIS") {
+        return explicit.trim();
+      }
+      const brand = window.localStorage.getItem("platform_custom_brand_name");
+      if (brand && brand.trim() && brand.trim().toUpperCase() !== "HMIS") {
+        return brand.trim();
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return "The Tassia Hill Hospital";
+}
+
 export interface DocumentLogoProps {
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "thermal" | "watermark";
   className?: string;
@@ -29,18 +72,49 @@ export interface DocumentLogoProps {
   alt?: string;
   showFallbackIcon?: boolean;
   border?: boolean;
+  src?: string;
+  url?: string;
+  type?: "document" | "system";
 }
 
 export default function DocumentLogo({
   size = "md",
   className = "",
   shape = "circle",
-  alt = "Hospital Emblem & Logo",
+  alt = "Hospital Document Emblem",
   showFallbackIcon = true,
-  border = true
+  border = true,
+  src,
+  url,
+  type = "document"
 }: DocumentLogoProps) {
-  const [imgError, setImgError] = React.useState(false);
-  const logoUrl = getPlatformLogoUrl();
+  const [imgError, setImgError] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState<string>(() => {
+    if (src) return src;
+    if (url) return url;
+    return type === "document" ? getDocumentLogoUrl() : getPlatformLogoUrl();
+  });
+
+  useEffect(() => {
+    if (src || url) {
+      setCurrentUrl(src || url || "");
+      setImgError(false);
+      return;
+    }
+
+    const updateLogo = () => {
+      setCurrentUrl(type === "document" ? getDocumentLogoUrl() : getPlatformLogoUrl());
+      setImgError(false);
+    };
+
+    updateLogo();
+    window.addEventListener("platform_branding_changed", updateLogo);
+    window.addEventListener("platform_document_logo_changed", updateLogo);
+    return () => {
+      window.removeEventListener("platform_branding_changed", updateLogo);
+      window.removeEventListener("platform_document_logo_changed", updateLogo);
+    };
+  }, [src, url, type]);
 
   const sizeClasses = {
     xs: "w-6 h-6",
@@ -60,7 +134,7 @@ export default function DocumentLogo({
 
   const borderClass = border ? "border border-slate-300 shadow-2xs" : "";
 
-  if (imgError || !logoUrl) {
+  if (imgError || !currentUrl) {
     if (!showFallbackIcon) return null;
     return (
       <div
@@ -76,7 +150,7 @@ export default function DocumentLogo({
       className={`relative shrink-0 overflow-hidden bg-white flex items-center justify-center ${sizeClasses} ${shapeClasses} ${borderClass} ${className}`}
     >
       <img
-        src={logoUrl}
+        src={currentUrl}
         alt={alt}
         className={`w-full h-full object-cover ${shapeClasses}`}
         referrerPolicy="no-referrer"
@@ -85,3 +159,4 @@ export default function DocumentLogo({
     </div>
   );
 }
+

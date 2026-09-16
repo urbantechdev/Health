@@ -100,3 +100,4 @@ export const PushNotificationPromptBanner: React.FC<PushNotificationPromptBanner
     </aside>
   );
 };
+export default PushNotificationPromptBanner;
