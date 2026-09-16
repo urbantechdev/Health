@@ -254,6 +254,34 @@ export const REPO_STAFF_SEEDS: RepoStaffSeed[] = [
     licenseNumber: "NCK-RN-38102",
   },
 
+  // Maternity & Midwifery
+  {
+    name: "Sister Lucy Muthoni (Senior Midwife)",
+    email: "lucy.muthoni@tassiahillhospital.co.ke",
+    role: "Maternity",
+    department: "maternity",
+    specialty: "Senior Midwife & Labour In-Charge",
+    pin: "2026",
+    nationalId: "29841029",
+    phone: "+254 721 890 234",
+    salary: 110000,
+    accessLevel: "Department Admin",
+    licenseNumber: "NCK-RM-49102",
+  },
+  {
+    name: "Nurse Grace Achieng",
+    email: "grace.achieng@tassiahillhospital.co.ke",
+    role: "Maternity",
+    department: "maternity",
+    specialty: "Midwife & ANC Clinic Officer",
+    pin: "2026",
+    nationalId: "30829104",
+    phone: "+254 732 901 345",
+    salary: 95000,
+    accessLevel: "Standard Staff",
+    licenseNumber: "NCK-RM-51029",
+  },
+
   // 4. Pharmacy
   {
     name: "Kennedy Otieno",

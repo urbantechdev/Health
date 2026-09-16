@@ -27,6 +27,7 @@ export interface DepartmentToggles {
   procurement?: boolean;
   transfers?: boolean;
   admissions?: boolean;
+  maternity?: boolean;
   forms?: boolean;
   admin?: boolean;
   [key: string]: boolean | undefined;
@@ -979,5 +980,106 @@ export interface GrowthChartMeasurement {
   bmiZScore?: number; // BMI-for-Age Z-score
   bmiPercentile?: number;
   classification: "Severely Wasted" | "Underweight" | "Normal / Healthy" | "Overweight" | "Obese";
+}
+
+export interface MaternityAdmission {
+  id: string;
+  patientId: string;
+  patientName: string;
+  nationalId?: string;
+  phone?: string;
+  age?: number | string;
+  ticketNo?: string;
+  gravida: number;
+  parity: number;
+  gestationWeeks: number;
+  lmp?: string;
+  edd?: string;
+  bloodGroup?: string;
+  rhesus?: "+" | "-" | string;
+  hivStatus?: "Non-Reactive" | "Reactive" | "Unknown";
+  vdrlStatus?: "Negative" | "Positive" | "Pending";
+  stageOfLabor: "Stage 1 - Latent" | "Stage 1 - Active" | "Stage 2 - Expulsive" | "Stage 3 - Placental" | "Stage 4 - Postpartum Recovery";
+  cervicalDilationCm: number;
+  fetalHeartRate: number; // bpm
+  contractionsPer10Min: number;
+  membranesStatus: "Intact" | "Ruptured Clear" | "Ruptured Meconium" | "Ruptured Blood";
+  ruptureTime?: string;
+  allocatedBed: string; // e.g. "Labour Suite 1", "Delivery Bed 2"
+  admissionStatus: "active_labor" | "delivered" | "transferred" | "discharged";
+  highRiskAlerts?: string[]; // e.g. "Pre-eclampsia", "Previous C-Section", "Breech"
+  admittedBy: string;
+  admittedAt: string;
+  deliveredAt?: string;
+  notes?: string;
+}
+
+export interface NewbornRecord {
+  id?: string;
+  babyTagNumber: string;
+  gender: "Male" | "Female" | "Ambiguous";
+  birthWeightKg: number;
+  lengthCm?: number;
+  headCircumferenceCm?: number;
+  apgar1Min: number; // 0 - 10
+  apgar5Min: number; // 0 - 10
+  apgar10Min?: number;
+  resuscitationDone: boolean;
+  vitaminKGiven: boolean; // 1mg IM
+  eyeProphylaxisGiven: boolean; // Tetracycline Eye Ointment (TEO 1%)
+  bcgVaccineGiven: boolean;
+  opv0VaccineGiven: boolean;
+  skinToSkinInitiated: boolean;
+  breastfeedingWithin1Hour: boolean;
+  abnormalitiesObserved?: string;
+  examinedBy: string;
+  timestamp: string;
+}
+
+export interface DeliveryRecord {
+  id: string;
+  admissionId: string;
+  patientId: string;
+  patientName: string;
+  nationalId?: string;
+  ticketNo?: string;
+  deliveryDateTime: string;
+  deliveryMode: "Spontaneous Vertex Delivery (SVD)" | "Vacuum Extraction" | "Breech Delivery" | "Emergency C-Section" | "Elective C-Section";
+  perineumOutcome: "Intact" | "Episiotomy" | "1st Degree Tear" | "2nd Degree Tear" | "3rd Degree Tear" | "4th Degree Tear";
+  estimatedBloodLossMl: number;
+  amtslOxytocinGiven: boolean; // 10 IU IM Active Management
+  placentaComplete: boolean;
+  membranesComplete: boolean;
+  conductedBy: string;
+  assistantName?: string;
+  newborn: NewbornRecord;
+  maternalStatusImmediate: "Stable" | "PPH Alert" | "Eclamptic Alert" | "Transferred to HDU/ICU";
+  notes?: string;
+  moh333Registered: boolean;
+  timestamp: string;
+}
+
+export interface PartographEntry {
+  id: string;
+  admissionId: string;
+  patientName?: string;
+  recordedAt: string;
+  hoursInActiveLabor: number;
+  cervicalDilationCm: number; // 4 to 10 cm
+  fetalDescentStation: string; // -3 to +3
+  fetalHeartRateBpm: number;
+  contractionsCountPer10Min: number;
+  contractionsDurationSec: number; // <20s, 20-40s, >40s
+  liquorStatus: "I" | "C" | "M" | "B"; // Intact, Clear, Meconium, Blood
+  moulding: "0" | "+" | "++" | "+++";
+  maternalBp: string; // e.g. "120/80"
+  maternalPulse: number;
+  maternalTemp: number;
+  oxytocinDropsPerMin?: number;
+  urineProtein?: "Nil" | "Trace" | "+" | "++" | "+++";
+  urineGlucose?: "Nil" | "+" | "++";
+  alertLineStatus: "normal" | "on_alert_line" | "action_line_crossed";
+  recordedBy: string;
+  clinicalNotes?: string;
 }
 

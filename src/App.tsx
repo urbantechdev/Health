@@ -35,6 +35,7 @@ import { shouldShowPopupNotification, UserIdentity } from "./lib/messageTargetin
 import PatientTransferModal from "./components/PatientTransferModal";
 import TransfersHub from "./components/TransfersHub";
 import AdmissionDischargeManager from "./components/AdmissionDischargeManager";
+import MaternityHub from "./components/MaternityHub";
 import KenyanHospitalFormsModal, { KenyanFormType } from "./components/KenyanHospitalFormsModal";
 import PatientHistoryLookupModal from "./components/PatientHistoryLookupModal";
 import ReceiptsClearanceModal from "./components/ReceiptsClearanceModal";
@@ -118,7 +119,8 @@ import {
   BookMarked,
   Receipt,
   Fingerprint,
-  Radio
+  Radio,
+  Baby
 } from "lucide-react";
 
 export interface LiveNotification {
@@ -378,6 +380,7 @@ export default function App() {
     laboratory: true, // Enabled for Tier Clinic & all facility tiers
     radiology: false,
     billing: true,
+    maternity: true,
   });
 
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -1411,6 +1414,7 @@ export default function App() {
     { id: "reception", label: "Reception Desk", icon: UserPlus, enabled: toggles.reception },
     { id: "triage", label: "Nurse Triage", icon: HeartPulse, enabled: true },
     { id: "admissions", label: "Admission & Wards", icon: Bed, enabled: true },
+    { id: "maternity", label: "Maternity & Labour", icon: Baby, enabled: toggles.maternity ?? true },
     { id: "doctor", label: "Doctor Station", icon: Stethoscope, enabled: toggles.doctor },
     { id: "transfers", label: "Transfers & Referrals", icon: ArrowRightLeft, enabled: true },
     { id: "surveillance", label: "Public Health & IDSR", icon: Radio, enabled: true },
@@ -2762,6 +2766,27 @@ export default function App() {
                         <AdmissionDischargeManager
                           onNavigateToBilling={() => setActiveTab("billing")}
                           onNavigateToDoctor={() => setActiveTab("doctor")}
+                        />
+                      </ErrorBoundary>
+                    )}
+
+                    {activeTab === "maternity" && (
+                      <ErrorBoundary fallbackTitle="Maternity & Labour Suite">
+                        <MaternityHub
+                          currentUser={{
+                            name: activeUser?.displayName || "Midwife / Obstetrician",
+                            email: activeUser?.email || "",
+                            role: currentSystemRole
+                          }}
+                          activeSpecialistId={activeSpecialistId}
+                          onNavigateToBilling={(pId) => {
+                            if (pId) setSelectedBillingPatientId(pId);
+                            setActiveTab("billing");
+                          }}
+                          onNavigateToPharmacy={() => setActiveTab("pharmacy")}
+                          onNavigateToDiagnostics={() => setActiveTab("diagnostics")}
+                          onNavigateToDoctor={() => setActiveTab("doctor")}
+                          onNavigateToQueue={() => setActiveTab("queue")}
                         />
                       </ErrorBoundary>
                     )}

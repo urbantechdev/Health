@@ -19,6 +19,7 @@ export const ALL_SYSTEM_ROLES: SystemRole[] = [
   "Reception",
   "Nurse",
   "Doctor",
+  "Maternity",
   "Pharmacy",
   "Lab",
   "HR",
@@ -38,6 +39,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
       "dashboard",
       "reception",
       "triage",
+      "maternity",
       "queue",
       "doctor",
       "pharmacy",
@@ -65,6 +67,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
       "dashboard",
       "reception",
       "triage",
+      "maternity",
       "queue",
       "doctor",
       "pharmacy",
@@ -95,7 +98,7 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
     title: "Triage & Inpatient Nurse",
     department: "Nursing & Outpatient Triage",
     description: "Vital signs capture, acuity assessment, fast-track triage, patient queueing, and medication administration.",
-    allowedModules: ["dashboard", "triage", "queue", "transfers", "admissions", "surveillance", "forms"],
+    allowedModules: ["dashboard", "triage", "maternity", "queue", "transfers", "admissions", "surveillance", "forms"],
     badgeColor: "rose"
   },
   {
@@ -103,8 +106,16 @@ export const SYSTEM_ROLES_DIRECTORY: SystemRoleConfig[] = [
     title: "Medical Officer / Consultant",
     department: "Clinical Consultations & OPD",
     description: "Clinical examinations, ICD-10 diagnostic coding, electronic prescription ordering, and lab work orders.",
-    allowedModules: ["dashboard", "doctor", "laboratory", "radiology", "pharmacy", "transfers", "admissions", "surveillance", "forms"],
+    allowedModules: ["dashboard", "doctor", "maternity", "laboratory", "radiology", "pharmacy", "transfers", "admissions", "surveillance", "forms"],
     badgeColor: "emerald"
+  },
+  {
+    role: "Maternity",
+    title: "Midwife / Obstetric Officer",
+    department: "Maternity, Labour & Delivery",
+    description: "Antenatal care (ANC), partograph labor progression, safe delivery, newborn APGAR care, and postnatal follow-up.",
+    allowedModules: ["dashboard", "maternity", "triage", "queue", "doctor", "laboratory", "pharmacy", "transfers", "admissions", "surveillance", "forms"],
+    badgeColor: "pink"
   },
   {
     role: "Pharmacy",
