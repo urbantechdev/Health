@@ -9,6 +9,7 @@ import AdminPanel from "./components/AdminPanel";
 import ReceptionKiosk from "./components/ReceptionKiosk";
 import NurseTriageStation from "./components/NurseTriageStation";
 import QueueDashboard from "./components/QueueDashboard";
+import BigMonitorPage from "./components/BigMonitorPage";
 import DoctorsDesk from "./components/DoctorsDesk";
 import SmartPharmacy from "./components/SmartPharmacy";
 import AncillaryLabs from "./components/AncillaryLabs";
@@ -26,6 +27,7 @@ import DesktopBottomNav from "./components/DesktopBottomNav";
 import MpesaPaymentModal from "./components/MpesaPaymentModal";
 import ShaIntegrationHubModal from "./components/ShaIntegrationHubModal";
 import LogoUploadModal from "./components/LogoUploadModal";
+import { getHospitalFacilityName } from "./components/DocumentLogo";
 import UserProfileModal from "./components/UserProfileModal";
 import InternalChatModal from "./components/InternalChatModal";
 import IncomingMessagePromptListener from "./components/IncomingMessagePromptListener";
@@ -381,6 +383,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
       const search = window.location.search;
+      if (search.includes("display=big-monitor") || search.includes("page=big-monitor") || search.includes("view=big-monitor") || search.includes("tab=big-monitor")) {
+        return "big-monitor";
+      }
       if (search.includes("display=signage") || search.includes("signage=true") || search.includes("tab=queue")) {
         return "queue";
       }
@@ -859,8 +864,8 @@ export default function App() {
       };
     }
 
-    // Global dashboard overview and platform user guide are accessible to all logged-in roles
-    if (tabId === "dashboard" || tabId === "guide") {
+    // Global dashboard overview, user guide, queue, and big monitor are accessible to all logged-in roles
+    if (tabId === "dashboard" || tabId === "guide" || tabId === "queue" || tabId === "big-monitor") {
       return { allowed: true };
     }
 
@@ -964,6 +969,7 @@ export default function App() {
           "j": "journey",
           "k": "tickets",
           "q": "queue",
+          "m": "big-monitor",
           "s": "surveillance",
         };
 
@@ -1080,10 +1086,16 @@ export default function App() {
 
   // Sync listener to check if there are any snapshots with pending writes
   useEffect(() => {
-    const unsubQueueSync = onSnapshot(collection(db, "queue"), (snapshot) => {
-      const hasPending = snapshot.metadata.hasPendingWrites;
-      setPendingSyncCount(hasPending ? 1 : 0);
-    });
+    const unsubQueueSync = onSnapshot(
+      collection(db, "queue"),
+      (snapshot) => {
+        const hasPending = snapshot.metadata.hasPendingWrites;
+        setPendingSyncCount(hasPending ? 1 : 0);
+      },
+      (err) => {
+        console.warn("[queueSync] onSnapshot error:", err);
+      }
+    );
     return () => unsubQueueSync();
   }, []);
 
@@ -1100,19 +1112,25 @@ export default function App() {
 
   // Fetch active specialists list from database
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "employees"), (snapshot) => {
-      const emps: Employee[] = [];
-      const seen = new Set<string>();
-      snapshot.forEach((docSnap) => {
-        const data = { id: docSnap.id, ...docSnap.data() } as Employee;
-        const key = (data.email || "").toLowerCase().trim() || (data.nationalId || "").trim() || docSnap.id;
-        if (!seen.has(key)) {
-          seen.add(key);
-          emps.push(data);
-        }
-      });
-      setEmployees(emps.filter(e => e.status === "active"));
-    });
+    const unsub = onSnapshot(
+      collection(db, "employees"),
+      (snapshot) => {
+        const emps: Employee[] = [];
+        const seen = new Set<string>();
+        snapshot.forEach((docSnap) => {
+          const data = { id: docSnap.id, ...docSnap.data() } as Employee;
+          const key = (data.email || "").toLowerCase().trim() || (data.nationalId || "").trim() || docSnap.id;
+          if (!seen.has(key)) {
+            seen.add(key);
+            emps.push(data);
+          }
+        });
+        setEmployees(emps.filter(e => e.status === "active"));
+      },
+      (err) => {
+        console.warn("[employees] onSnapshot error:", err);
+      }
+    );
     return () => unsub();
   }, []);
 
@@ -1168,9 +1186,15 @@ export default function App() {
 
   // Real-time listener for invoices to update bottom dock badge
   useEffect(() => {
-    const unsubInvoices = onSnapshot(collection(db, "invoices"), (snap) => {
-      setTotalReceiptsCount(snap.size);
-    });
+    const unsubInvoices = onSnapshot(
+      collection(db, "invoices"),
+      (snap) => {
+        setTotalReceiptsCount(snap.size);
+      },
+      (err) => {
+        console.warn("[invoices] onSnapshot error:", err);
+      }
+    );
     return () => unsubInvoices();
   }, []);
 
@@ -1179,64 +1203,88 @@ export default function App() {
 
   // Real-time listener for internal_messages to calculate unread message count
   useEffect(() => {
-    const unsubChat = onSnapshot(collection(db, "internal_messages"), (snapshot) => {
-      let unread = 0;
-      const userEmail = currentUserIdentity.email.toLowerCase().trim();
-      const userName = currentUserIdentity.name.toLowerCase().trim();
-      const userId = (currentUserIdentity.id || "").toLowerCase().trim();
+    const unsubChat = onSnapshot(
+      collection(db, "internal_messages"),
+      (snapshot) => {
+        let unread = 0;
+        const userEmail = currentUserIdentity.email.toLowerCase().trim();
+        const userName = currentUserIdentity.name.toLowerCase().trim();
+        const userId = (currentUserIdentity.id || "").toLowerCase().trim();
 
-      snapshot.forEach((doc) => {
-        const msg = { id: doc.id, ...doc.data() } as any;
-        const readBy = Array.isArray(msg.readBy) ? msg.readBy.map((r: any) => String(r).toLowerCase().trim()) : [];
-        const isRead = (userEmail && readBy.includes(userEmail)) || (userName && readBy.includes(userName)) || (userId && readBy.includes(userId));
-        if (!isRead) {
-          // Count if this message was strictly targeted to this user or their specific clinical role/dept
-          if (shouldShowPopupNotification(msg, currentUserIdentity)) {
-            unread++;
+        snapshot.forEach((doc) => {
+          const msg = { id: doc.id, ...doc.data() } as any;
+          const readBy = Array.isArray(msg.readBy) ? msg.readBy.map((r: any) => String(r).toLowerCase().trim()) : [];
+          const isRead = (userEmail && readBy.includes(userEmail)) || (userName && readBy.includes(userName)) || (userId && readBy.includes(userId));
+          if (!isRead) {
+            // Count if this message was strictly targeted to this user or their specific clinical role/dept
+            if (shouldShowPopupNotification(msg, currentUserIdentity)) {
+              unread++;
+            }
           }
-        }
-      });
-      setUnreadMessagesCount(unread);
-    });
+        });
+        setUnreadMessagesCount(unread);
+      },
+      (err) => {
+        console.warn("[chat] onSnapshot error:", err);
+      }
+    );
     return () => unsubChat();
   }, [currentSystemRole, activeUser, activeStaffRecord, loggedInEmployee]);
 
   // Real-time listener for patient_transfers
   useEffect(() => {
-    const unsubTransfers = onSnapshot(collection(db, "patient_transfers"), (snapshot) => {
-      let pending = 0;
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.status === "pending" || data.status === "on_hold") {
-          pending++;
-        }
-      });
-      setPendingTransfersCount(pending);
-    });
+    const unsubTransfers = onSnapshot(
+      collection(db, "patient_transfers"),
+      (snapshot) => {
+        let pending = 0;
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.status === "pending" || data.status === "on_hold") {
+            pending++;
+          }
+        });
+        setPendingTransfersCount(pending);
+      },
+      (err) => {
+        console.warn("[transfers] onSnapshot error:", err);
+      }
+    );
     return () => unsubTransfers();
   }, []);
 
   // Real-time listener for queue collection to power live notification badges
   useEffect(() => {
-    const unsubQueue = onSnapshot(collection(db, "queue"), (snapshot) => {
-      const q: any[] = [];
-      snapshot.forEach((doc) => {
-        q.push({ id: doc.id, ...doc.data() });
-      });
-      setQueueItems(q);
-    });
+    const unsubQueue = onSnapshot(
+      collection(db, "queue"),
+      (snapshot) => {
+        const q: any[] = [];
+        snapshot.forEach((doc) => {
+          q.push({ id: doc.id, ...doc.data() });
+        });
+        setQueueItems(q);
+      },
+      (err) => {
+        console.warn("[queue] onSnapshot error:", err);
+      }
+    );
     return () => unsubQueue();
   }, []);
 
   // Real-time listener for system_tickets collection to power live notification badges
   useEffect(() => {
-    const unsubTickets = onSnapshot(collection(db, "system_tickets"), (snapshot) => {
-      const t: any[] = [];
-      snapshot.forEach((doc) => {
-        t.push({ id: doc.id, ...doc.data() });
-      });
-      setSystemTicketsList(t);
-    });
+    const unsubTickets = onSnapshot(
+      collection(db, "system_tickets"),
+      (snapshot) => {
+        const t: any[] = [];
+        snapshot.forEach((doc) => {
+          t.push({ id: doc.id, ...doc.data() });
+        });
+        setSystemTicketsList(t);
+      },
+      (err) => {
+        console.warn("[tickets] onSnapshot error:", err);
+      }
+    );
     return () => unsubTickets();
   }, []);
 
@@ -1337,6 +1385,8 @@ export default function App() {
           }
         }
       });
+    }, (err) => {
+      console.warn("[specialistQueue] onSnapshot error:", err);
     });
 
     return () => unsubscribeQueue();
@@ -1356,7 +1406,8 @@ export default function App() {
   // Note: Tickets, Patient Journey, Live Queue, and Pharmacy are hosted on the Desktop Bottom Nav to avoid sidebar congestion
   const navItems = [
     { id: "dashboard", label: "Dashboard Overview", icon: LayoutDashboard, enabled: true },
-    { id: "queue", label: "Ticket Display / Big Screen", icon: Monitor, enabled: true },
+    { id: "queue", label: "Live Queue Board", icon: Users, enabled: true },
+    { id: "big-monitor", label: "Big Monitor Display", icon: Monitor, enabled: true },
     { id: "reception", label: "Reception Desk", icon: UserPlus, enabled: toggles.reception },
     { id: "triage", label: "Nurse Triage", icon: HeartPulse, enabled: true },
     { id: "admissions", label: "Admission & Wards", icon: Bed, enabled: true },
@@ -1374,6 +1425,29 @@ export default function App() {
     { id: "admin", label: "Developer Settings", icon: Sliders, enabled: true },
   ];
 
+  // Standalone Direct Display for Big Monitor / Public TV Screen (accessible without logging into employee portal)
+  const isDirectBigMonitor = typeof window !== "undefined" && (
+    window.location.search.includes("display=big-monitor") ||
+    window.location.search.includes("page=big-monitor") ||
+    window.location.search.includes("view=big-monitor") ||
+    window.location.search.includes("display=signage") ||
+    window.location.search.includes("signage=true")
+  );
+
+  if (isDirectBigMonitor && !activeUser) {
+    return (
+      <BigMonitorPage
+        standalone={true}
+        onReturnToApp={() => {
+          if (typeof window !== "undefined") {
+            window.history.replaceState({}, "", window.location.pathname);
+            window.location.reload();
+          }
+        }}
+      />
+    );
+  }
+
   if (!activeUser) {
     return (
       <>
@@ -1383,11 +1457,11 @@ export default function App() {
           minDurationMs={0}
           onComplete={() => setIsInitialLoading(false)}
           logoUrl={brandLogoUrl}
-          hospitalName={brandCustomName || "The Tassia Hill Hospital"}
+          hospitalName={getHospitalFacilityName()}
         />
         <RolePortalLogin
           employees={employees}
-          hospitalName={brandCustomName || "HMIS"}
+          hospitalName={getHospitalFacilityName()}
           hospitalLogoUrl={brandLogoUrl}
           authError={authError}
           onGoogleLogin={handleGoogleLogin}
@@ -1517,7 +1591,7 @@ export default function App() {
               </div>
               <div className="min-w-0">
                 <h1 className={`text-base sm:text-lg md:text-2xl lg:text-3xl font-black tracking-tight ${currentHeaderStyle.titleClass} leading-tight font-sans truncate drop-shadow-xs group-hover:text-slate-800 transition-colors duration-200`}>
-                  {brandCustomName || "HMIS"}
+                  HMIS
                 </h1>
               </div>
             </div>
@@ -1950,8 +2024,8 @@ export default function App() {
 
         {/* Clean Plain Left Sidebar Navigation with Bright Grey Background - Fixed / Independent Scroll */}
         <aside className="hidden md:flex w-72 bg-slate-100 text-slate-700 flex-col justify-between shrink-0 shadow-sm overflow-y-auto z-20 border-r border-slate-200/80 relative group/sidebar">
-          <div className="p-3.5 relative z-10">
-            <div className="flex items-center justify-between mb-2 px-1">
+          <div className="p-5 relative z-10">
+            <div className="flex items-center justify-between mb-4 px-1">
               <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">FACILITY DEPARTMENTS</p>
               {totalSystemActiveNotifications > 0 ? (
                 <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 border border-rose-200 text-rose-700 text-[10px] font-extrabold shadow-xs animate-pulse">
@@ -1970,7 +2044,7 @@ export default function App() {
             </div>
  
             {/* Navigation Menu (Strictly Filtered by role permissions: unauthorized features are completely hidden) */}
-            <nav className="space-y-0.5 relative">
+            <nav className="space-y-1.5 relative">
               {navItems
                 .filter((item) => item.enabled && checkTabPermission(item.id).allowed)
                 .map((item) => {
@@ -1983,9 +2057,9 @@ export default function App() {
                       key={item.id}
                       id={`sidebar-nav-${item.id}`}
                       onClick={() => setActiveTab(item.id)}
-                      whileHover={{ x: 3 }}
+                      whileHover={{ x: 4 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`group relative w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
+                      className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-colors cursor-pointer ${
                         isActive
                           ? "text-white font-bold"
                           : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/70"
@@ -1995,7 +2069,7 @@ export default function App() {
                       {isActive && (
                         <motion.div
                           layoutId="activeSideNavPill"
-                          className="absolute inset-0 bg-emerald-600 rounded-lg shadow-md shadow-emerald-600/20 border border-emerald-500/30"
+                          className="absolute inset-0 bg-emerald-600 rounded-xl shadow-md shadow-emerald-600/20 border border-emerald-500/30"
                           transition={{ type: "spring", stiffness: 450, damping: 35 }}
                         />
                       )}
@@ -2004,16 +2078,16 @@ export default function App() {
                       {isActive && (
                         <motion.div
                           layoutId="activeSideNavStrip"
-                          className="absolute left-0 top-2 bottom-2 w-1.5 bg-emerald-200 rounded-r-full"
+                          className="absolute left-0 top-2 bottom-2 w-1 bg-emerald-200 rounded-r-full"
                           transition={{ type: "spring", stiffness: 450, damping: 35 }}
                         />
                       )}
 
                       <div className="flex items-center gap-3 relative z-10 min-w-0">
-                        <div className={`w-10 h-10 flex items-center justify-center rounded-lg transition-transform duration-200 shrink-0 ${isActive ? "scale-105" : "group-hover:scale-110"}`}>
-                          <Icon className={`w-10 h-10 transition-colors ${isActive ? "text-white" : "text-slate-500 group-hover:text-emerald-700"}`} />
+                        <div className={`p-1 rounded-lg transition-transform duration-200 shrink-0 ${isActive ? "scale-105" : "group-hover:scale-110 group-hover:rotate-3"}`}>
+                          <Icon className={`w-4.5 h-4.5 transition-colors ${isActive ? "text-white" : "text-slate-500 group-hover:text-emerald-700"}`} />
                         </div>
-                        <span className="truncate leading-tight">{item.label}</span>
+                        <span className="truncate">{item.label}</span>
                       </div>
 
                       <div className="relative z-10 flex items-center gap-1.5 shrink-0 ml-2">
@@ -2021,7 +2095,7 @@ export default function App() {
                         {notifCount > 0 && (
                           <span
                             id={`sidebar-badge-${item.id}`}
-                            className="px-1.5 py-0.5 text-[9px] font-black rounded-full bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-sm shadow-rose-500/40 ring-1 ring-white/60 animate-pulse flex items-center gap-1 shrink-0"
+                            className="px-2 py-0.5 text-[10px] font-black rounded-full bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 text-white shadow-sm shadow-rose-500/40 ring-1 ring-white/60 animate-pulse flex items-center gap-1 shrink-0"
                             title={`${notifCount} active / pending notification(s)`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping shrink-0" />
@@ -2304,7 +2378,7 @@ export default function App() {
                               <div className={`p-2 rounded-xl shrink-0 ${
                                 isActive ? "bg-emerald-600 text-white" : "bg-slate-800 text-emerald-400"
                               }`}>
-                                <Icon className="w-8 h-8" />
+                                <Icon className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
@@ -2701,7 +2775,21 @@ export default function App() {
                     )}
 
                     {activeTab === "queue" && toggles.queue && (
-                      <QueueDashboard toggles={toggles} />
+                      <QueueDashboard
+                        toggles={toggles}
+                        onLaunchBigMonitor={() => setActiveTab("big-monitor")}
+                      />
+                    )}
+
+                    {activeTab === "big-monitor" && (
+                      <BigMonitorPage
+                        onReturnToApp={() => {
+                          setActiveTab("queue");
+                          if (typeof window !== "undefined" && window.location.search.includes("display=big-monitor")) {
+                            window.history.replaceState({}, "", window.location.pathname);
+                          }
+                        }}
+                      />
                     )}
 
                     {activeTab === "doctor" && toggles.doctor && (
@@ -3070,6 +3158,13 @@ export default function App() {
         savePwaSettingsToCloud({ logoUrl: url }, user?.email || simulatedUser?.email || "Admin").catch(() => {});
         window.dispatchEvent(new Event("platform_branding_changed"));
       }}
+      currentDocumentLogo={localStorage.getItem("platform_document_logo_url") || ""}
+      onSaveDocumentLogo={(url) => {
+        localStorage.setItem("platform_document_logo_url", url);
+        savePwaSettingsToCloud({ documentLogoUrl: url }, user?.email || simulatedUser?.email || "Admin").catch(() => {});
+        window.dispatchEvent(new Event("platform_document_logo_changed"));
+        window.dispatchEvent(new Event("platform_branding_changed"));
+      }}
       currentFavicon={brandFaviconUrl}
       onSaveFavicon={(url) => {
         setBrandFaviconUrl(url);
@@ -3077,7 +3172,13 @@ export default function App() {
         savePwaSettingsToCloud({ faviconUrl: url }, user?.email || simulatedUser?.email || "Admin").catch(() => {});
         window.dispatchEvent(new Event("platform_branding_changed"));
       }}
-      hospitalName={brandCustomName || tenant.name || "The Tassia Hill Hospital"}
+      hospitalName={getHospitalFacilityName()}
+      onSaveHospitalName={(name) => {
+        localStorage.setItem("hospital_facility_name", name);
+        savePwaSettingsToCloud({ facilityName: name }, user?.email || simulatedUser?.email || "Admin").catch(() => {});
+        window.dispatchEvent(new Event("hospital_facility_name_changed"));
+        window.dispatchEvent(new Event("platform_branding_changed"));
+      }}
     />
 
     {/* User Account Profile & Credentials Management Modal */}
@@ -3177,7 +3278,7 @@ export default function App() {
       minDurationMs={0}
       onComplete={() => setIsInitialLoading(false)}
       logoUrl={brandLogoUrl}
-      hospitalName={brandCustomName || "The Tassia Hill Hospital"}
+      hospitalName={getHospitalFacilityName()}
     />
 
     {/* Floating Smart Mobile / iPhone PWA Installation Banner */}

@@ -1,8 +1,10 @@
-import { db } from "./firebase";
+import { db, cleanFirestoreData } from "./firebase";
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
+  setDoc,
   addDoc,
   updateDoc,
   query,
@@ -11,6 +13,7 @@ import {
   Unsubscribe
 } from "firebase/firestore";
 import { MedicalRecord, ClinicalVisit, QueueTicket, SystemTicket, PrescriptionItem, Invoice } from "../types";
+import { createHospitalEncounter } from "./encounterService";
 
 /**
  * Universal Patient Normalizer & Database Auto-Sync Engine
@@ -133,6 +136,7 @@ export interface UnifiedPatientInput {
   priority?: "emergency" | "urgent" | "normal" | string;
   biometricStatus?: string;
   autoQueueTriage?: boolean;
+  encounterId?: string;
 }
 
 export interface UpsertPatientResult {
@@ -165,19 +169,28 @@ export async function createTriageQueueTicket(
 ): Promise<{ ticketNo: string; queueId: string }> {
   const ticketNo = input.ticketNo || `TRG-${Date.now().toString().slice(-4)}`;
   const nowIso = new Date().toISOString();
-  const docRef = await addDoc(collection(db, "queue"), {
+  const queuePayload = cleanFirestoreData({
     patientId: input.patientId,
     patientName: input.patientName,
     nationalId: input.nationalId || "",
     phone: input.phone || "",
+    age: input.age || 30,
+    gender: input.gender || "Male",
     ticketNo,
     department: "triage",
-    status: "waiting",
-    priority: input.priority || "normal",
+    currentDepartment: "triage",
+    service: "Nurse Triage & Vitals",
+    status: "pending",
+    priority: input.priority === "STAT Emergency" ? "stat_emergency" : input.priority === "Urgent / Child" ? "urgent" : input.priority || "normal",
+    paymentScheme: input.paymentScheme || "Cash / M-Pesa",
+    insurancePolicyNo: input.insurancePolicyNo || "",
+    biometricStatus: input.biometricStatus || "not_verified",
+    encounterId: input.encounterId || null,
     notes: input.notes || "Queued for triage assessment",
     timestamp: nowIso,
     createdAt: nowIso
   });
+  const docRef = await addDoc(collection(db, "queue"), queuePayload);
   return { ticketNo, queueId: docRef.id };
 }
 
@@ -200,24 +213,86 @@ export const upsertUnifiedPatientRecord = async (
     let existingDocId: string | null = null;
     let existingData: MedicalRecord | null = null;
 
-    if (input.id) {
-      existingDocId = input.id;
-    } else if (cleanNationalId && cleanNationalId.length >= 3) {
-      const qId = query(collection(db, "patients"), where("nationalId", "==", cleanNationalId));
-      const snap = await getDocs(qId);
-      if (!snap.empty) {
-        existingDocId = snap.docs[0].id;
-        existingData = { id: snap.docs[0].id, ...snap.docs[0].data() } as MedicalRecord;
+    // Check direct ID if provided, verifying that the document actually exists in Firestore
+    if (input.id && input.id.trim()) {
+      try {
+        const directSnap = await getDoc(doc(db, "patients", input.id.trim()));
+        if (directSnap.exists()) {
+          existingDocId = directSnap.id;
+          existingData = { id: directSnap.id, ...directSnap.data() } as MedicalRecord;
+        }
+      } catch (err) {
+        console.warn("[Auto-Sync] Could not fetch document by id:", input.id, err);
       }
     }
 
+    // If not found by direct ID, check National ID
+    if (!existingDocId && cleanNationalId && cleanNationalId.length >= 3) {
+      try {
+        const qId = query(collection(db, "patients"), where("nationalId", "==", cleanNationalId));
+        const snap = await getDocs(qId);
+        if (!snap.empty) {
+          existingDocId = snap.docs[0].id;
+          existingData = { id: snap.docs[0].id, ...snap.docs[0].data() } as MedicalRecord;
+        }
+      } catch (err) {
+        console.warn("[Auto-Sync] Query by nationalId error:", err);
+      }
+    }
+
+    // If not found, check Passport Number
+    if (!existingDocId && input.passportNumber && input.passportNumber.trim()) {
+      try {
+        const qPass = query(collection(db, "patients"), where("passportNumber", "==", input.passportNumber.trim()));
+        const snap = await getDocs(qPass);
+        if (!snap.empty) {
+          existingDocId = snap.docs[0].id;
+          existingData = { id: snap.docs[0].id, ...snap.docs[0].data() } as MedicalRecord;
+        }
+      } catch (err) {
+        console.warn("[Auto-Sync] Query by passportNumber error:", err);
+      }
+    }
+
+    // If not found, check Birth Certificate Number
+    if (!existingDocId && input.birthCertificateNumber && input.birthCertificateNumber.trim()) {
+      try {
+        const qBirth = query(collection(db, "patients"), where("birthCertificateNumber", "==", input.birthCertificateNumber.trim()));
+        const snap = await getDocs(qBirth);
+        if (!snap.empty) {
+          existingDocId = snap.docs[0].id;
+          existingData = { id: snap.docs[0].id, ...snap.docs[0].data() } as MedicalRecord;
+        }
+      } catch (err) {
+        console.warn("[Auto-Sync] Query by birthCertificateNumber error:", err);
+      }
+    }
+
+    // If not found, check Phone
+    if (!existingDocId && cleanPhone && cleanPhone.length >= 6) {
+      try {
+        const qPhone = query(collection(db, "patients"), where("phone", "==", cleanPhone));
+        const snap = await getDocs(qPhone);
+        if (!snap.empty) {
+          existingDocId = snap.docs[0].id;
+          existingData = { id: snap.docs[0].id, ...snap.docs[0].data() } as MedicalRecord;
+        }
+      } catch (err) {
+        console.warn("[Auto-Sync] Query by phone error:", err);
+      }
+    }
+
+    // If not found, check Exact Patient Name
     if (!existingDocId && cleanName) {
-      // Look up by name
-      const qName = query(collection(db, "patients"), where("patientName", "==", cleanName));
-      const snap = await getDocs(qName);
-      if (!snap.empty) {
-        existingDocId = snap.docs[0].id;
-        existingData = { id: snap.docs[0].id, ...snap.docs[0].data() } as MedicalRecord;
+      try {
+        const qName = query(collection(db, "patients"), where("patientName", "==", cleanName));
+        const snap = await getDocs(qName);
+        if (!snap.empty) {
+          existingDocId = snap.docs[0].id;
+          existingData = { id: snap.docs[0].id, ...snap.docs[0].data() } as MedicalRecord;
+        }
+      } catch (err) {
+        console.warn("[Auto-Sync] Query by patientName error:", err);
       }
     }
 
@@ -240,7 +315,7 @@ export const upsertUnifiedPatientRecord = async (
     } : null;
 
     if (existingDocId) {
-      // UPDATE existing patient
+      // UPDATE existing patient using setDoc with merge: true (avoids 'No document to update' error)
       const docRef = doc(db, "patients", existingDocId);
       const updatedFields: any = {
         patientName: cleanName,
@@ -255,6 +330,12 @@ export const upsertUnifiedPatientRecord = async (
       if (numericAge) updatedFields.age = numericAge;
       if (input.gender) updatedFields.gender = input.gender;
       if (input.bloodType) updatedFields.bloodType = input.bloodType;
+      if (input.nextOfKin) updatedFields.nextOfKin = input.nextOfKin.trim();
+      if (input.nextOfKinPhone) updatedFields.nextOfKinPhone = input.nextOfKinPhone.trim();
+      if (input.residence) updatedFields.residence = input.residence.trim();
+      if (input.paymentScheme) updatedFields.paymentScheme = input.paymentScheme;
+      if (input.insurancePolicyNo) updatedFields.insurancePolicyNo = input.insurancePolicyNo.trim();
+      if (input.biometricStatus) updatedFields.biometricStatus = input.biometricStatus;
       if (input.shaEligible) updatedFields.shaEligible = input.shaEligible;
       if (input.shaId) updatedFields.shaId = input.shaId;
       if (input.currentDepartment) updatedFields.currentDepartment = input.currentDepartment;
@@ -263,6 +344,7 @@ export const upsertUnifiedPatientRecord = async (
       if (input.familyHistory) updatedFields.familyHistory = input.familyHistory;
       if (input.allergiesList) updatedFields.allergiesList = input.allergiesList;
       if (input.allergies) updatedFields.allergies = input.allergies;
+      if (input.chronicConditions) updatedFields.chronicConditions = input.chronicConditions;
 
       if (input.vitals) {
         updatedFields.latestVitals = {
@@ -278,7 +360,7 @@ export const upsertUnifiedPatientRecord = async (
         updatedFields.visits = [...existingVisits, newVisit];
       }
 
-      await updateDoc(docRef, updatedFields);
+      await setDoc(docRef, cleanFirestoreData(updatedFields), { merge: true });
       console.log(`[Auto-Sync] Updated patient EHR [${existingDocId}] from ${input.sourceStation || "Workstation"}`);
 
       let createdQueueTicketNo = input.activeTicketNo;
@@ -292,8 +374,14 @@ export const upsertUnifiedPatientRecord = async (
             patientName: cleanName,
             nationalId: cleanNationalId,
             phone: cleanPhone,
+            age: numericAge,
+            gender: input.gender || existingData?.gender || "Male",
             priority: input.priority,
+            paymentScheme: input.paymentScheme || existingData?.paymentScheme,
+            insurancePolicyNo: input.insurancePolicyNo || existingData?.insurancePolicyNo,
+            biometricStatus: input.biometricStatus || existingData?.biometricStatus,
             ticketNo: input.activeTicketNo,
+            encounterId: existingData?.activeEncounterId || null,
             notes: input.symptoms || "Registration intake triage"
           });
           createdQueueTicketNo = res.ticketNo;
@@ -314,9 +402,37 @@ export const upsertUnifiedPatientRecord = async (
       };
     } else {
       // CREATE new patient
+      const targetId = input.id && input.id.trim()
+        ? input.id.trim()
+        : `PAT-${cleanNationalId || Date.now().toString().slice(-6)}`;
+
+      let newEncounterId = input.encounterId || null;
+      if (!newEncounterId) {
+        try {
+          newEncounterId = await createHospitalEncounter({
+            patientId: targetId,
+            patientName: cleanName,
+            nationalId: cleanNationalId,
+            phone: cleanPhone,
+            age: numericAge,
+            gender: input.gender || "Male",
+            bloodType: input.bloodType || "Not Sure",
+            admissionType: "OUTPATIENT",
+            initialSymptoms: input.symptoms || "Registration intake assessment",
+            recordedBy: input.sourceStation || "Reception Desk",
+          });
+        } catch (encErr) {
+          console.warn("[Auto-Sync] Encounter create error:", encErr);
+          newEncounterId = `ENC-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        }
+      }
+
       const newPatientDoc: any = {
+        id: targetId,
+        patientNumber: targetId,
         patientName: cleanName,
         nationalId: cleanNationalId || `GEN-${Math.floor(10000000 + Math.random() * 90000000)}`,
+        activeEncounterId: newEncounterId,
         passportNumber: input.passportNumber?.trim() || "",
         birthCertificateNumber: input.birthCertificateNumber?.trim() || "",
         dob: input.dob || "",
@@ -324,12 +440,19 @@ export const upsertUnifiedPatientRecord = async (
         age: numericAge,
         gender: input.gender || "Male",
         bloodType: input.bloodType || "Not Sure",
+        nextOfKin: input.nextOfKin?.trim() || "",
+        nextOfKinPhone: input.nextOfKinPhone?.trim() || "",
+        residence: input.residence?.trim() || "",
+        paymentScheme: input.paymentScheme || "Cash / M-Pesa",
+        insurancePolicyNo: input.insurancePolicyNo?.trim() || "",
+        biometricStatus: input.biometricStatus || "not_verified",
         shaEligible: input.shaEligible || "not_eligible",
         shaId: input.shaId || "",
         problemList: input.problemList || [],
         familyHistory: input.familyHistory || [],
         allergiesList: input.allergiesList || [],
         allergies: input.allergies || "",
+        chronicConditions: input.chronicConditions || "",
         visits: newVisit ? [newVisit] : [{
           id: `vst-${Date.now()}`,
           date: todayDate,
@@ -359,8 +482,9 @@ export const upsertUnifiedPatientRecord = async (
         updatedAt: nowIso,
       };
 
-      const docRef = await addDoc(collection(db, "patients"), newPatientDoc);
-      console.log(`[Auto-Sync] Created unified patient EHR [${docRef.id}] from ${input.sourceStation || "Workstation"}`);
+      const docRef = doc(db, "patients", targetId);
+      await setDoc(docRef, cleanFirestoreData(newPatientDoc));
+      console.log(`[Auto-Sync] Created unified patient EHR [${targetId}] from ${input.sourceStation || "Workstation"}`);
 
       let createdQueueTicketNo = input.activeTicketNo;
       let createdQueueId: string | undefined;
@@ -369,12 +493,18 @@ export const upsertUnifiedPatientRecord = async (
       if (input.autoQueueTriage) {
         try {
           const res = await createTriageQueueTicket({
-            patientId: docRef.id,
+            patientId: targetId,
             patientName: cleanName,
             nationalId: cleanNationalId,
             phone: cleanPhone,
+            age: numericAge,
+            gender: input.gender || "Male",
             priority: input.priority,
+            paymentScheme: input.paymentScheme,
+            insurancePolicyNo: input.insurancePolicyNo,
+            biometricStatus: input.biometricStatus,
             ticketNo: input.activeTicketNo,
+            encounterId: newEncounterId || null,
             notes: input.symptoms || "Registration intake triage"
           });
           createdQueueTicketNo = res.ticketNo;
@@ -387,7 +517,7 @@ export const upsertUnifiedPatientRecord = async (
 
       return {
         success: true,
-        patientId: docRef.id,
+        patientId: targetId,
         isNew: true,
         ticketNo: createdQueueTicketNo || input.activeTicketNo,
         queueId: createdQueueId,

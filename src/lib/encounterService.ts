@@ -131,32 +131,39 @@ export async function createHospitalEncounter(encounterData: any): Promise<strin
     createdAt: encounterData.createdAt || new Date().toISOString(),
     status: encounterData.status || "active",
   });
-  await setDoc(doc(db, "clinical_encounters", encId), clean);
+  // Write to both encounters and clinical_encounters for seamless cross-station compatibility
+  await Promise.all([
+    setDoc(doc(db, "encounters", encId), clean, { merge: true }),
+    setDoc(doc(db, "clinical_encounters", encId), clean, { merge: true }),
+  ]);
   return encId;
 }
 
 export async function addEncounterVital(encounterId: string, vital: any): Promise<void> {
   const vitalId = `vital-${Date.now()}`;
-  await setDoc(
-    doc(db, "clinical_encounters", encounterId, "vitals", vitalId),
-    cleanFirestoreData({ ...vital, id: vitalId, recordedAt: new Date().toISOString() })
-  );
+  const clean = cleanFirestoreData({ ...vital, id: vitalId, recordedAt: new Date().toISOString() });
+  await Promise.all([
+    setDoc(doc(db, "encounters", encounterId, "vitals", vitalId), clean),
+    setDoc(doc(db, "clinical_encounters", encounterId, "vitals", vitalId), clean),
+  ]);
 }
 
 export async function addEncounterPrescription(encounterId: string, prescription: any): Promise<void> {
   const rxId = prescription.id || `rx-${Date.now()}`;
-  await setDoc(
-    doc(db, "clinical_encounters", encounterId, "prescriptions", rxId),
-    cleanFirestoreData({ ...prescription, id: rxId, prescribedAt: new Date().toISOString(), status: "pending" })
-  );
+  const clean = cleanFirestoreData({ ...prescription, id: rxId, prescribedAt: new Date().toISOString(), status: "pending" });
+  await Promise.all([
+    setDoc(doc(db, "encounters", encounterId, "prescriptions", rxId), clean),
+    setDoc(doc(db, "clinical_encounters", encounterId, "prescriptions", rxId), clean),
+  ]);
 }
 
 export async function addEncounterLabRequest(encounterId: string, labRequest: any): Promise<void> {
   const labId = labRequest.id || `lab-${Date.now()}`;
-  await setDoc(
-    doc(db, "clinical_encounters", encounterId, "lab_requests", labId),
-    cleanFirestoreData({ ...labRequest, id: labId, requestedAt: new Date().toISOString(), status: "pending" })
-  );
+  const clean = cleanFirestoreData({ ...labRequest, id: labId, requestedAt: new Date().toISOString(), status: "pending" });
+  await Promise.all([
+    setDoc(doc(db, "encounters", encounterId, "lab_requests", labId), clean),
+    setDoc(doc(db, "clinical_encounters", encounterId, "lab_requests", labId), clean),
+  ]);
 }
 
 export async function completeEncounterLabRequest(
@@ -170,50 +177,56 @@ export async function completeEncounterLabRequest(
     typeof resultDataOrResults === "object" && resultDataOrResults !== null && !Array.isArray(resultDataOrResults)
       ? resultDataOrResults
       : { results: resultDataOrResults, impression, technicianName };
-  await updateDoc(
-    doc(db, "clinical_encounters", encounterId, "lab_requests", labRequestId),
-    cleanFirestoreData({
-      ...payload,
-      status: "completed",
-      completedAt: new Date().toISOString(),
-    })
-  );
+  const clean = cleanFirestoreData({
+    ...payload,
+    status: "completed",
+    completedAt: new Date().toISOString(),
+  });
+  await Promise.all([
+    updateDoc(doc(db, "encounters", encounterId, "lab_requests", labRequestId), clean).catch(() => {}),
+    updateDoc(doc(db, "clinical_encounters", encounterId, "lab_requests", labRequestId), clean).catch(() => {}),
+  ]);
   return { success: true, message: "Lab completed successfully" };
 }
 
 export async function dispenseEncounterPrescription(encounterId: string, prescriptionId: string, dispenserInfo: any): Promise<void> {
-  await updateDoc(
-    doc(db, "clinical_encounters", encounterId, "prescriptions", prescriptionId),
-    cleanFirestoreData({
-      status: "dispensed",
-      dispensedAt: new Date().toISOString(),
-      ...(dispenserInfo || {}),
-    })
-  );
+  const clean = cleanFirestoreData({
+    status: "dispensed",
+    dispensed: true,
+    dispensedAt: new Date().toISOString(),
+    ...(dispenserInfo || {}),
+  });
+  await Promise.all([
+    updateDoc(doc(db, "encounters", encounterId, "prescriptions", prescriptionId), clean).catch(() => {}),
+    updateDoc(doc(db, "clinical_encounters", encounterId, "prescriptions", prescriptionId), clean).catch(() => {}),
+  ]);
 }
 
 export async function addEncounterNursingNote(encounterId: string, note: any): Promise<void> {
   const noteId = `note-nurse-${Date.now()}`;
-  await setDoc(
-    doc(db, "clinical_encounters", encounterId, "nursing_notes", noteId),
-    cleanFirestoreData({ ...note, id: noteId, timestamp: new Date().toISOString() })
-  );
+  const clean = cleanFirestoreData({ ...note, id: noteId, timestamp: new Date().toISOString() });
+  await Promise.all([
+    setDoc(doc(db, "encounters", encounterId, "nursing_notes", noteId), clean),
+    setDoc(doc(db, "clinical_encounters", encounterId, "nursing_notes", noteId), clean),
+  ]);
 }
 
 export async function addEncounterDoctorNote(encounterId: string, note: any): Promise<void> {
   const noteId = `note-doc-${Date.now()}`;
-  await setDoc(
-    doc(db, "clinical_encounters", encounterId, "doctor_notes", noteId),
-    cleanFirestoreData({ ...note, id: noteId, timestamp: new Date().toISOString() })
-  );
+  const clean = cleanFirestoreData({ ...note, id: noteId, timestamp: new Date().toISOString() });
+  await Promise.all([
+    setDoc(doc(db, "encounters", encounterId, "doctor_notes", noteId), clean),
+    setDoc(doc(db, "clinical_encounters", encounterId, "doctor_notes", noteId), clean),
+  ]);
 }
 
 export async function addEncounterBillItem(encounterId: string, billItem: any): Promise<void> {
   const billId = billItem.id || `bill-${Date.now()}`;
-  await setDoc(
-    doc(db, "clinical_encounters", encounterId, "bill_items", billId),
-    cleanFirestoreData({ ...billItem, id: billId, addedAt: new Date().toISOString(), paid: false })
-  );
+  const clean = cleanFirestoreData({ ...billItem, id: billId, addedAt: new Date().toISOString(), paid: false });
+  await Promise.all([
+    setDoc(doc(db, "encounters", encounterId, "bill_items", billId), clean),
+    setDoc(doc(db, "clinical_encounters", encounterId, "bill_items", billId), clean),
+  ]);
 }
 
 export async function payEncounterBill(
@@ -223,7 +236,7 @@ export async function payEncounterBill(
   notes?: string
 ): Promise<{ success: boolean; newTotalPaid: number; billingCleared: boolean; message: string }> {
   if (typeof billIdOrAmount === "number") {
-    const encRef = doc(db, "clinical_encounters", encounterId);
+    const encRef = doc(db, "encounters", encounterId);
     const encSnap = await getDoc(encRef);
     const encData = encSnap.exists() ? encSnap.data() : {};
     const previousPaid = Number(encData.totalPaid || 0);
@@ -231,16 +244,19 @@ export async function payEncounterBill(
     const newTotalPaid = previousPaid + billIdOrAmount;
     const billingCleared = newTotalPaid >= totalBilled;
 
-    await updateDoc(
-      encRef,
-      cleanFirestoreData({
-        totalPaid: newTotalPaid,
-        billingCleared,
-        paymentMethod: typeof paymentInfoOrMethod === "string" ? paymentInfoOrMethod : paymentInfoOrMethod?.method || "Cash",
-        paymentNotes: notes,
-        lastPaymentAt: new Date().toISOString(),
-      })
-    );
+    const payload = cleanFirestoreData({
+      totalPaid: newTotalPaid,
+      billingCleared,
+      status: billingCleared ? "PAID" : encData.status || "active",
+      paymentMethod: typeof paymentInfoOrMethod === "string" ? paymentInfoOrMethod : paymentInfoOrMethod?.method || "Cash",
+      paymentNotes: notes,
+      lastPaymentAt: new Date().toISOString(),
+    });
+
+    await Promise.all([
+      updateDoc(doc(db, "encounters", encounterId), payload).catch(() => {}),
+      updateDoc(doc(db, "clinical_encounters", encounterId), payload).catch(() => {}),
+    ]);
 
     return {
       success: true,
@@ -250,14 +266,15 @@ export async function payEncounterBill(
     };
   }
 
-  await updateDoc(
-    doc(db, "clinical_encounters", encounterId, "bill_items", billIdOrAmount),
-    cleanFirestoreData({
-      paid: true,
-      paidAt: new Date().toISOString(),
-      ...(typeof paymentInfoOrMethod === "object" ? paymentInfoOrMethod : { method: paymentInfoOrMethod }),
-    })
-  );
+  const payload = cleanFirestoreData({
+    paid: true,
+    paidAt: new Date().toISOString(),
+    ...(typeof paymentInfoOrMethod === "object" ? paymentInfoOrMethod : { method: paymentInfoOrMethod }),
+  });
+  await Promise.all([
+    updateDoc(doc(db, "encounters", encounterId, "bill_items", billIdOrAmount), payload).catch(() => {}),
+    updateDoc(doc(db, "clinical_encounters", encounterId, "bill_items", billIdOrAmount), payload).catch(() => {}),
+  ]);
   return { success: true, newTotalPaid: 0, billingCleared: true, message: "Bill item paid successfully" };
 }
 
@@ -267,16 +284,17 @@ export async function signDoctorClinicalDischarge(
 ): Promise<{ success: boolean; message: string }> {
   const encounterId = typeof encounterIdOrData === "string" ? encounterIdOrData : encounterIdOrData.encounterId;
   const clearanceData = typeof encounterIdOrData === "string" ? maybeClearanceData : encounterIdOrData;
-  await updateDoc(
-    doc(db, "clinical_encounters", encounterId),
-    cleanFirestoreData({
-      doctorDischargeApproved: true,
-      dischargeClearance: {
-        ...clearanceData,
-        clearedAt: new Date().toISOString(),
-      },
-    })
-  );
+  const payload = cleanFirestoreData({
+    doctorDischargeApproved: true,
+    dischargeClearance: {
+      ...clearanceData,
+      clearedAt: new Date().toISOString(),
+    },
+  });
+  await Promise.all([
+    updateDoc(doc(db, "encounters", encounterId), payload).catch(() => {}),
+    updateDoc(doc(db, "clinical_encounters", encounterId), payload).catch(() => {}),
+  ]);
   return { success: true, message: "Doctor discharge clearance signed successfully." };
 }
 
@@ -307,17 +325,17 @@ export async function transferEncounterBed(
   }
   // Record transfer
   const xferId = `xfer-${Date.now()}`;
-  await setDoc(
-    doc(db, "clinical_encounters", encounterId, "bed_transfers", xferId),
-    cleanFirestoreData({ ...transferData, id: xferId, timestamp: new Date().toISOString() })
-  );
-  await updateDoc(
-    doc(db, "clinical_encounters", encounterId),
-    cleanFirestoreData({
-      currentBedId: transferData.toBedId,
-      currentWard: transferData.toWardName,
-    })
-  );
+  const cleanXfer = cleanFirestoreData({ ...transferData, id: xferId, timestamp: new Date().toISOString() });
+  const cleanBed = cleanFirestoreData({
+    currentBedId: transferData.toBedId,
+    currentWard: transferData.toWardName,
+  });
+  await Promise.all([
+    setDoc(doc(db, "encounters", encounterId, "bed_transfers", xferId), cleanXfer),
+    setDoc(doc(db, "clinical_encounters", encounterId, "bed_transfers", xferId), cleanXfer),
+    updateDoc(doc(db, "encounters", encounterId), cleanBed).catch(() => {}),
+    updateDoc(doc(db, "clinical_encounters", encounterId), cleanBed).catch(() => {}),
+  ]);
   return { success: true, message: "Patient bed transfer successfully recorded." };
 }
 
@@ -328,7 +346,7 @@ export async function executeAtomicDischarge(
   const encounterId = typeof encounterIdOrData === "string" ? encounterIdOrData : encounterIdOrData.encounterId;
   const dischargeData = typeof encounterIdOrData === "string" ? maybeDischargeData : encounterIdOrData;
 
-  const encSnap = await getDoc(doc(db, "clinical_encounters", encounterId));
+  const encSnap = await getDoc(doc(db, "encounters", encounterId));
   if (encSnap.exists()) {
     const enc = encSnap.data();
     if (enc.currentBedId) {
@@ -340,14 +358,15 @@ export async function executeAtomicDischarge(
       }).catch(() => {});
     }
   }
-  await updateDoc(
-    doc(db, "clinical_encounters", encounterId),
-    cleanFirestoreData({
-      status: "discharged",
-      dischargedAt: new Date().toISOString(),
-      dischargeSummary: dischargeData,
-    })
-  );
+  const payload = cleanFirestoreData({
+    status: "discharged",
+    dischargedAt: new Date().toISOString(),
+    dischargeSummary: dischargeData,
+  });
+  await Promise.all([
+    updateDoc(doc(db, "encounters", encounterId), payload).catch(() => {}),
+    updateDoc(doc(db, "clinical_encounters", encounterId), payload).catch(() => {}),
+  ]);
   return { success: true, message: "Patient officially discharged and bed released." };
 }
 
@@ -358,16 +377,17 @@ export async function executeMorgueAdmission(
   const encounterId = typeof encounterIdOrData === "string" ? encounterIdOrData : encounterIdOrData.encounterId;
   const morgueData = typeof encounterIdOrData === "string" ? maybeMorgueData : encounterIdOrData;
 
-  await updateDoc(
-    doc(db, "clinical_encounters", encounterId),
-    cleanFirestoreData({
-      status: "deceased",
-      morgueAdmission: {
-        ...morgueData,
-        admittedAt: new Date().toISOString(),
-      },
-    })
-  );
+  const payload = cleanFirestoreData({
+    status: "deceased",
+    morgueAdmission: {
+      ...morgueData,
+      admittedAt: new Date().toISOString(),
+    },
+  });
+  await Promise.all([
+    updateDoc(doc(db, "encounters", encounterId), payload).catch(() => {}),
+    updateDoc(doc(db, "clinical_encounters", encounterId), payload).catch(() => {}),
+  ]);
   return {
     success: true,
     message: "Deceased patient safely transferred to morgue unit.",
@@ -376,7 +396,7 @@ export async function executeMorgueAdmission(
 }
 
 export function subscribeEncounters(callback: (encounters: any[]) => void): () => void {
-  const colRef = collection(db, "clinical_encounters");
+  const colRef = collection(db, "encounters");
   return onSnapshot(colRef, (snap) => {
     const list: any[] = [];
     snap.forEach((d) => list.push({ id: d.id, ...d.data() }));

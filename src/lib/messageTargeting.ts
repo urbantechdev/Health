@@ -1,48 +1,70 @@
+import { InternalMessage, SystemRole } from "../types";
+
 export interface UserIdentity {
   id?: string;
   name?: string;
   email?: string;
-  role?: string;
-  department?: string;
+  role?: SystemRole | string;
   specialty?: string;
-  specialistTitle?: string;
+  department?: string;
   [key: string]: any;
 }
 
-export function shouldShowPopupNotification(msg: any, user: UserIdentity | null | undefined): boolean {
-  if (!msg || !user) return false;
+export function isMessageTargetedToUser(message: InternalMessage | any, user: UserIdentity): boolean {
+  if (!message || !user) return false;
 
-  // Never notify self of own outgoing messages
-  if (user.id && msg.senderId && String(msg.senderId) === String(user.id)) {
-    return false;
-  }
-  if (user.email && msg.senderEmail && msg.senderEmail.toLowerCase().trim() === user.email.toLowerCase().trim()) {
-    return false;
-  }
+  // If user is sender, do not notify self
+  const senderId = message.senderId || message.senderEmail;
+  const userId = user.id || user.email;
+  if (senderId && userId && senderId === userId) return false;
+  if (message.senderName && user.name && message.senderName.trim().toLowerCase() === user.name.trim().toLowerCase()) return false;
 
-  // Broadcast to all hospital staff
-  if (msg.targetType === "all" || msg.recipientId === "all" || (!msg.targetType && !msg.recipientId && !msg.recipientRole)) {
+  // Broadcast to all
+  if (!message.targetRole && !message.targetSpecialist && !message.targetUserId) {
     return true;
   }
 
-  // Direct recipient by user ID or email
-  if (msg.targetType === "user" || msg.targetType === "individual" || msg.recipientId) {
-    if (user.id && msg.recipientId && String(msg.recipientId) === String(user.id)) return true;
-    if (user.email && msg.recipientEmail && msg.recipientEmail.toLowerCase().trim() === user.email.toLowerCase().trim()) return true;
-    if (user.id && msg.targetUserId && String(msg.targetUserId) === String(user.id)) return true;
+  // Direct user target
+  if (message.targetUserId && user.id && message.targetUserId === user.id) {
+    return true;
+  }
+  if (message.targetEmail && user.email && message.targetEmail.toLowerCase() === user.email.toLowerCase()) {
+    return true;
   }
 
-  // Role targeted (e.g., all Nurses, Doctors, Pharmacists)
-  if (msg.targetType === "role" || msg.targetRole || msg.recipientRole) {
-    const roleTarget = (msg.targetRole || msg.recipientRole || "").toLowerCase().trim();
-    if (user.role && user.role.toLowerCase().trim() === roleTarget) return true;
+  // Role match
+  const userRole = (user.role || "").toLowerCase();
+  const targetRole = (message.targetRole || "").toLowerCase();
+  const roleMatch = !targetRole || targetRole === "all" || targetRole === userRole;
+
+  // Specialist / Name match
+  if (message.targetSpecialist) {
+    const targetSpec = message.targetSpecialist.toLowerCase().trim();
+    const userName = (user.name || "").toLowerCase().trim();
+    if (userName.includes(targetSpec) || targetSpec.includes(userName)) {
+      return true;
+    }
+    return false;
   }
 
-  // Department targeted (e.g., Casualty, Maternity, Pharmacy)
-  if (msg.targetType === "department" || msg.targetDepartment || msg.recipientDepartment) {
-    const deptTarget = (msg.targetDepartment || msg.recipientDepartment || "").toLowerCase().trim();
-    if (user.department && user.department.toLowerCase().trim() === deptTarget) return true;
+  return roleMatch;
+}
+
+export function shouldShowPopupNotification(message: InternalMessage | any, user: UserIdentity): boolean {
+  if (!isMessageTargetedToUser(message, user)) return false;
+
+  // If already read by user
+  const identifier = user.email || user.id || user.name;
+  if (identifier && Array.isArray(message.readBy) && message.readBy.includes(identifier)) {
+    return false;
   }
 
-  return false;
+  return true;
+}
+
+export function getMessageAudienceDisplay(message: InternalMessage | any): string {
+  if (!message) return "Everyone";
+  if (message.targetSpecialist) return `Dr. ${message.targetSpecialist}`;
+  if (message.targetRole && message.targetRole !== "all") return `${message.targetRole} Department`;
+  return "All Staff";
 }

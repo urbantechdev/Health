@@ -1,6 +1,10 @@
 import { db } from "./firebase";
-import { collection, getDocs, doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { MASTER_SUPER_ADMIN_SEEDS, isSuperAdminEmail } from "./superAdmins";
+import { importStaffFromRepo, saveUserToDatabase, REPO_STAFF_SEEDS } from "./userService";
+import { importPharmacyStockFromRepo } from "../services/drugInventorySync";
+
+export { importStaffFromRepo, saveUserToDatabase, REPO_STAFF_SEEDS, importPharmacyStockFromRepo };
 
 export interface CollectionCounts {
   [collectionName: string]: number;
@@ -15,33 +19,10 @@ export interface CleanSystemReport {
 export async function ensureSuperAdminsExist(): Promise<boolean> {
   let seeded = false;
   try {
-    const empSnap = await getDocs(collection(db, "employees"));
-    const existingEmails = new Set(empSnap.docs.map(d => d.data().email?.toLowerCase().trim()));
-
-    for (const admin of MASTER_SUPER_ADMIN_SEEDS) {
-      const cleanEmail = admin.email.toLowerCase().trim();
-      if (!existingEmails.has(cleanEmail)) {
-        const docId = `superadmin-${cleanEmail.replace(/[^a-zA-Z0-9]/g, "_")}`;
-        const ref = doc(db, "employees", docId);
-        await setDoc(
-          ref,
-          {
-            id: docId,
-            name: admin.name,
-            email: admin.email,
-            role: admin.role,
-            systemRole: admin.role,
-            department: admin.department,
-            employmentType: admin.adminType === "developer" ? "developer" : "employee",
-            isEmployee: admin.adminType !== "developer",
-            status: "active",
-            createdAt: new Date().toISOString(),
-            isSuperAdmin: true,
-          },
-          { merge: true }
-        );
-        seeded = true;
-      }
+    // Import and seed all repo staff and super administrators
+    const result = await importStaffFromRepo();
+    if (result.importedCount > 0) {
+      seeded = true;
     }
   } catch (err) {
     console.warn("ensureSuperAdminsExist notice:", err);
@@ -55,6 +36,7 @@ const APP_COLLECTIONS = [
   "queue",
   "queue_tickets",
   "system_tickets",
+  "system_users",
   "encounters",
   "clinical_encounters",
   "patient_carts",
@@ -82,6 +64,7 @@ const APP_COLLECTIONS = [
   "audit_logs",
   "settings_audit_logs",
   "push_subscriptions",
+  "medications",
 ];
 
 export async function bootstrapCloudFirestore(): Promise<{ counts: CollectionCounts; seeded: boolean }> {
@@ -99,6 +82,19 @@ export async function bootstrapCloudFirestore(): Promise<{ counts: CollectionCou
     }
     const empSnap = await getDocs(collection(db, "employees"));
     counts["employees"] = empSnap.size;
+
+    // If medications collection is empty, automatically seed pharmacy stock from repository
+    if (!counts["medications"] || counts["medications"] === 0) {
+      try {
+        const medResult = await importPharmacyStockFromRepo();
+        if (medResult.success && (medResult.importedCount || 0) > 0) {
+          counts["medications"] = medResult.importedCount || 0;
+          seeded = true;
+        }
+      } catch (medErr) {
+        console.warn("Auto-import pharmacy stock notice:", medErr);
+      }
+    }
   } catch (err) {
     console.warn("bootstrapCloudFirestore notice:", err);
   }
