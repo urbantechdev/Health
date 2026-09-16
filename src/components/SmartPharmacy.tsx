@@ -35,6 +35,7 @@ import { toast, modernAlert } from "../lib/promptService";
 import { onHotkeyAction } from "../lib/hotkeyService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 import { importPharmacyStockFromRepo } from "../services/drugInventorySync";
+import IncomingDepartmentPromptBanner from "./IncomingDepartmentPromptBanner";
 
 interface SmartPharmacyProps {
   toggles: any;
@@ -719,6 +720,16 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
 
   const totalCartValue = cart.reduce((acc, curr) => acc + curr.med.price * curr.qty, 0);
 
+  const handleAcceptPharmacyTicket = async (ticket: QueueTicket) => {
+    try {
+      await updateDoc(doc(db, "queue", ticket.id), { status: "serving" });
+      setSelectedPrescriptionId(ticket.id);
+      toast.success(`Loaded prescription order for ${ticket.patientName}!`);
+    } catch (e) {
+      console.error("Error accepting pharmacy ticket:", e);
+    }
+  };
+
   return (
     <div id="smart-pharmacy" className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-gray-100">
@@ -816,6 +827,15 @@ export default function SmartPharmacy({ toggles, onDispenseCompleted, userRole =
           )}
         </div>
       </div>
+
+      {/* Real-Time Incoming Pharmacy Dispense Queue Notification Banner */}
+      <IncomingDepartmentPromptBanner
+        department="pharmacy"
+        stationLabel="Smart Pharmacy & Dispensary"
+        themeColor="emerald"
+        acceptButtonLabel="Accept Prescription & Begin Dispense"
+        onAcceptTicket={handleAcceptPharmacyTicket}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Inventory Catalogue & Reorder Alerts */}

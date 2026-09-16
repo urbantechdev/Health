@@ -20,10 +20,11 @@ import {
   Check,
   ChevronRight,
   Activity,
-  Award
+  Award,
+  Baby
 } from "lucide-react";
 
-export type TargetStationType = "triage" | "doctor" | "diagnostics" | "pharmacy" | "billing";
+export type TargetStationType = "triage" | "doctor" | "diagnostics" | "pharmacy" | "billing" | "maternity";
 
 interface StationRoutingPromptModalProps {
   isOpen: boolean;
@@ -199,6 +200,33 @@ export default function StationRoutingPromptModal({
           ],
           roleLabel: "Cashier / Billing Officer"
         };
+      case "maternity":
+        return {
+          title: "Select Maternity Midwife / Obstetrician",
+          subTitle: "Assign patient to Labour Ward, Antenatal Clinic (ANC), Delivery Suite, or Postnatal Recovery.",
+          dept: "maternity",
+          prefix: "MAT",
+          icon: Baby,
+          iconColor: "text-pink-600",
+          iconBg: "bg-pink-50 border-pink-200",
+          accentColor: "border-pink-500",
+          defaultNotes: "Referred to Maternity & Labour Ward for obstetric evaluation / delivery monitoring.",
+          defaultRooms: [
+            "Labour Suite 1 (First Stage)",
+            "Labour Suite 2 (Active Labour)",
+            "Delivery & Resuscitation Suite",
+            "MCH / Antenatal (ANC) Consultation Room",
+            "Postnatal Recovery Bed 1",
+            "Postnatal Recovery Bed 2"
+          ],
+          defaultClinics: [
+            "Labour & Delivery Ward",
+            "Antenatal Care (ANC) Clinic",
+            "Postnatal Care (PNC) Clinic",
+            "Obstetric Emergency Resuscitation"
+          ],
+          roleLabel: "Midwife / Obstetrician"
+        };
     }
   }, [targetStation]);
 
@@ -234,6 +262,25 @@ export default function StationRoutingPromptModal({
           r.includes("physician") ||
           r.includes("surgeon") ||
           r.includes("officer") ||
+          s.includes("doctor")
+        );
+      });
+    } else if (targetStation === "maternity") {
+      return allEmployees.filter((emp) => {
+        const d = (emp.department || "").toLowerCase();
+        const r = (emp.role || "").toLowerCase();
+        const s = (emp.systemRole || "").toLowerCase();
+        return (
+          d.includes("mat") ||
+          d.includes("labour") ||
+          d.includes("gyna") ||
+          d.includes("nurs") ||
+          r.includes("midwife") ||
+          r.includes("nurse") ||
+          r.includes("gyna") ||
+          r.includes("mat") ||
+          s.includes("maternity") ||
+          s.includes("nurse") ||
           s.includes("doctor")
         );
       });

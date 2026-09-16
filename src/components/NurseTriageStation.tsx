@@ -48,8 +48,15 @@ import {
   Zap,
   Scale,
   Users,
-  Award
+  Award,
+  ArrowRightLeft,
+  Inbox,
+  Filter,
+  CheckCircle,
+  XCircle,
+  ExternalLink
 } from "lucide-react";
+import IncomingDepartmentPromptBanner from "./IncomingDepartmentPromptBanner";
 
 interface NurseTriageStationProps {
   onNavigateToDoctor?: () => void;
@@ -96,6 +103,12 @@ export default function NurseTriageStation({
   const [assignedDoctorId, setAssignedDoctorId] = useState<string>("");
   const [targetRoom, setTargetRoom] = useState<string>("Room 101 - General OPD");
   const [autoBalanceMode, setAutoBalanceMode] = useState<boolean>(true);
+
+  // Recent Referrals Drawer state & shift logging
+  const [transfers, setTransfers] = useState<any[]>([]);
+  const [showReferralsDrawer, setShowReferralsDrawer] = useState<boolean>(false);
+  const [referralsTabFilter, setReferralsTabFilter] = useState<"all" | "accepted" | "rejected" | "pending">("all");
+  const [actioningReferralId, setActioningReferralId] = useState<string | null>(null);
 
   // Helper to parse created time consistently (epoch ms)
   const getTicketCreatedTime = (t: QueueTicket): number => {
@@ -151,10 +164,26 @@ export default function NurseTriageStation({
       setEmployees(emps);
     });
 
+    const unsubTransfers = onSnapshot(collection(db, "patient_transfers"), (snapshot) => {
+      const list: any[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      list.sort((a, b) => {
+        const timeA = new Date(a.timestamp || a.transferredAt || 0).getTime();
+        const timeB = new Date(b.timestamp || b.transferredAt || 0).getTime();
+        return timeB - timeA;
+      });
+      setTransfers(list);
+    }, (err) => {
+      console.warn("Transfers snapshot error in NurseTriage:", err);
+    });
+
     return () => {
       unsubQueue();
       unsubPatients();
       unsubEmployees();
+      unsubTransfers();
     };
   }, []);
 
@@ -501,6 +530,126 @@ export default function NurseTriageStation({
     }
   };
 
+  // Recent Referrals relevant to Nursing & Triage
+  const recentReferrals = useMemo(() => {
+    return transfers.filter((t) => {
+      const toDept = (t.toDepartment || "").toLowerCase();
+      const fromDept = (t.fromDepartment || "").toLowerCase();
+      return (
+        toDept === "triage" ||
+        toDept === "nurse" ||
+        toDept === "nursing" ||
+        fromDept === "triage" ||
+        toDept === "opd" ||
+        toDept === "emergency" ||
+        !t.toDepartment
+      );
+    });
+  }, [transfers]);
+
+  const acceptedReferrals = useMemo(() => recentReferrals.filter((r) => r.status === "accepted"), [recentReferrals]);
+  const rejectedReferrals = useMemo(() => recentReferrals.filter((r) => r.status === "rejected"), [recentReferrals]);
+  const pendingReferrals = useMemo(() => recentReferrals.filter((r) => r.status === "pending" || !r.status), [recentReferrals]);
+
+  const displayedReferrals = useMemo(() => {
+    if (referralsTabFilter === "accepted") return acceptedReferrals;
+    if (referralsTabFilter === "rejected") return rejectedReferrals;
+    if (referralsTabFilter === "pending") return pendingReferrals;
+    return recentReferrals;
+  }, [referralsTabFilter, recentReferrals, acceptedReferrals, rejectedReferrals, pendingReferrals]);
+
+  // Handle Accept Referral
+  const handleAcceptReferral = async (referral: any) => {
+    try {
+      setActioningReferralId(referral.id);
+      await updateDoc(doc(db, "patient_transfers", referral.id), {
+        status: "accepted",
+        acceptedAt: new Date().toISOString(),
+        acceptedBy: "Triage Nurse On-Duty",
+        notes: (referral.notes || "") + " [Accepted at Nurse Triage Station]"
+      });
+      toast.success(`Referral for ${referral.patientName || "Patient"} accepted!`);
+    } catch (err: any) {
+      console.error("Failed to accept referral:", err);
+      toast.error("Failed to accept referral: " + err.message);
+    } finally {
+      setActioningReferralId(null);
+    }
+  };
+
+  // Handle Reject Referral
+  const handleRejectReferral = async (referral: any) => {
+    const reason = window.prompt("Reason for rejecting or redirecting this referral:", "Triage capacity reached or patient redirected to specialist.");
+    if (!reason) return;
+    try {
+      setActioningReferralId(referral.id);
+      await updateDoc(doc(db, "patient_transfers", referral.id), {
+        status: "rejected",
+        rejectedAt: new Date().toISOString(),
+        rejectedBy: "Triage Nurse On-Duty",
+        rejectionReason: reason,
+        notes: (referral.notes || "") + ` [Rejected at Triage: ${reason}]`
+      });
+      toast.warning(`Referral for ${referral.patientName || "Patient"} rejected/returned.`);
+    } catch (err: any) {
+      console.error("Failed to reject referral:", err);
+      toast.error("Failed to reject referral: " + err.message);
+    } finally {
+      setActioningReferralId(null);
+    }
+  };
+
+  // Load patient from referral directly into Vitals Desk
+  const handleLoadReferralIntoVitals = (referral: any) => {
+    const match = tickets.find((t) =>
+      (referral.ticketNo && t.ticketNo === referral.ticketNo) ||
+      (referral.patientId && t.patientId === referral.patientId) ||
+      (referral.patientName && t.patientName && t.patientName.toLowerCase() === referral.patientName.toLowerCase())
+    );
+
+    if (match) {
+      handleSelectTicket(match);
+    } else {
+      const synthTicket: QueueTicket = {
+        id: referral.ticketId || "ref-" + referral.id,
+        ticketNo: referral.ticketNo || "REF",
+        ticketNumber: referral.ticketNo || "REF",
+        patientId: referral.patientId || referral.id,
+        patientName: referral.patientName || "Referral Patient",
+        nationalId: referral.nationalId || "",
+        phone: referral.phone || "",
+        age: referral.age || "",
+        gender: referral.gender || "",
+        department: "triage",
+        currentDepartment: "triage",
+        targetDepartment: "doctor",
+        status: "serving",
+        issue: referral.clinicalSummary || referral.reason || referral.issue || "Referred Patient Intake",
+        priority: referral.priority || "normal",
+        createdAt: new Date().toISOString(),
+        timestamp: new Date()
+      };
+      handleSelectTicket(synthTicket);
+    }
+
+    if (referral.clinicalSummary || referral.reason) {
+      setChiefComplaint(referral.clinicalSummary || referral.reason);
+    }
+    if (referral.vitals) {
+      if (referral.vitals.bp && referral.vitals.bp.includes("/")) {
+        const parts = referral.vitals.bp.split("/");
+        setSystolic(parts[0].trim());
+        setDiastolic(parts[1].trim());
+      }
+      if (referral.vitals.temp) setTemp(String(referral.vitals.temp));
+      if (referral.vitals.pulse) setPulse(String(referral.vitals.pulse));
+      if (referral.vitals.weight) setWeight(String(referral.vitals.weight));
+    }
+
+    setShowReferralsDrawer(false);
+    toast.info(`Loaded referral for ${referral.patientName || "Patient"} into Vitals Desk!`);
+  };
+
   return (
     <div id="nurse-triage-station" className="space-y-6">
       {/* Header Banner */}
@@ -524,17 +673,51 @@ export default function NurseTriageStation({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-rose-950/50 px-4 py-2.5 rounded-2xl border border-rose-700/60 backdrop-blur-xs">
-            <div className="text-right">
-              <p className="text-[10px] font-bold text-rose-300 uppercase">Awaiting Triage</p>
-              <p className="text-lg font-black text-white">{triageTickets.length} Patients</p>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-rose-600/50 flex items-center justify-center">
-              <Activity className="w-5 h-5 text-rose-200" />
+          <div className="flex items-center gap-3">
+            {/* Recent Referrals Log Button */}
+            <button
+              id="btn-open-recent-referrals"
+              onClick={() => setShowReferralsDrawer(true)}
+              className="flex items-center gap-3 bg-white/15 hover:bg-white/25 px-4 py-2.5 rounded-2xl border border-white/25 backdrop-blur-xs transition-all cursor-pointer active:scale-95 text-left group"
+              title="View Shift Log of Accepted & Rejected Referrals"
+            >
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[10px] font-bold text-rose-200 uppercase tracking-wide">Recent Referrals</p>
+                  {pendingReferrals.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                  )}
+                </div>
+                <p className="text-base font-black text-white">{recentReferrals.length} Shift Logs</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-white/15 group-hover:bg-white/25 flex items-center justify-center transition-colors">
+                <ArrowRightLeft className="w-5 h-5 text-rose-100" />
+              </div>
+            </button>
+
+            {/* Awaiting Triage Badge */}
+            <div className="flex items-center gap-2 bg-rose-950/60 px-4 py-2.5 rounded-2xl border border-rose-700/60 backdrop-blur-xs">
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-rose-300 uppercase">Awaiting Triage</p>
+                <p className="text-lg font-black text-white">{triageTickets.length} Patients</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-rose-600/50 flex items-center justify-center">
+                <Activity className="w-5 h-5 text-rose-200" />
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Universal Real-Time Incoming Queue Prompt Banner for Triage Bay */}
+      <IncomingDepartmentPromptBanner
+        department="triage"
+        stationLabel="Nurse Triage Bay"
+        activeSpecialistId={activeSpecialistId}
+        themeColor="rose"
+        acceptButtonLabel="Accept & Call to Triage Bay"
+        onAcceptTicket={(tick) => handleSelectTicket(tick)}
+      />
 
       {/* Main Grid: Waiting Triage Queue vs. Vitals Entry Desk */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1368,6 +1551,236 @@ export default function NurseTriageStation({
           )}
         </div>
       </div>
+
+      {/* Recent Referrals Drawer / Modal */}
+      {showReferralsDrawer && (
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end animate-in fade-in duration-200">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setShowReferralsDrawer(false)}
+          />
+
+          {/* Slide-Over Panel */}
+          <div className="relative w-full max-w-2xl bg-slate-50 h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-300 border-l border-slate-200">
+            {/* Drawer Header */}
+            <div className="bg-gradient-to-r from-rose-900 via-rose-800 to-pink-900 text-white p-6 shadow-md shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
+                    <ArrowRightLeft className="w-5 h-5 text-rose-200" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black tracking-tight">Recent Referrals Log</h2>
+                    <p className="text-xs text-rose-200">Shift Inflow & Acceptance Records • Nurse Triage</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowReferralsDrawer(false)}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Quick Shift Summary Stats */}
+              <div className="grid grid-cols-4 gap-2 mt-4">
+                <div className="bg-white/10 border border-white/15 rounded-xl p-2.5 text-center">
+                  <p className="text-[10px] font-bold text-rose-200 uppercase">Total Shift</p>
+                  <p className="text-lg font-black text-white">{recentReferrals.length}</p>
+                </div>
+                <div className="bg-emerald-950/50 border border-emerald-500/40 rounded-xl p-2.5 text-center">
+                  <p className="text-[10px] font-bold text-emerald-300 uppercase">Accepted</p>
+                  <p className="text-lg font-black text-emerald-200">{acceptedReferrals.length}</p>
+                </div>
+                <div className="bg-rose-950/50 border border-rose-500/40 rounded-xl p-2.5 text-center">
+                  <p className="text-[10px] font-bold text-rose-300 uppercase">Rejected</p>
+                  <p className="text-lg font-black text-rose-200">{rejectedReferrals.length}</p>
+                </div>
+                <div className="bg-amber-950/50 border border-amber-500/40 rounded-xl p-2.5 text-center">
+                  <p className="text-[10px] font-bold text-amber-300 uppercase">Pending</p>
+                  <p className="text-lg font-black text-amber-200">{pendingReferrals.length}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="p-4 bg-white border-b border-slate-200 shrink-0">
+              <div className="flex items-center gap-2">
+                {(
+                  [
+                    { id: "all", label: `All (${recentReferrals.length})` },
+                    { id: "accepted", label: `Accepted (${acceptedReferrals.length})` },
+                    { id: "rejected", label: `Rejected (${rejectedReferrals.length})` },
+                    { id: "pending", label: `Pending (${pendingReferrals.length})` }
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setReferralsTabFilter(tab.id)}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      referralsTabFilter === tab.id
+                        ? "bg-rose-600 text-white shadow-sm"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Referrals List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {displayedReferrals.length === 0 ? (
+                <div className="text-center py-16 text-slate-400 space-y-3">
+                  <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                    <Inbox className="w-6 h-6" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-600">No {referralsTabFilter !== "all" ? referralsTabFilter : ""} referrals found</p>
+                  <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                    Patient transfers and department referrals will appear here as they are logged during this shift.
+                  </p>
+                </div>
+              ) : (
+                displayedReferrals.map((ref) => {
+                  const isPending = ref.status === "pending" || !ref.status;
+                  const isAccepted = ref.status === "accepted";
+                  const isRejected = ref.status === "rejected";
+
+                  return (
+                    <div
+                      key={ref.id}
+                      className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-rose-300 transition-all space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {ref.ticketNo && (
+                              <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-black text-[11px] rounded-md">
+                                #{ref.ticketNo}
+                              </span>
+                            )}
+                            <span className="text-sm font-extrabold text-slate-900">
+                              {ref.patientName || "Unnamed Patient"}
+                            </span>
+                            {ref.age && (
+                              <span className="text-xs font-medium text-slate-500">
+                                ({ref.age} yrs{ref.gender ? `, ${ref.gender}` : ""})
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-xs text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-slate-700">From:</span>
+                            <span className="px-2 py-0.5 bg-slate-100 rounded text-[11px] font-bold text-slate-800">
+                              {ref.fromDepartment || "Outpatient / Reception"}
+                            </span>
+                            <ArrowRight className="w-3 h-3 text-slate-400" />
+                            <span className="px-2 py-0.5 bg-rose-50 border border-rose-200 rounded text-[11px] font-bold text-rose-800">
+                              {ref.toDepartment || "Nurse Triage"}
+                            </span>
+                            {ref.transferredBy && (
+                              <span className="text-[11px] text-slate-400">
+                                by {ref.transferredBy}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div>
+                          {isAccepted && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-[11px] font-bold">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              Accepted
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded-full text-[11px] font-bold">
+                              <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                              Rejected
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-[11px] font-bold">
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              Pending Review
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Clinical Reason */}
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs">
+                        <p className="font-bold text-slate-700">Indication / Referral Reason:</p>
+                        <p className="text-slate-600 mt-0.5">
+                          {ref.clinicalSummary || ref.reason || ref.issue || "Referral for vital signs assessment & fast-track triage"}
+                        </p>
+                        {ref.rejectionReason && (
+                          <p className="text-rose-600 font-bold mt-1">
+                            Rejection Note: {ref.rejectionReason}
+                          </p>
+                        )}
+                        {ref.acceptedAt && (
+                          <p className="text-emerald-700 text-[10px] mt-1 font-medium">
+                            Accepted: {new Date(ref.acceptedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} by {ref.acceptedBy || "Nurse"}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadReferralIntoVitals(ref)}
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-black flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <HeartPulse className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Load Patient into Vitals Desk</span>
+                        </button>
+
+                        {isPending && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={actioningReferralId === ref.id}
+                              onClick={() => handleRejectReferral(ref)}
+                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              type="button"
+                              disabled={actioningReferralId === ref.id}
+                              onClick={() => handleAcceptReferral(ref)}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              Accept
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+              <span>Shift Log Active • Synced in real-time</span>
+              <button
+                onClick={() => setShowReferralsDrawer(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors cursor-pointer"
+              >
+                Close Drawer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

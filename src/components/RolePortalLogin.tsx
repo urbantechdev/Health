@@ -10,6 +10,7 @@ import {
   Stethoscope,
   FlaskConical,
   HeartPulse,
+  Baby,
   CreditCard,
   TrendingUp,
   ShoppingBag,

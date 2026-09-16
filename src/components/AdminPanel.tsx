@@ -683,6 +683,7 @@ export default function AdminPanel({ tenant, onTenantChange, toggles, onToggleCh
       doctor: true,
       pharmacy: true,
       billing: true,
+      maternity: true,
       laboratory: true, // Lab feature enabled across Tier Clinic, Level 4 & Level 5
       radiology: type === "hospital_level_5",
     };

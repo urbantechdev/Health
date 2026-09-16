@@ -42,6 +42,7 @@ import {
 } from "../data/labTestDirectory";
 import { LabDisciplineWorksheet } from "./LabDisciplineWorksheet";
 import { LabDirectoryModal } from "./LabDirectoryModal";
+import IncomingDepartmentPromptBanner from "./IncomingDepartmentPromptBanner";
 
 interface AncillaryLabsProps {
   toggles: any;
@@ -1121,6 +1122,16 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
     }
   };
 
+  const handleAcceptLabTicket = async (ticket: QueueTicket) => {
+    try {
+      await updateDoc(doc(db, "queue", ticket.id), { status: "serving" });
+      setSelectedTicket(ticket);
+      toast.success(`Accepted ${ticket.patientName} into Diagnostic Workbench!`);
+    } catch (e) {
+      console.error("Error accepting lab ticket:", e);
+    }
+  };
+
   const isPatientBloodUnconfirmed = !matchedPatient?.bloodType || matchedPatient.bloodType === "Not Sure" || matchedPatient.bloodType === "Unknown";
 
   const filteredLabTickets = labTickets.filter(t => {
@@ -1173,6 +1184,15 @@ export default function AncillaryLabs({ toggles, onActionCompleted }: AncillaryL
           )}
         </div>
       </div>
+
+      {/* Real-Time Incoming Diagnostic Order Notification Banner */}
+      <IncomingDepartmentPromptBanner
+        department={["laboratory", "diagnostics", "radiology", "lab"]}
+        stationLabel="Diagnostic Laboratory & Radiology"
+        themeColor="blue"
+        acceptButtonLabel="Accept Specimen / Diagnostic Order"
+        onAcceptTicket={handleAcceptLabTicket}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Side: Waiting Queue Intake List */}

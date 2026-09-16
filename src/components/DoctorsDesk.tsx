@@ -57,6 +57,7 @@ import { cleanFirestoreData } from "../lib/firebase";
 import { toast } from "../lib/promptService";
 import { voiceAnnouncer } from "../lib/voiceAnnouncementService";
 import { LabDirectoryModal } from "./LabDirectoryModal";
+import IncomingDepartmentPromptBanner from "./IncomingDepartmentPromptBanner";
 
 interface DoctorsDeskProps {
   toggles: any;
@@ -246,18 +247,6 @@ export default function DoctorsDesk({
         }
       });
       setPendingQueueTickets(pending);
-
-      // Show real-time popup if there is an incoming pending patient and no active consultation
-      if (pending.length > 0) {
-        const newest = pending[0];
-        setIncomingPatientPrompt((prev) => {
-          if (!prev || prev.id !== newest.id) {
-            playAudioTone(750, 0.25);
-            return newest;
-          }
-          return prev;
-        });
-      }
     });
 
     return () => {
@@ -1314,56 +1303,14 @@ export default function DoctorsDesk({
       </div>
 
       {/* Real-Time Incoming Patient Queue Popup Notification Banner */}
-      {incomingPatientPrompt && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white rounded-2xl shadow-lg border border-emerald-500/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center gap-3">
-            <div className="relative p-3 bg-emerald-500/20 border border-emerald-400/40 rounded-xl shrink-0">
-              <BellRing className="w-6 h-6 text-emerald-300 animate-bounce" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-ping"></span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 bg-emerald-400 text-emerald-950 font-mono font-black text-xs rounded-md shadow-xs">
-                  {incomingPatientPrompt.ticketNo}
-                </span>
-                <span className="text-xs font-semibold text-emerald-200 uppercase tracking-wider">
-                  Incoming Patient in Queue
-                </span>
-                {incomingPatientPrompt.specialistTitle && (
-                  <span className="text-[10px] px-2 py-0.5 bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 rounded">
-                    {incomingPatientPrompt.specialistTitle}
-                  </span>
-                )}
-              </div>
-              <h3 className="text-base font-bold text-white mt-0.5">
-                {incomingPatientPrompt.patientName}
-                {incomingPatientPrompt.age ? ` (${incomingPatientPrompt.age} yrs)` : ""}
-              </h3>
-              <p className="text-xs text-emerald-100/80 line-clamp-1 mt-0.5">
-                <strong>Chief Complaint:</strong> {incomingPatientPrompt.issue || "General Consultation / Triage intake"}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-            <button
-              id="btn-dismiss-incoming-prompt"
-              onClick={() => setIncomingPatientPrompt(null)}
-              className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white/80 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-            >
-              Dismiss
-            </button>
-            <button
-              id="btn-accept-incoming-patient"
-              onClick={() => handleAcceptIncomingPatient(incomingPatientPrompt)}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Accept & Call Patient In</span>
-            </button>
-          </div>
-        </div>
-      )}
+      <IncomingDepartmentPromptBanner
+        department="doctor"
+        stationLabel="Doctor's Consultation Room"
+        activeSpecialistId={activeSpecialistId}
+        themeColor="emerald"
+        acceptButtonLabel="Accept & Call Patient In"
+        onAcceptTicket={(ticket) => handleAcceptIncomingPatient(ticket)}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Patient Selection & History timeline */}

@@ -24,7 +24,8 @@ import {
   BillItemDraft,
   Medication,
   PatientCart,
-  PatientCartItem
+  PatientCartItem,
+  QueueTicket
 } from "../types";
 import {
   CreditCard,
@@ -74,6 +75,7 @@ import {
   getPatientCart,
   addChargeToCart
 } from "../lib/patientCartService";
+import IncomingDepartmentPromptBanner from "./IncomingDepartmentPromptBanner";
 import { toast, modernConfirm } from "../lib/promptService";
 
 interface PaperlessBillingProps {
@@ -1081,6 +1083,26 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled, initial
     return matchesSearch;
   });
 
+  const handleAcceptBillingTicket = async (ticket: QueueTicket) => {
+    try {
+      await updateDoc(doc(db, "queue", ticket.id), { status: "serving" });
+      const matched = patients.find(
+        (p) =>
+          p.id === ticket.patientId ||
+          p.nationalId === ticket.nationalId ||
+          getPatientName(p).toLowerCase() === ticket.patientName.toLowerCase()
+      );
+      if (matched) {
+        setSelectedPatientId(matched.id);
+        toast.success(`Loaded billing account for ${getPatientName(matched)}!`);
+      } else {
+        toast.info(`Accepted queue ticket ${ticket.ticketNo} for ${ticket.patientName}.`);
+      }
+    } catch (e) {
+      console.error("Error accepting billing ticket:", e);
+    }
+  };
+
   return (
     <div id="paperless-billing-module" className="space-y-6">
       
@@ -1165,6 +1187,15 @@ export default function PaperlessBilling({ toggles, onPaymentReconciled, initial
           </button>
         </div>
       </div>
+
+      {/* Real-Time Incoming Billing / Payment Queue Notification Banner */}
+      <IncomingDepartmentPromptBanner
+        department={["billing", "cashier"]}
+        stationLabel="Central Billing & Cashier Desk"
+        themeColor="emerald"
+        acceptButtonLabel="Load Account for Billing"
+        onAcceptTicket={handleAcceptBillingTicket}
+      />
 
       {/* ========================================================= */}
       {/* 2. ACTIVE PATIENT CARTS VIEW (E-COMMERCE STAGE FOLIOS) */}

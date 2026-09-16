@@ -4,7 +4,8 @@ import {
   collection,
   doc,
   onSnapshot,
-  getDocs
+  getDocs,
+  updateDoc
 } from "firebase/firestore";
 import {
   Encounter,
@@ -20,7 +21,8 @@ import {
   AdmissionType,
   EncounterStatus,
   BedTransferRecord,
-  DoctorDischargeClearance
+  DoctorDischargeClearance,
+  QueueTicket
 } from "../types";
 import {
   initDefaultHospitalWardsAndBeds,
@@ -78,6 +80,7 @@ import {
   Hospital
 } from "lucide-react";
 import PrintDocument from "./PrintDocument";
+import IncomingDepartmentPromptBanner from "./IncomingDepartmentPromptBanner";
 
 export default function AdmissionDischargeManager({
   onNavigateToBilling,
@@ -90,6 +93,29 @@ export default function AdmissionDischargeManager({
   const [beds, setBeds] = useState<WardBed[]>([]);
   const [patients, setPatients] = useState<MedicalRecord[]>([]);
   const [selectedEncounterId, setSelectedEncounterId] = useState<string | null>(null);
+
+  const handleAcceptAdmissionTicket = async (ticket: QueueTicket) => {
+    try {
+      await updateDoc(doc(db, "queue", ticket.id), { status: "serving" });
+      const matched = findUnifiedPatient(ticket.patientId || ticket.nationalId || ticket.patientName, patients);
+      if (matched) {
+        setAdmSelectedPatient(matched);
+        setAdmPatientName(matched.patientName);
+        setAdmNationalId(matched.nationalId || "");
+        setAdmPhone(matched.phone || "");
+        setAdmAge(Number(matched.age) || 30);
+        setAdmGender(matched.gender || "Male");
+        setShowNewAdmissionModal(true);
+        toast.success(`Prepared ward admission for ${matched.patientName}!`);
+      } else {
+        setAdmPatientName(ticket.patientName);
+        setShowNewAdmissionModal(true);
+        toast.info(`Accepted ticket ${ticket.ticketNo}. Select ward and bed.`);
+      }
+    } catch (e) {
+      console.error("Error accepting admission ticket:", e);
+    }
+  };
 
   // Subcollection state for active encounter
   const [subcollections, setSubcollections] = useState<{
@@ -635,6 +661,15 @@ export default function AdmissionDischargeManager({
 
   return (
     <div className="space-y-6">
+      {/* Real-Time Incoming Inpatient / Ward Admission Notification Banner */}
+      <IncomingDepartmentPromptBanner
+        department={["inpatient", "admissions", "wards", "admission"]}
+        stationLabel="Ward Admission & Bed Allocation Hub"
+        themeColor="emerald"
+        acceptButtonLabel="Admit Patient to Bed"
+        onAcceptTicket={handleAcceptAdmissionTicket}
+      />
+
       {/* 1. Header & Live Metrics Bar */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-100">
